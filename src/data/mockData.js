@@ -1,24 +1,20 @@
-// ── Projects ──────────────────────────────────────────────────────────────────
-export const PROJECTS = [
+// ── Client → Project hierarchy ────────────────────────────────────────────────
+export const CLIENTS = [
   {
-    id: 'oxford',
-    name: 'EIT Oxford House',
-    color: '#4F9CF9',
-    colorLight: '#a8d0fc',
-    items: 24,
-    hoursSpent: 180,
-    hoursTotal: 320,
-  },
-  {
-    id: 'projectb',
-    name: 'Project B',
-    color: '#F97316',
-    colorLight: '#fdba74',
-    items: 12,
-    hoursSpent: 60,
-    hoursTotal: 150,
+    id: 'axiom',
+    name: 'Axiom',
+    color: '#6366F1',
+    projects: [
+      { id: 'proj-1', name: 'EIT Oxford House', color: '#4F9CF9', items: 24, hoursSpent: 180, hoursTotal: 320 },
+      { id: 'proj-2', name: 'Project B',         color: '#F97316', items: 12, hoursSpent:  60, hoursTotal: 150 },
+    ],
   },
 ];
+
+// Flat project list (derived) — keeps ProjectHome / PhaseTable working unchanged
+export const PROJECTS = CLIENTS.flatMap(c =>
+  c.projects.map(p => ({ ...p, clientId: c.id }))
+);
 
 // ── DM Phase config ───────────────────────────────────────────────────────────
 export const DM_PHASES = [
@@ -49,7 +45,6 @@ export const STATUS_COLORS = {
 };
 
 // ── Mock timeline items ───────────────────────────────────────────────────────
-// dates are relative to 2026-04-07 (today)
 const T = (offsetDays) => {
   const d = new Date('2026-04-07');
   d.setDate(d.getDate() + offsetDays);
@@ -58,141 +53,76 @@ const T = (offsetDays) => {
 
 export const MOCK_ITEMS = [
   {
-    id: 'OX-01',
-    projectId: 'oxford',
+    id: 'OX-01', projectId: 'proj-1',
     name: 'Curtain Wall Type CW-01',
-    status: 'In Progress',
-    dmPhase: 'DT1',
-    assignee: 'JD',
+    status: 'In Progress', dmPhase: 'DT1', assignee: 'JD',
     rfis: ['RFI-001', 'RFI-003'],
-    milestones: {
-      dt1Start:    T(-5),
-      dt1Delivery: T(3),
-      sub1:        T(14),
-      s4Status:    T(28),
-    },
+    milestones: { dt1Start: T(-5), dt1Delivery: T(3), sub1: T(14), s4Status: T(28) },
   },
   {
-    id: 'OX-02',
-    projectId: 'oxford',
+    id: 'OX-02', projectId: 'proj-1',
     name: 'Entrance Canopy Steel',
-    status: 'In Review',
-    dmPhase: 'P01',
-    assignee: 'SR',
+    status: 'In Review', dmPhase: 'P01', assignee: 'SR',
     rfis: ['RFI-007'],
-    milestones: {
-      dt1Delivery: T(-10),
-      sub1:        T(-3),
-      s4Status:    T(18),
-    },
+    milestones: { dt1Delivery: T(-10), sub1: T(-3), s4Status: T(18) },
   },
   {
-    id: 'OX-03',
-    projectId: 'oxford',
+    id: 'OX-03', projectId: 'proj-1',
     name: 'Atrium Roof Glazing',
-    status: 'On Hold - RFIs',
-    dmPhase: 'DT1',
-    assignee: 'MK',
+    status: 'On Hold - RFIs', dmPhase: 'DT1', assignee: 'MK',
     rfis: ['RFI-012', 'RFI-015'],
-    milestones: {
-      dt1Start:    T(2),
-      dt1Delivery: T(9),
-      sub1:        T(21),
-    },
+    milestones: { dt1Start: T(2), dt1Delivery: T(9), sub1: T(21) },
   },
   {
-    id: 'OX-04',
-    projectId: 'oxford',
+    id: 'OX-04', projectId: 'proj-1',
     name: 'Ground Floor Facade Panels',
-    status: 'Design Complete',
-    dmPhase: 'S4',
-    assignee: 'JD',
+    status: 'Design Complete', dmPhase: 'S4', assignee: 'JD',
     rfis: [],
-    milestones: {
-      dt1Delivery: T(-21),
-      sub1:        T(-14),
-      s4Status:    T(-5),
-      s5Status:    T(25),
-    },
+    milestones: { dt1Delivery: T(-21), sub1: T(-14), s4Status: T(-5), s5Status: T(25) },
   },
   {
-    id: 'OX-05',
-    projectId: 'oxford',
+    id: 'OX-05', projectId: 'proj-1',
     name: 'Rooftop Plant Enclosure',
-    status: 'Backlog',
-    dmPhase: 'DT2',
-    assignee: 'SR',
+    status: 'Backlog', dmPhase: 'DT2', assignee: 'SR',
     rfis: [],
-    milestones: {
-      dt2Start:    T(5),
-      dt2Delivery: T(12),
-    },
+    milestones: { dt2Start: T(5), dt2Delivery: T(12) },
   },
   {
-    id: 'OX-06',
-    projectId: 'oxford',
+    id: 'OX-06', projectId: 'proj-1',
     name: 'Main Lobby Balustrade',
-    status: 'In Manufacture',
-    dmPhase: 'PROD',
-    assignee: 'MK',
+    status: 'In Manufacture', dmPhase: 'PROD', assignee: 'MK',
     rfis: [],
-    milestones: {
-      sub1:        T(-60),
-      s4Status:    T(-45),
-      sub2:        T(-30),
-      s5Status:    T(-15),
-      production:  T(-7),
-    },
+    milestones: { sub1: T(-60), s4Status: T(-45), sub2: T(-30), s5Status: T(-15), production: T(-7) },
   },
   {
-    id: 'PB-01',
-    projectId: 'projectb',
+    id: 'PB-01', projectId: 'proj-2',
     name: 'External Cladding System A',
-    status: 'In Progress',
-    dmPhase: 'DT1',
-    assignee: 'TW',
+    status: 'In Progress', dmPhase: 'DT1', assignee: 'TW',
     rfis: ['RFI-B01'],
-    milestones: {
-      dt1Start:    T(-3),
-      dt1Delivery: T(6),
-      sub1:        T(20),
-    },
+    milestones: { dt1Start: T(-3), dt1Delivery: T(6), sub1: T(20) },
   },
   {
-    id: 'PB-02',
-    projectId: 'projectb',
+    id: 'PB-02', projectId: 'proj-2',
     name: 'Structural Steel Connections',
-    status: 'In Review',
-    dmPhase: 'P01',
-    assignee: 'TW',
+    status: 'In Review', dmPhase: 'P01', assignee: 'TW',
     rfis: [],
-    milestones: {
-      dt1Delivery: T(-8),
-      sub1:        T(1),
-      s4Status:    T(22),
-    },
+    milestones: { dt1Delivery: T(-8), sub1: T(1), s4Status: T(22) },
   },
   {
-    id: 'PB-03',
-    projectId: 'projectb',
+    id: 'PB-03', projectId: 'proj-2',
     name: 'Roof Drainage System',
-    status: 'Design Complete',
-    dmPhase: 'S5',
-    assignee: 'AL',
+    status: 'Design Complete', dmPhase: 'S5', assignee: 'AL',
     rfis: ['RFI-B04'],
-    milestones: {
-      sub2:        T(-10),
-      s5Status:    T(4),
-    },
+    milestones: { sub2: T(-10), s5Status: T(4) },
   },
 ];
 
-// ── Computed stats ────────────────────────────────────────────────────────────
+// ── Computed stats (all projects) ────────────────────────────────────────────
 export const STATS = {
-  rfisOpen: MOCK_ITEMS.reduce((n, i) => n + i.rfis.length, 0),
-  itemsIssued: 14,
+  rfisOpen:        MOCK_ITEMS.reduce((n, i) => n + i.rfis.length, 0),
+  itemsIssued:     14,
   drawingsAssigned: 24,
   drawingsApproved: { s4: 8, s5: 4 },
-  itemsHanging: 5,
-  inProduction: MOCK_ITEMS.filter(i => i.dmPhase === 'PROD').length,
+  itemsHanging:    5,
+  inProduction:    MOCK_ITEMS.filter(i => i.dmPhase === 'PROD').length,
 };

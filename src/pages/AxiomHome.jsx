@@ -3,7 +3,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer,
 } from 'recharts';
 import {
-  PROJECTS, MOCK_ITEMS, STATS, DM_PHASES, PHASE_ORDER, STATUS_COLORS,
+  CLIENTS, PROJECTS, MOCK_ITEMS, STATS, DM_PHASES, PHASE_ORDER, STATUS_COLORS,
 } from '../data/mockData.js';
 
 // ── Colours ───────────────────────────────────────────────────────────────────
@@ -27,15 +27,6 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function lighten(hex, amount = 0.4) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  const lr = Math.round(r + (255 - r) * amount);
-  const lg = Math.round(g + (255 - g) * amount);
-  const lb = Math.round(b + (255 - b) * amount);
-  return `rgb(${lr},${lg},${lb})`;
-}
 
 function phaseCfg(key) {
   return DM_PHASES.find(p => p.key === key) || { bg: '#1e293b', text: '#94a3b8' };
@@ -70,7 +61,7 @@ function AssigneeChip({ assignee }) {
   );
 }
 
-// ── A: Project Cards ──────────────────────────────────────────────────────────
+// ── A: Client Cards ───────────────────────────────────────────────────────────
 function DonutCenter({ children }) {
   return (
     <div style={{
@@ -83,48 +74,68 @@ function DonutCenter({ children }) {
   );
 }
 
-function ProjectCard({ project, allProjects }) {
-  const totalItems = allProjects.reduce((s, p) => s + p.items, 0);
-  const itemsData  = allProjects.map(p => ({ name: p.name, value: p.items, color: p.color }));
+// One card per client. Projects listed inside; donuts aggregate across all client projects.
+function ClientCard({ client }) {
+  const { projects } = client;
 
-  const hoursRemaining = project.hoursTotal - project.hoursSpent;
-  const hoursData = [
-    { name: 'Spent',     value: project.hoursSpent,    color: project.color },
-    { name: 'Remaining', value: hoursRemaining > 0 ? hoursRemaining : 0, color: hexToRgba(project.color, 0.25) },
-  ];
+  // Left donut: one segment per project, sized by item count
+  const totalItems = projects.reduce((s, p) => s + p.items, 0);
+  const itemsData  = projects.map(p => ({ name: p.name, value: p.items, color: p.color }));
+
+  // Right donut: per-project hours, two tones each (spent = full, remaining = dim)
+  const hoursData = projects.flatMap(p => {
+    const remaining = Math.max(0, p.hoursTotal - p.hoursSpent);
+    return [
+      { value: p.hoursSpent,  color: p.color },
+      { value: remaining,     color: hexToRgba(p.color, 0.2) },
+    ];
+  });
+  const totalSpent     = projects.reduce((s, p) => s + p.hoursSpent, 0);
+  const totalRemaining = projects.reduce((s, p) => s + Math.max(0, p.hoursTotal - p.hoursSpent), 0);
 
   return (
-    <Link to={`/project/${project.id}`} style={{ textDecoration: 'none' }}>
-      <div style={{
-        background: C.bgCard,
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
-        padding: '16px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 24,
-        cursor: 'pointer',
-        transition: 'border-color 0.15s',
-        minWidth: 340,
-      }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = project.color}
+    <Link to={`/client/${client.id}`} style={{ textDecoration: 'none' }}>
+      <div
+        style={{
+          background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12,
+          padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24,
+          cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 420,
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = client.color}
         onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
       >
-        {/* Project name + colour dot */}
-        <div style={{ flex: '0 0 auto', maxWidth: 140 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: project.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{project.name}</span>
+        {/* Client name + project list */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: client.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>{client.name}</span>
+            <span style={{ fontSize: 10, color: C.textMut, marginLeft: 2 }}>{projects.length} projects</span>
           </div>
-          <div style={{ fontSize: 11, color: C.textSec }}>{project.items} items</div>
-          <div style={{ fontSize: 11, color: C.textMut }}>{project.hoursSpent}h / {project.hoursTotal}h</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {projects.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                {/* Stop propagation so clicking project name navigates to project, not client */}
+                <Link
+                  to={`/project/${p.id}`}
+                  onClick={e => e.stopPropagation()}
+                  style={{ fontSize: 12, color: C.textSec, textDecoration: 'none', fontWeight: 500, flexShrink: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.color = p.color; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = C.textSec; }}
+                >
+                  {p.name}
+                </Link>
+                <span style={{ fontSize: 10, color: C.textMut }}>{p.items} items · {p.hoursSpent}h/{p.hoursTotal}h</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Left donut: all projects by item count */}
-        <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
+        {/* Left donut: projects by item count */}
+        <div style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} dataKey="value" strokeWidth={0}>
+              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={27} outerRadius={41} dataKey="value" strokeWidth={0}>
                 {itemsData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
@@ -135,18 +146,18 @@ function ProjectCard({ project, allProjects }) {
           </DonutCenter>
         </div>
 
-        {/* Right donut: this project's hours */}
-        <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
+        {/* Right donut: per-project hours, two tones each */}
+        <div style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
+              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={27} outerRadius={41} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
                 {hoursData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 18, fontWeight: 800, color: project.color, lineHeight: 1 }}>{project.hoursSpent}h</span>
-            <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{Math.max(0, hoursRemaining)}h left</span>
+            <span style={{ fontSize: 17, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
+            <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{totalRemaining}h left</span>
           </DonutCenter>
         </div>
       </div>
@@ -457,13 +468,13 @@ export default function AxiomHome() {
         </div>
       </div>
 
-      {/* A: Project cards */}
+      {/* A: Client cards */}
       <section style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-          Projects
+          Clients
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {PROJECTS.map(p => <ProjectCard key={p.id} project={p} allProjects={PROJECTS} />)}
+          {CLIENTS.map(c => <ClientCard key={c.id} client={c} />)}
         </div>
       </section>
 
