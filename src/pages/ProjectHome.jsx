@@ -5,6 +5,7 @@ import {
 import {
   PROJECTS, MOCK_ITEMS, DM_PHASES, PHASE_ORDER, STATUS_COLORS,
 } from '../data/mockData.js';
+import QuickLogBar from '../components/QuickLogBar.jsx';
 
 // ── Colours (same dark palette as AxiomHome) ──────────────────────────────────
 const C = {
@@ -322,6 +323,9 @@ export default function ProjectHome() {
           {new Date('2026-04-07').toLocaleDateString('en-GB',{ weekday:'long', day:'numeric', month:'long', year:'numeric' })}
         </div>
       </div>
+
+      {/* Quick log action bar — pre-selects this project */}
+      <QuickLogBar defaultProjectId={projectId} />
 
       {/* A: Project summary card (single project) */}
       <section style={{ marginBottom: 28 }}>

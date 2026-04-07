@@ -5,6 +5,7 @@ import {
 import {
   CLIENTS, PROJECTS, MOCK_ITEMS, STATS, DM_PHASES, PHASE_ORDER, STATUS_COLORS,
 } from '../data/mockData.js';
+import QuickLogBar from '../components/QuickLogBar.jsx';
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
@@ -467,6 +468,9 @@ export default function AxiomHome() {
           {new Date('2026-04-07').toLocaleDateString('en-GB',{ weekday:'long', day:'numeric', month:'long', year:'numeric' })}
         </div>
       </div>
+
+      {/* Quick log action bar */}
+      <QuickLogBar />
 
       {/* A: Client cards */}
       <section style={{ marginBottom: 28 }}>

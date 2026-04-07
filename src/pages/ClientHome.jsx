@@ -5,6 +5,7 @@ import {
 import {
   CLIENTS, PROJECTS, MOCK_ITEMS, DM_PHASES, PHASE_ORDER, STATUS_COLORS,
 } from '../data/mockData.js';
+import QuickLogBar from '../components/QuickLogBar.jsx';
 
 const C = {
   bg:       '#0a0f1a',
@@ -296,6 +297,9 @@ export default function ClientHome() {
           {new Date('2026-04-07').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
       </div>
+
+      {/* Quick log action bar */}
+      <QuickLogBar />
 
       {/* A: Project cards */}
       <section style={{ marginBottom: 28 }}>
