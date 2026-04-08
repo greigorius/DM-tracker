@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
 import QuickLogBar from '../components/QuickLogBar.jsx';
@@ -51,6 +51,7 @@ function DonutCenter({ children }) {
 }
 
 function ClientCard({ client }) {
+  const navigate    = useNavigate();
   const { projects } = client;
   const totalItems = projects.reduce((s, p) => s + (p.itemCount ?? 0), 0);
   const itemsData  = projects.map(p => ({ name: p.name, value: p.itemCount ?? 1, color: p.color }));
@@ -67,12 +68,12 @@ function ClientCard({ client }) {
   const totalRemaining = projects.reduce((s, p) => s + Math.max(0, (p.hoursRequired ?? 0) - (p.hoursSpent ?? 0)), 0);
 
   return (
-    <Link to={`/client/${encodeURIComponent(client.name)}`} style={{ textDecoration: 'none' }}>
-      <div
-        style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24, cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 420 }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = client.color}
-        onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-      >
+    <div
+      style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24, cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 420 }}
+      onClick={() => navigate(`/client/${encodeURIComponent(client.name)}`)}
+      onMouseEnter={e => e.currentTarget.style.borderColor = client.color}
+      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+    >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: client.color, flexShrink: 0 }} />
@@ -127,8 +128,7 @@ function ClientCard({ client }) {
             <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{totalRemaining}h left</span>
           </DonutCenter>
         </div>
-      </div>
-    </Link>
+    </div>
   );
 }
 
