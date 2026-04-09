@@ -1,0 +1,58 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
+
+# ── API rewrites → Netlify Functions ─────────────────────────────────────────
+[[redirects]]
+  from   = "/api/projects/:id/items"
+  to     = "/.netlify/functions/project-items"
+  status = 200
+
+[[redirects]]
+  from   = "/api/projects/:id/timeline"
+  to     = "/.netlify/functions/project-timeline"
+  status = 200
+
+[[redirects]]
+  from   = "/api/projects"
+  to     = "/.netlify/functions/projects"
+  status = 200
+
+[[redirects]]
+  from   = "/api/stats"
+  to     = "/.netlify/functions/stats"
+  status = 200
+
+[[redirects]]
+  from   = "/api/rfis"
+  to     = "/.netlify/functions/rfis"
+  status = 200
+
+[[redirects]]
+  from   = "/api/tdl"
+  to     = "/.netlify/functions/tdl"
+  status = 200
+
+[[redirects]]
+  from   = "/api/quick-log/todo"
+  to     = "/.netlify/functions/quick-log-todo"
+  status = 200
+
+[[redirects]]
+  from   = "/api/quick-log/rfi"
+  to     = "/.netlify/functions/quick-log-rfi"
+  status = 200
+
+[[redirects]]
+  from   = "/api/quick-log/production"
+  to     = "/.netlify/functions/quick-log-production"
+  status = 200
+
+# ── SPA fallback ──────────────────────────────────────────────────────────────
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
