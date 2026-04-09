@@ -42,8 +42,8 @@ function AssigneeChip({ assignee }) {
 
 // ── Project summary card ──────────────────────────────────────────────────────
 function ProjectSummaryCard({ project, projectItems }) {
-  const hoursSpent     = project.hoursSpent    ?? 0;
-  const hoursRemaining = Math.max(0, (project.hoursRequired ?? 0) - hoursSpent);
+  const hoursSpent     = Math.ceil(project.hoursSpent    ?? 0);
+  const hoursRemaining = Math.ceil(Math.max(0, (project.hoursRequired ?? 0) - (project.hoursSpent ?? 0)));
   const projectColor   = project.color ?? '#4F9CF9';
 
   const hoursData = [
@@ -74,30 +74,30 @@ function ProjectSummaryCard({ project, projectItems }) {
         </div>
       </div>
 
-      <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
+      <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={phaseData.length ? phaseData : [{ value: 1, color: C.border }]} cx="50%" cy="50%" innerRadius={28} outerRadius={42} dataKey="value" strokeWidth={0}>
+            <Pie data={phaseData.length ? phaseData : [{ value: 1, color: C.border }]} cx="50%" cy="50%" innerRadius={34} outerRadius={50} dataKey="value" strokeWidth={0}>
               {(phaseData.length ? phaseData : [{ color: C.border }]).map((d, i) => <Cell key={i} fill={d.color} />)}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: C.text, lineHeight: 1 }}>{projectItems.length}</span>
+          <span style={{ fontSize: 22, fontWeight: 800, color: C.text, lineHeight: 1 }}>{projectItems.length}</span>
           <span style={{ fontSize: 9, color: C.textMut, marginTop: 1 }}>items</span>
         </div>
       </div>
 
-      <div style={{ position: 'relative', width: 90, height: 90, flexShrink: 0 }}>
+      <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={hoursData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
+            <Pie data={hoursData} cx="50%" cy="50%" innerRadius={34} outerRadius={50} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
               {hoursData.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <span style={{ fontSize: 18, fontWeight: 800, color: projectColor, lineHeight: 1 }}>{hoursSpent}h</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: projectColor, lineHeight: 1 }}>{hoursSpent}h</span>
           <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{hoursRemaining}h left</span>
         </div>
       </div>

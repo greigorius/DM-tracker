@@ -159,6 +159,7 @@ export function transformTask(page, drawings = []) {
       production:  { plan: null },
     },
 
+    drawingIds: (props['Drawing No(s)']?.relation ?? []).map(r => r.id),
     drawings,
   }
 }

@@ -193,12 +193,21 @@ export default function ProjectTimeline({
         setFetchedItems(data.items || []);
         setError(null);
         setLoading(false);
-        if (data.phase === 'tasks') {
-          fetch(`/api/projects/${projectId}/timeline?phase=all`)
-            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-            .then(d2 => { if (!cancelled) setFetchedItems(d2.items || []); })
-            .catch(() => {});
-        }
+
+        // Fetch drawings separately — only for items that have them
+        const taskIdsWithDrawings = (data.items || [])
+          .filter(item => item.drawingIds?.length > 0)
+          .map(item => item.id);
+        if (!taskIdsWithDrawings.length) return;
+
+        fetch(`/api/projects/${projectId}/drawings?taskIds=${taskIdsWithDrawings.join(',')}`)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(drawingsByTask => {
+            if (!cancelled) setFetchedItems(prev =>
+              prev.map(item => ({ ...item, drawings: drawingsByTask[item.id] || [] }))
+            );
+          })
+          .catch(() => {});
       })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
     return () => { cancelled = true; };

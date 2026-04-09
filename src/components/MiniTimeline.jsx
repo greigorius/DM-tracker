@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 const C = {
@@ -65,50 +66,56 @@ const bestDate   = d => d ? (d.actual || d.adj || d.plan || null) : null;
 const fmtDate    = s => s ? parseLocal(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : null;
 
 export default function MiniTimeline({ items, projectColor }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const todayStr    = toLocalStr(today);
-  const windowStart = new Date(today); windowStart.setDate(today.getDate() - 7);
+  // Stable window — computed once per mount (today doesn't drift within a session)
+  const { todayStr, windowStart, windowEnd, todayX, dayHeaders, weekLabels, totalW } = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr    = toLocalStr(today);
+    const windowStart = new Date(today); windowStart.setDate(today.getDate() - 7);
+    const windowEnd   = new Date(windowStart); windowEnd.setDate(windowStart.getDate() + DAYS);
 
-  const dateX = s => {
-    if (!s) return null;
-    const d = parseLocal(s);
-    return Math.round((d - windowStart) / 86_400_000) * DAY_W;
-  };
-
-  const todayX = dateX(todayStr); // always = 7 * DAY_W with local dates
-
-  const dayHeaders = Array.from({ length: DAYS }, (_, i) => {
-    const d = new Date(windowStart); d.setDate(d.getDate() + i);
-    return {
-      label:        d.getDate(),
-      isToday:      toLocalStr(d) === todayStr,
-      isWeekStart:  d.getDay() === 1,
-      x:            i * DAY_W,
+    const dateX = s => {
+      if (!s) return null;
+      const d = parseLocal(s);
+      return Math.round((d - windowStart) / 86_400_000) * DAY_W;
     };
-  });
 
-  const weekLabels = [];
-  for (let i = 0; i < DAYS; i++) {
-    const d = new Date(windowStart); d.setDate(d.getDate() + i);
-    if (d.getDay() === 1 || i === 0) {
-      const fmt = dt => dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      weekLabels.push({ label: `w/c ${fmt(d)}`, x: i * DAY_W, width: Math.min(7, DAYS - i) * DAY_W });
+    const todayX = dateX(todayStr);
+    const totalW = DAYS * DAY_W;
+
+    const dayHeaders = Array.from({ length: DAYS }, (_, i) => {
+      const d = new Date(windowStart); d.setDate(d.getDate() + i);
+      return { label: d.getDate(), isToday: toLocalStr(d) === todayStr, isWeekStart: d.getDay() === 1, x: i * DAY_W };
+    });
+
+    const weekLabels = [];
+    for (let i = 0; i < DAYS; i++) {
+      const d = new Date(windowStart); d.setDate(d.getDate() + i);
+      if (d.getDay() === 1 || i === 0) {
+        const fmt = dt => dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        weekLabels.push({ label: `w/c ${fmt(d)}`, x: i * DAY_W, width: Math.min(7, DAYS - i) * DAY_W });
+      }
     }
-  }
 
-  const windowEnd  = new Date(windowStart); windowEnd.setDate(windowStart.getDate() + DAYS);
-  const windowItems = items.filter(item => {
+    return { todayStr, windowStart, windowEnd, todayX, dayHeaders, weekLabels, totalW };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // dateX helper — stable reference (windowStart is memoised above)
+  const dateX = useMemo(() => s => {
+    if (!s) return null;
+    return Math.round((parseLocal(s) - windowStart) / 86_400_000) * DAY_W;
+  }, [windowStart]);
+
+  // Filter items to the 3-week window — only re-runs when items change
+  const windowItems = useMemo(() => items.filter(item => {
     const dates = MILESTONE_KEYS.map(m => bestDate(item.dates?.[m.key])).filter(Boolean).map(s => parseLocal(s));
     if (!dates.length) return false;
     const lo = new Date(Math.min(...dates));
     const hi = new Date(Math.max(...dates));
     return lo <= windowEnd && hi >= windowStart;
-  });
-
-  const totalW = DAYS * DAY_W;
+  }), [items, windowStart, windowEnd]);
 
   return (
-    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', fontFamily: "'ui-monospace', Consolas, monospace" }}>
+    <div style={{ width: '100%', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', fontFamily: "'ui-monospace', Consolas, monospace" }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${C.border}`, background: C.bgPanel }}>

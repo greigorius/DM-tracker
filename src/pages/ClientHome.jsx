@@ -52,10 +52,11 @@ function DonutCenter({ children }) {
 function ProjectCard({ project, allClientProjects }) {
   const totalItems = allClientProjects.reduce((s, p) => s + (p.itemCount ?? 0), 0);
   const itemsData  = allClientProjects.map(p => ({ name: p.name, value: p.itemCount ?? 1, color: p.color }));
-  const remaining  = Math.max(0, (project.hoursRequired ?? 0) - (project.hoursSpent ?? 0));
+  const hoursSpent = Math.ceil(project.hoursSpent ?? 0);
+  const remaining  = Math.ceil(Math.max(0, (project.hoursRequired ?? 0) - (project.hoursSpent ?? 0)));
   const hoursData  = [
-    { value: project.hoursSpent ?? 0, color: project.color },
-    { value: remaining,               color: hexToRgba(project.color, 0.2) },
+    { value: hoursSpent, color: project.color },
+    { value: remaining,  color: hexToRgba(project.color, 0.2) },
   ];
 
   return (
@@ -74,31 +75,31 @@ function ProjectCard({ project, allClientProjects }) {
           <div style={{ fontSize: 11, color: C.textMut }}>{project.hoursSpent ?? 0}h / {project.hoursRequired ?? 0}h</div>
         </div>
 
-        <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={24} outerRadius={37} dataKey="value" strokeWidth={0}>
+              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={34} outerRadius={50} dataKey="value" strokeWidth={0}>
                 {itemsData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 17, fontWeight: 800, color: C.text, lineHeight: 1 }}>{totalItems || '—'}</span>
-            <span style={{ fontSize: 8, color: C.textMut, marginTop: 1 }}>items</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: C.text, lineHeight: 1 }}>{totalItems || '—'}</span>
+            <span style={{ fontSize: 9, color: C.textMut, marginTop: 1 }}>items</span>
           </DonutCenter>
         </div>
 
-        <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: 110, height: 110, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={24} outerRadius={37} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
+              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={34} outerRadius={50} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
                 {hoursData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 15, fontWeight: 800, color: project.color, lineHeight: 1 }}>{project.hoursSpent ?? 0}h</span>
-            <span style={{ fontSize: 8, color: C.textMut, marginTop: 2 }}>{remaining}h left</span>
+            <span style={{ fontSize: 19, fontWeight: 800, color: project.color, lineHeight: 1 }}>{hoursSpent}h</span>
+            <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{remaining}h left</span>
           </DonutCenter>
         </div>
       </div>

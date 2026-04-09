@@ -64,8 +64,8 @@ function ClientCard({ client }) {
       { value: remaining, color: hexToRgba(p.color, 0.2) },
     ];
   });
-  const totalSpent     = projects.reduce((s, p) => s + (p.hoursSpent    ?? 0), 0);
-  const totalRemaining = projects.reduce((s, p) => s + Math.max(0, (p.hoursRequired ?? 0) - (p.hoursSpent ?? 0)), 0);
+  const totalSpent     = Math.ceil(projects.reduce((s, p) => s + (p.hoursSpent    ?? 0), 0));
+  const totalRemaining = Math.ceil(projects.reduce((s, p) => s + Math.max(0, (p.hoursRequired ?? 0) - (p.hoursSpent ?? 0)), 0));
 
   return (
     <div
@@ -124,7 +124,7 @@ function ClientCard({ client }) {
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 21, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
             <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{totalRemaining}h left</span>
           </DonutCenter>
         </div>

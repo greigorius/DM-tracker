@@ -132,44 +132,39 @@ app.get('/api/projects/:id/items', async (req, res) => {
   }
 });
 
-// ── GET /api/projects/:id/timeline ────────────────────────────────────────────
-// Two-phase: phase=tasks (fast) then phase=all (adds drawings).
+// ── GET /api/projects/:id/timeline ───────────────────────────────────────────
+// Returns task items with drawingIds. Drawings loaded separately via /drawings.
 app.get('/api/projects/:id/timeline', async (req, res) => {
   if (!notionRequired(res)) return;
-  const { id }     = req.params;
-  const phase      = req.query.phase ?? 'tasks';
-  const forceRefresh = req.query.refresh === '1';
-
-  if (forceRefresh) {
-    deleteCached(`tasks:${id}`);
-    deleteCached(`timeline:${id}`);
-  }
+  const { id } = req.params;
+  if (req.query.refresh === '1') deleteCached(`tasks:${id}`);
 
   try {
-    // Fast path: full cache hit
-    const fullCached = getCached(`timeline:${id}`);
-    if (fullCached) return res.json(fullCached);
+    const taskPages = await fetchTaskPages(id);
+    const items     = taskPages.map(p => transformTask(p, []));
+    res.json({ items });
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again in a moment' });
+    console.error('[timeline]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
 
-    if (phase === 'tasks') {
-      const taskPages = await fetchTaskPages(id);
-      const items     = taskPages.map(p => transformTask(p, []));
-      return res.json({ items, phase: 'tasks' });
-    }
+// ── GET /api/projects/:id/drawings?taskIds=id1,id2,... ────────────────────────
+// Returns drawings grouped by taskId: { [taskId]: drawing[] }
+app.get('/api/projects/:id/drawings', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const taskIds = (req.query.taskIds ?? '').split(',').filter(Boolean);
+  if (!taskIds.length) return res.json({});
 
-    // phase=all: tasks + drawings
-    const taskPages  = await fetchTaskPages(id);
-    const taskIds    = taskPages.map(p => p.id);
+  try {
     const drawingMap = await fetchDrawingMap(taskIds);
-    const items      = taskPages.map(p => transformTask(p, drawingMap.get(p.id) ?? []));
-    const result     = { items };
-
-    setCached(`timeline:${id}`, result, 5 * 60 * 1000);
+    const result = {};
+    drawingMap.forEach((drawings, taskId) => { result[taskId] = drawings; });
     res.json(result);
   } catch (err) {
-    if (err.name === 'AbortError') {
-      return res.status(504).json({ error: 'Notion API timed out — try again in a moment' });
-    }
-    console.error('[timeline]', err.message);
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again in a moment' });
+    console.error('[drawings]', err.message);
     res.status(err.status ?? 500).json({ error: err.message });
   }
 });

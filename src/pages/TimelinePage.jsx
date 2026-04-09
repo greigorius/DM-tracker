@@ -68,12 +68,25 @@ export default function TimelinePage() {
         .then(data => {
           if (ctrl.signal.aborted) return;
           mergeItems(proj, data.items || []);
-          if (data.phase === 'tasks') {
-            fetch(`/api/projects/${proj.id}/timeline?phase=all`, { signal: ctrl.signal })
-              .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-              .then(d2 => { if (!ctrl.signal.aborted) mergeItems(proj, d2.items || []); })
-              .catch(e => { if (e.name !== 'AbortError') console.warn('[timeline:drawings]', proj.name, e.message); });
-          }
+
+          // Fetch drawings separately — only for items that have them, avoiding task re-fetch
+          const taskIdsWithDrawings = (data.items || [])
+            .filter(item => item.drawingIds?.length > 0)
+            .map(item => item.id);
+
+          if (!taskIdsWithDrawings.length) return;
+
+          fetch(`/api/projects/${proj.id}/drawings?taskIds=${taskIdsWithDrawings.join(',')}`, { signal: ctrl.signal })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(drawingsByTask => {
+              if (ctrl.signal.aborted) return;
+              const itemsWithDrawings = (data.items || []).map(item => ({
+                ...item,
+                drawings: drawingsByTask[item.id] || [],
+              }));
+              mergeItems(proj, itemsWithDrawings);
+            })
+            .catch(e => { if (e.name !== 'AbortError') console.warn('[drawings]', proj.name, e.message); });
         })
         .catch(e => { if (e.name !== 'AbortError') console.warn('[timeline]', proj.name, e.message); })
         .finally(() => {

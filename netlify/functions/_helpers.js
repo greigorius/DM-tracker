@@ -112,6 +112,7 @@ export function transformTask(page, drawings = []) {
       subC01:      { plan: d(props, 'Constr. Submission Date (Plan)'), adj:    d(props, 'Constr. Submission Date (Adj)'),   actual: d(props, 'Constr. Submission Date (Actual)') },
       production:  { plan: null },
     },
+    drawingIds: (props['Drawing No(s)']?.relation ?? []).map(r => r.id),
     drawings,
   }
 }
