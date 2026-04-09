@@ -1,17 +1,7 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import ProjectTimeline from '../components/Timeline/ProjectTimeline.jsx';
-
-const PROJECT_COLORS = [
-  '#3b82f6', // blue
-  '#a78bfa', // violet
-  '#34d399', // emerald
-  '#fb923c', // orange
-  '#f472b6', // pink
-  '#38bdf8', // sky
-  '#facc15', // yellow
-  '#4ade80', // green
-];
+import { PROJECT_COLORS, assignProjectColors } from '../data/colors.js';
 
 export default function TimelinePage() {
   const { projectId } = useParams();
@@ -30,11 +20,12 @@ export default function TimelinePage() {
       .then(r => r.json())
       .then(d => {
         const pages = Array.isArray(d) ? d : (d.projects ?? []);
-        setProjects(pages.map((p, i) => ({
+        const colorMap = assignProjectColors(pages);
+        setProjects(pages.map(p => ({
           id:     p.id,
           name:   p.name ?? p.properties?.['Project Name']?.title?.[0]?.plain_text ?? p.id,
           status: p.status ?? p.properties?.['Status']?.status?.name ?? '',
-          color:  PROJECT_COLORS[i % PROJECT_COLORS.length],
+          color:  colorMap.get(p.id) ?? PROJECT_COLORS[0],
         })));
       })
       .catch(() => {})
@@ -138,6 +129,17 @@ export default function TimelinePage() {
 
   return (
     <div style={S.page}>
+
+      {/* Page header */}
+      <div style={{ marginBottom: 20 }}>
+        <Link to="/" style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>← Back to DM Tracker</Link>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.02em' }}>
+          {projectId && selected ? selected.name : 'DM Timeline'}
+        </h1>
+        <div style={{ fontSize: 12, color: '#7b90b0', marginTop: 4 }}>
+          {projectId && selected ? 'Project programme timeline' : 'All active projects · programme overview'}
+        </div>
+      </div>
 
       <div style={S.topBar}>
         <span style={S.label}>Project</span>

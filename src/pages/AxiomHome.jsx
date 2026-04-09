@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
 import QuickLogBar from '../components/QuickLogBar.jsx';
+import MiniTimeline from '../components/MiniTimeline.jsx';
+import { PROJECT_COLORS, CLIENT_COLORS, assignProjectColors } from '../data/colors.js';
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
@@ -16,9 +18,6 @@ const C = {
   today:    'rgba(74,222,128,0.75)',
   grid:     '#1a2540',
 };
-
-const PROJECT_COLORS = ['#4F9CF9','#F97316','#a78bfa','#34d399','#f472b6','#38bdf8','#facc15','#4ade80'];
-const CLIENT_COLORS  = ['#6366F1','#ec4899','#14b8a6','#f59e0b','#8b5cf6','#06b6d4'];
 
 function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1,3),16);
@@ -69,7 +68,7 @@ function ClientCard({ client }) {
 
   return (
     <div
-      style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24, cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 420 }}
+      style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24, cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 500 }}
       onClick={() => navigate(`/client/${encodeURIComponent(client.name)}`)}
       onMouseEnter={e => e.currentTarget.style.borderColor = client.color}
       onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
@@ -101,30 +100,30 @@ function ClientCard({ client }) {
           </div>
         </div>
 
-        <div style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={27} outerRadius={41} dataKey="value" strokeWidth={0}>
+              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={38} outerRadius={55} dataKey="value" strokeWidth={0}>
                 {itemsData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.text, lineHeight: 1 }}>{totalItems || '—'}</span>
+            <span style={{ fontSize: 24, fontWeight: 800, color: C.text, lineHeight: 1 }}>{totalItems || '—'}</span>
             <span style={{ fontSize: 9, color: C.textMut, marginTop: 1 }}>items</span>
           </DonutCenter>
         </div>
 
-        <div style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={27} outerRadius={41} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
+              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={38} outerRadius={55} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
                 {hoursData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <DonutCenter>
-            <span style={{ fontSize: 17, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
+            <span style={{ fontSize: 21, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
             <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{totalRemaining}h left</span>
           </DonutCenter>
         </div>
@@ -132,149 +131,7 @@ function ClientCard({ client }) {
   );
 }
 
-// ── B: Three-week lookahead ───────────────────────────────────────────────────
-const DAY_W   = 44;
-const LABEL_W = 220;
-const ROW_H   = 44;
-const DAYS    = 21;
-
-const MILESTONE_KEYS = [
-  { key: 'dt1Start',    label: 'DT1↑', ck: 'dt1'  },
-  { key: 'dt1Delivery', label: 'DT1↓', ck: 'dt1'  },
-  { key: 'sub1',        label: 'P01',  ck: 'p01'  },
-  { key: 's4Status',    label: 'S4',   ck: 's4'   },
-  { key: 'dt2Start',    label: 'DT2↑', ck: 'dt2'  },
-  { key: 'dt2Delivery', label: 'DT2↓', ck: 'dt2'  },
-  { key: 'sub2',        label: 'P02',  ck: 'p02'  },
-  { key: 's5Status',    label: 'S5',   ck: 's5'   },
-  { key: 'production',  label: 'PROD', ck: 'prod' },
-];
-
-const MILESTONE_COLORS = {
-  dt1:  { bg: '#1e3a5f', text: '#60a5fa' },
-  p01:  { bg: '#2e1f5e', text: '#818cf8' },
-  s4:   { bg: '#78350f', text: '#fbbf24' },
-  dt2:  { bg: '#1e3a5f', text: '#60a5fa' },
-  p02:  { bg: '#2e1f5e', text: '#818cf8' },
-  s5:   { bg: '#2e1065', text: '#a78bfa' },
-  dtc:  { bg: '#3b1a3b', text: '#e879f9' },
-  c01:  { bg: '#1a3a2a', text: '#34d399' },
-  prod: { bg: '#1a3a2a', text: '#34d399' },
-};
-
-// Pick best single date from { plan, adj, actual } object
-const bestDate = d => d ? (d.actual || d.adj || d.plan || null) : null;
-
-function MiniTimeline({ items, projectsMap }) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const windowStart = new Date(today); windowStart.setDate(today.getDate() - 7);
-
-  const dateX = (dateStr) => {
-    if (!dateStr) return null;
-    const d = new Date(dateStr); d.setHours(0,0,0,0);
-    return Math.round((d - windowStart) / 86_400_000) * DAY_W;
-  };
-
-  const todayX = dateX(today.toISOString().slice(0,10));
-
-  const dayHeaders = Array.from({ length: DAYS }, (_, i) => {
-    const d = new Date(windowStart); d.setDate(d.getDate() + i);
-    return { label: d.getDate(), isToday: d.toDateString() === today.toDateString(), isWeekStart: d.getDay() === 1, x: i * DAY_W };
-  });
-
-  const weekLabels = [];
-  for (let i = 0; i < DAYS; i++) {
-    const d = new Date(windowStart); d.setDate(d.getDate() + i);
-    if (d.getDay() === 1 || i === 0) {
-      const fmt = dt => dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      weekLabels.push({ label: `w/c ${fmt(d)}`, x: i * DAY_W, width: Math.min(7, DAYS - i) * DAY_W });
-    }
-  }
-
-  const windowEnd = new Date(windowStart); windowEnd.setDate(windowStart.getDate() + DAYS);
-  const windowItems = items.filter(item => {
-    const dates = MILESTONE_KEYS.map(m => bestDate(item.dates?.[m.key])).filter(Boolean).map(d => new Date(d));
-    if (!dates.length) return false;
-    const lo = new Date(Math.min(...dates));
-    const hi = new Date(Math.max(...dates));
-    return lo <= windowEnd && hi >= windowStart;
-  });
-
-  const totalW = DAYS * DAY_W;
-  const wStart = new Date(windowStart); wStart.setDate(windowStart.getDate() - 7);
-  const wEnd   = new Date(windowStart); wEnd.setDate(windowStart.getDate() + DAYS + 14);
-
-  return (
-    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', fontFamily: "'ui-monospace', Consolas, monospace" }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${C.border}`, background: C.bgPanel }}>
-        <div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Three-Week Lookahead</span>
-          <span style={{ fontSize: 11, color: C.textMut, marginLeft: 10 }}>
-            {windowStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} — {new Date(windowEnd).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
-          </span>
-        </div>
-        <Link to="/timeline" style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', fontWeight: 600 }}>View Full Timeline →</Link>
-      </div>
-
-      {windowItems.length === 0 ? (
-        <div style={{ padding: '24px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>
-          No milestone activity in this window
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ display: 'flex', height: 20, marginLeft: LABEL_W, position: 'relative', minWidth: totalW }}>
-            {weekLabels.map((w, i) => (
-              <div key={i} style={{ position: 'absolute', left: w.x, width: w.width, fontSize: 9, color: C.textMut, display: 'flex', alignItems: 'center', paddingLeft: 4, borderLeft: i > 0 ? `1px solid ${C.border}` : 'none' }}>{w.label}</div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', height: 24, borderBottom: `1px solid ${C.border}`, background: C.bgPanel }}>
-            <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, background: C.bgPanel, borderRight: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', paddingLeft: 16, fontSize: 10, color: C.textMut }}>Item / Assignee</div>
-            {dayHeaders.map((d, i) => (
-              <div key={i} style={{ width: DAY_W, flexShrink: 0, fontSize: 9, fontWeight: d.isToday ? 800 : 400, color: d.isToday ? '#4ade80' : d.isWeekStart ? C.textSec : C.textMut, borderLeft: d.isWeekStart && i > 0 ? `1px solid ${C.border}` : `1px solid ${C.grid}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: d.isToday ? 'rgba(74,222,128,0.06)' : 'transparent' }}>{d.label}</div>
-            ))}
-          </div>
-          {windowItems.map((item, idx) => {
-            const projColor = item.projectColor ?? C.textMut;
-            const rowBg = idx % 2 === 0 ? C.bgCard : '#0b1020';
-            return (
-              <div key={item.id} style={{ display: 'flex', height: ROW_H, borderBottom: `1px solid ${C.grid}`, background: rowBg }}>
-                <div style={{ width: LABEL_W, flexShrink: 0, position: 'sticky', left: 0, zIndex: 10, background: rowBg, borderRight: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', overflow: 'hidden' }}>
-                  <div style={{ width: 3, height: '60%', borderRadius: 2, background: projColor, flexShrink: 0 }} />
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>{item.name}</div>
-                    <div style={{ display: 'flex', gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
-                      {item.assignee && <AssigneeChip assignee={item.assignee} />}
-                      {item.dmPhase && <PhaseBadge phase={item.dmPhase} />}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minWidth: totalW }}>
-                  {dayHeaders.map((d, i) => (
-                    <div key={i} style={{ position: 'absolute', left: d.x, top: 0, width: 1, height: '100%', background: d.isWeekStart && i > 0 ? C.border : C.grid, zIndex: 0, pointerEvents: 'none' }} />
-                  ))}
-                  <div style={{ position: 'absolute', left: todayX, top: 0, width: DAY_W, height: '100%', background: 'rgba(74,222,128,0.04)', zIndex: 0, pointerEvents: 'none' }} />
-                  <div style={{ position: 'absolute', left: todayX, top: 0, width: 2, height: '100%', background: C.today, zIndex: 2, pointerEvents: 'none' }} />
-                  {MILESTONE_KEYS.map(m => {
-                    const dateStr = bestDate(item.dates?.[m.key]);
-                    if (!dateStr) return null;
-                    const x = dateX(dateStr);
-                    if (x === null || x < 0 || x > totalW) return null;
-                    const mc = MILESTONE_COLORS[m.ck] || { bg: '#1e293b', text: '#94a3b8' };
-                    return (
-                      <div key={m.key} title={`${m.label}: ${dateStr}`} style={{ position: 'absolute', left: x + DAY_W / 2 - 14, top: '50%', transform: 'translateY(-50%)', background: mc.bg, color: mc.text, fontSize: 8, fontWeight: 800, padding: '2px 4px', borderRadius: 3, zIndex: 3, border: `1px solid ${mc.text}40`, whiteSpace: 'nowrap' }}>
-                        {m.label}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+// MiniTimeline imported from src/components/MiniTimeline.jsx
 
 // ── C: Stat panels ────────────────────────────────────────────────────────────
 function StatPanel({ label, value, sub, valueColor = C.text }) {
@@ -343,9 +200,10 @@ export default function AxiomHome() {
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data) ? data : [];
-        setProjects(list.map((p, i) => ({
+        const colorMap = assignProjectColors(list);
+        setProjects(list.map(p => ({
           ...p,
-          color:     PROJECT_COLORS[i % PROJECT_COLORS.length],
+          color:     colorMap.get(p.id) ?? PROJECT_COLORS[0],
           itemCount: null,
         })));
       })
