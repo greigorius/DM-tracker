@@ -83,7 +83,7 @@ export function anyDate(props, field) {
 }
 
 // ── Paginated query helper ────────────────────────────────────────────────────
-export async function queryAll(databaseId, filter, extraBody = {}) {
+export async function queryAll(databaseId, filter, extraBody = {}, timeoutMs = 55000) {
   const pages  = []
   let   cursor
   do {
@@ -96,6 +96,7 @@ export async function queryAll(databaseId, filter, extraBody = {}) {
     const r = await fetchNotion(
       `${NOTION_API}/databases/${databaseId}/query`,
       { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
+      timeoutMs,
     )
     if (!r.ok) {
       const txt = await r.text().catch(() => '')
@@ -176,18 +177,25 @@ export function transformItem(page) {
   const tdlCount     = relCount(p, 'To Do List')
   const finishCount  = relCount(p, 'Finishes')
 
-  const dates = {
-    sub1Adj:   dateVal(p, '1st Submission Date (Adj)'),
-    s4Adj:     dateVal(p, '2nd DT Start (Adj)'),
-    sub2Adj:   dateVal(p, '2nd Submission Date (Adj)'),
-    s5Adj:     dateVal(p, 'Constr. DT Start (Adj)'),
-    subC01Adj: dateVal(p, 'Constr. Submission Date (Adj)'),
-  }
+  const sub1Adj   = dateVal(p, '1st Submission Date (Adj)')
+  const s4Adj     = dateVal(p, '2nd DT Start (Adj)')
+  const sub2Adj   = dateVal(p, '2nd Submission Date (Adj)')
+  const s5Adj     = dateVal(p, 'Constr. DT Start (Adj)')
+  const subC01Adj = dateVal(p, 'Constr. Submission Date (Adj)')
 
-  const upcomingDates = Object.values(dates).filter(Boolean).map(d => new Date(d))
+  const upcomingDates = [sub1Adj, s4Adj, sub2Adj, s5Adj, subC01Adj].filter(Boolean).map(d => new Date(d))
   const nextDate = upcomingDates.length
     ? new Date(Math.min(...upcomingDates)).toISOString().slice(0, 10)
     : null
+
+  // Timeline-keyed shape for MiniTimeline compatibility
+  const dates = {
+    sub1:     { adj: sub1Adj },
+    s4Status: { adj: s4Adj },
+    sub2:     { adj: sub2Adj },
+    s5Status: { adj: s5Adj },
+    subC01:   { adj: subC01Adj },
+  }
 
   return {
     id,

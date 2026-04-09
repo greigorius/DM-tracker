@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Client } from '@notionhq/client';
 import {
   getCached, setCached, deleteCached,
   fetchNotion, notionHeaders, getSchemaIds, queryAll,
@@ -14,17 +13,13 @@ dotenv.config();
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
+const NOTION_API = 'https://api.notion.com/v1';
 
 app.use(cors());
 app.use(express.json());
 
-// ── Notion client (only active when NOTION_TOKEN is set) ──────────────────────
-const notion = process.env.NOTION_TOKEN
-  ? new Client({ auth: process.env.NOTION_TOKEN })
-  : null;
-
 function notionRequired(res) {
-  if (!notion) {
+  if (!process.env.NOTION_TOKEN) {
     res.status(503).json({ error: 'NOTION_TOKEN not configured' });
     return false;
   }
@@ -45,23 +40,10 @@ app.get('/api/projects', async (req, res) => {
   if (!notionRequired(res)) return;
 
   try {
-    const pages = [];
-    let startCursor;
-
-    do {
-      const response = await notion.databases.query({
-        database_id:  DB.projects,
-        start_cursor: startCursor,
-        filter: {
-          and: [
-            { property: 'Status', status: { does_not_equal: 'Done' } },
-          ],
-        },
-        sorts: [{ property: 'Start Date', direction: 'descending' }],
-      });
-      pages.push(...response.results);
-      startCursor = response.has_more ? response.next_cursor : undefined;
-    } while (startCursor);
+    const pages = await queryAll(DB.projects,
+      { property: 'Status', status: { does_not_equal: 'Done' } },
+      { sorts: [{ property: 'Start Date', direction: 'descending' }] },
+    );
 
     // Enrich with client names
     const clientIds = [...new Set(
@@ -70,8 +52,9 @@ app.get('/api/projects', async (req, res) => {
     const clientMap = {};
     await Promise.all(clientIds.map(async id => {
       try {
-        const page = await notion.pages.retrieve({ page_id: id });
-        clientMap[id] = page.properties['Company']?.title?.[0]?.plain_text ?? null;
+        const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() });
+        const page = r.ok ? await r.json() : null;
+        clientMap[id] = page?.properties['Company']?.title?.[0]?.plain_text ?? null;
       } catch { clientMap[id] = null; }
     }));
 
@@ -294,16 +277,22 @@ app.post('/api/quick-log/todo', async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
 
   try {
-    const page = await notion.pages.create({
-      parent: { database_id: DB.todo },
-      properties: {
-        'Item Description': { title: [{ text: { content: description } }] },
-        'Start Date': { date: { start: date || today } },
-        ...(itemId   && { 'Item':          { relation: [{ id: itemId }] } }),
-        ...(assignee && { 'Assigned To':   { people:   [{ id: assignee }] } }),
-        ...(category && { 'Task Category': { select:   { name: category } } }),
-      },
+    const r = await fetchNotion(`${NOTION_API}/pages`, {
+      method: 'POST',
+      headers: notionHeaders(),
+      body: JSON.stringify({
+        parent: { database_id: DB.todo },
+        properties: {
+          'Item Description': { title: [{ text: { content: description } }] },
+          'Start Date': { date: { start: date || today } },
+          ...(itemId   && { 'Item':          { relation: [{ id: itemId }] } }),
+          ...(assignee && { 'Assigned To':   { people:   [{ id: assignee }] } }),
+          ...(category && { 'Task Category': { select:   { name: category } } }),
+        },
+      }),
     });
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0,200)}`); }
+    const page = await r.json();
     res.json({ id: page.id, url: page.url });
   } catch (err) {
     console.error('[quick-log/todo]', err.message);
@@ -322,13 +311,19 @@ app.post('/api/quick-log/rfi', async (req, res) => {
   }
 
   try {
-    const page = await notion.pages.create({
-      parent: { database_id: DB.rfis },
-      properties: {
-        'Name': { title: [{ text: { content } }] },
-        ...(date && { 'Date': { date: { start: date } } }),
-      },
+    const r = await fetchNotion(`${NOTION_API}/pages`, {
+      method: 'POST',
+      headers: notionHeaders(),
+      body: JSON.stringify({
+        parent: { database_id: DB.rfis },
+        properties: {
+          'Name': { title: [{ text: { content } }] },
+          ...(date && { 'Date': { date: { start: date } } }),
+        },
+      }),
     });
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0,200)}`); }
+    const page = await r.json();
     res.json({ id: page.id, url: page.url });
   } catch (err) {
     console.error('[quick-log/rfi]', err.message);
@@ -344,14 +339,18 @@ app.post('/api/quick-log/production', async (req, res) => {
   if (taskId || itemId) {
     try {
       const pageId = taskId || itemId;
-      await notion.pages.update({
-        page_id: pageId,
-        properties: {
-          'Status': { status: { name: 'Pre-Production' } },
-          ...(targetDate && { 'Production Date': { date: { start: targetDate } } }),
-          ...(notes && { 'Notes': { rich_text: [{ text: { content: notes } }] } }),
-        },
+      const r = await fetchNotion(`${NOTION_API}/pages/${pageId}`, {
+        method: 'PATCH',
+        headers: notionHeaders(),
+        body: JSON.stringify({
+          properties: {
+            'Status': { status: { name: 'Pre-Production' } },
+            ...(targetDate && { 'Production Date': { date: { start: targetDate } } }),
+            ...(notes && { 'Notes': { rich_text: [{ text: { content: notes } }] } }),
+          },
+        }),
       });
+      if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0,200)}`); }
       return res.json({ updated: pageId });
     } catch (err) {
       console.error('[quick-log/production]', err.message);
@@ -360,14 +359,20 @@ app.post('/api/quick-log/production', async (req, res) => {
   }
 
   try {
-    const page = await notion.pages.create({
-      parent: { database_id: DB.todo },
-      properties: {
-        'Name': { title: [{ text: { content: notes || 'Schedule production' } }] },
-        'Category': { select: { name: 'Production' } },
-        ...(targetDate && { 'Date': { date: { start: targetDate } } }),
-      },
+    const r = await fetchNotion(`${NOTION_API}/pages`, {
+      method: 'POST',
+      headers: notionHeaders(),
+      body: JSON.stringify({
+        parent: { database_id: DB.todo },
+        properties: {
+          'Item Description': { title: [{ text: { content: notes || 'Schedule production' } }] },
+          'Task Category': { select: { name: 'Other' } },
+          ...(targetDate && { 'Start Date': { date: { start: targetDate } } }),
+        },
+      }),
     });
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0,200)}`); }
+    const page = await r.json();
     res.json({ id: page.id, url: page.url });
   } catch (err) {
     console.error('[quick-log/production]', err.message);
@@ -377,10 +382,10 @@ app.post('/api/quick-log/production', async (req, res) => {
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, notion: !!notion });
+  res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });
 });
 
 app.listen(PORT, () => {
   console.log(`DM Tracker server running on http://localhost:${PORT}`);
-  if (!notion) console.warn('  ⚠  NOTION_TOKEN not set — /api/quick-log/* will return 503');
+  if (!process.env.NOTION_TOKEN) console.warn('  ⚠  NOTION_TOKEN not set — API will return 503');
 });
