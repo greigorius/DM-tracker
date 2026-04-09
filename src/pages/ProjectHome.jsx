@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
+import { getCached, setCached } from '../hooks/usePageCache.js';
 import QuickLogBar from '../components/QuickLogBar.jsx';
 import MiniTimeline from '../components/MiniTimeline.jsx';
 import { PROJECT_COLORS, assignProjectColors } from '../data/colors.js';
@@ -194,30 +195,41 @@ export default function ProjectHome() {
   const [projLoading, setProjLoading] = useState(true);
   const [itemLoading, setItemLoading] = useState(true);
 
-  // Fetch project metadata
+  // Fetch project metadata (show cached immediately, refresh in background)
   useEffect(() => {
+    const applyList = list => {
+      const found = list.find(p => p.id === projectId);
+      if (found) {
+        const colorMap = assignProjectColors(list);
+        setProject({ ...found, color: colorMap.get(found.id) ?? PROJECT_COLORS[0] });
+      }
+    };
+    const cached = getCached('projects');
+    if (cached) { applyList(cached); setProjLoading(false); }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data) ? data : [];
-        const found = list.find(p => p.id === projectId);
-        if (found) {
-          const colorMap = assignProjectColors(list);
-          setProject({ ...found, color: colorMap.get(found.id) ?? PROJECT_COLORS[0] });
-        }
+        setCached('projects', list);
+        applyList(list);
       })
       .catch(() => {})
       .finally(() => setProjLoading(false));
   }, [projectId]);
 
-  // Fetch project items
+  // Fetch project items (show cached immediately, refresh in background)
   useEffect(() => {
     let cancelled = false;
+    const cached = getCached(`items:${projectId}`);
+    if (cached) { setItems(cached.items || []); setItemLoading(false); }
     setItemLoading(true);
     fetch(`/api/projects/${projectId}/items`)
       .then(r => r.json())
       .then(data => {
-        if (!cancelled) setItems(data.items || []);
+        if (!cancelled) {
+          setCached(`items:${projectId}`, data);
+          setItems(data.items || []);
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setItemLoading(false); });
@@ -286,7 +298,7 @@ export default function ProjectHome() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <StatPanel label="RFIs Open"      value={rfisOpen}     valueColor="#f87171" />
           <StatPanel label="Drawings"       value={drawingCount} sub="Total drawings assigned" valueColor="#60a5fa" />
-          <StatPanel label="Items Hanging"  value={itemsHanging} sub="On Hold status" valueColor="#fbbf24" />
+          <StatPanel label="Action Required" value={itemsHanging} sub="On Hold status" valueColor="#fbbf24" />
           <StatPanel label="In Production"  value={inProduction} sub="Pre-Production or In Manufacture" valueColor="#34d399" />
           <StatPanel label="Total Items"    value={items.length} sub="Active items in this project" />
         </div>

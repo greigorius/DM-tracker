@@ -5,6 +5,7 @@ import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
 import QuickLogBar from '../components/QuickLogBar.jsx';
 import MiniTimeline from '../components/MiniTimeline.jsx';
 import { PROJECT_COLORS, CLIENT_COLORS, assignProjectColors } from '../data/colors.js';
+import { getCached, setCached } from '../hooks/usePageCache.js';
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
@@ -231,18 +232,20 @@ export default function AxiomHome() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const abortRef = useRef(null);
 
-  // Fetch projects
+  // Fetch projects (show cached immediately, refresh in background)
   useEffect(() => {
+    const applyList = list => {
+      const colorMap = assignProjectColors(list);
+      setProjects(list.map(p => ({ ...p, color: colorMap.get(p.id) ?? PROJECT_COLORS[0], itemCount: null })));
+    };
+    const cached = getCached('projects');
+    if (cached) { applyList(cached); setProjLoading(false); }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data) ? data : [];
-        const colorMap = assignProjectColors(list);
-        setProjects(list.map(p => ({
-          ...p,
-          color:     colorMap.get(p.id) ?? PROJECT_COLORS[0],
-          itemCount: null,
-        })));
+        setCached('projects', list);
+        applyList(list);
       })
       .catch(() => {})
       .finally(() => setProjLoading(false));
@@ -262,18 +265,24 @@ export default function AxiomHome() {
     let remaining = active.length;
 
     active.forEach(proj => {
+      const applyData = data => {
+        const items = (data.items || []).map(item => ({
+          ...item,
+          projectId:    proj.id,
+          projectColor: proj.color,
+          projectName:  proj.name,
+        }));
+        setAllItems(prev => [...prev.filter(i => i.projectId !== proj.id), ...items]);
+        setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, itemCount: data.summary?.total ?? items.length } : p));
+      };
+      const cached = getCached(`items:${proj.id}`);
+      if (cached) applyData(cached);
       fetch(`/api/projects/${proj.id}/items`, { signal: ctrl.signal })
         .then(r => r.json())
         .then(data => {
           if (ctrl.signal.aborted) return;
-          const items = (data.items || []).map(item => ({
-            ...item,
-            projectId:    proj.id,
-            projectColor: proj.color,
-            projectName:  proj.name,
-          }));
-          setAllItems(prev => [...prev.filter(i => i.projectId !== proj.id), ...items]);
-          setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, itemCount: data.summary?.total ?? items.length } : p));
+          setCached(`items:${proj.id}`, data);
+          applyData(data);
         })
         .catch(e => { if (e.name !== 'AbortError') console.warn('[items]', proj.name, e.message); })
         .finally(() => {
@@ -354,7 +363,7 @@ export default function AxiomHome() {
           <StatPanel label="RFIs Open"       value={rfisOpen}     valueColor="#f87171" />
           <StatPanel label="Open TDL Items"  value={tdlOpen}      sub="To-Do List items across all projects" />
           <StatPanel label="Drawings"        value={drawingCount} sub="Total drawings assigned" valueColor="#60a5fa" />
-          <StatPanel label="Items Hanging"   value={itemsHanging} sub="On Hold status" valueColor="#fbbf24" />
+          <StatPanel label="Action Required"  value={itemsHanging} sub="On Hold status" valueColor="#fbbf24" />
           <StatPanel label="In Production"   value={inProduction} sub="Pre-Production or In Manufacture" valueColor="#34d399" />
         </div>
       </section>

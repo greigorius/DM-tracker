@@ -407,7 +407,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
         style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0', color: C.sec, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', letterSpacing: '0.06em', textTransform: 'uppercase' }}
       >
         <span style={{ color: C.muted }}>{panelOpen ? '▾' : '▸'}</span>
-        Queue
+        Tasks
         {totalItems > 0 && (
           <span style={{ background: '#1e3a5f', color: '#60a5fa', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, marginLeft: 2 }}>
             {totalItems}
