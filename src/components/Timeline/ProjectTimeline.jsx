@@ -664,17 +664,21 @@ export default function ProjectTimeline({
                       <div style={{ width: 4, flexShrink: 0, height: '100%', background: item.projectColor, opacity: 0.85 }} />
                     )}
 
-                    <button
-                      style={{
-                        background: 'none', border: 'none', color: hasExp ? C.textSec : 'transparent',
-                        cursor: hasExp ? 'pointer' : 'default', fontSize: 10, padding: '0 4px',
-                        lineHeight: 1, flexShrink: 0, fontFamily: 'monospace', width: 16,
-                      }}
-                      onClick={() => hasExp && setExpanded(e => ({ ...e, [item.id]: !e[item.id] }))}
-                      aria-label={isExp ? 'Collapse drawings' : `Show ${item.drawings?.length} drawings`}
-                    >
-                      {hasExp ? (isExp ? '▾' : '▸') : ''}
-                    </button>
+                    {hasExp ? (
+                      <button
+                        style={{
+                          background: 'none', border: 'none', color: C.textSec,
+                          cursor: 'pointer', fontSize: 10, padding: '0 4px',
+                          lineHeight: 1, flexShrink: 0, fontFamily: 'monospace', width: 16,
+                        }}
+                        onClick={() => setExpanded(e => ({ ...e, [item.id]: !e[item.id] }))}
+                        aria-label={isExp ? 'Collapse drawings' : `Show ${item.drawings.length} drawings`}
+                      >
+                        {isExp ? '▾' : '▸'}
+                      </button>
+                    ) : (
+                      <div style={{ width: 16, flexShrink: 0 }} />
+                    )}
 
                     <div style={{ flex: 1, minWidth: 0, padding: '0 6px 0 2px' }}>
                       {showProjectBadge && item.projectName && (

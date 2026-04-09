@@ -263,29 +263,7 @@ export async function fetchTaskPages(projectId) {
   if (cached) return cached
 
   const TASKS_DB = process.env.NOTION_DB_TASKS
-  const schema   = await getSchemaIds(TASKS_DB)
-
-  const NEEDED_PROPS = [
-    'Item Name', 'Status', 'Assigned To', 'Contract Category',
-    'No Client Approval', 'In Production', 'DM Phase',
-    '1st DT Start (Plan)',             '1st DT Start (Actual)',
-    '1st DT Delivery (Plan)',          '1st DT Delivery (Adj)',   '1st DT Delivery (Actual)',
-    '1st Submission Date (Plan)',      '1st Submission Date (Adj)',  '1st Submission Date (Actual)',
-    '2nd DT Start (Plan)',             '2nd DT Start (Adj)',
-    '2nd DT Delivery (Plan)',          '2nd DT Delivery (Adj)',   '2nd DT Delivery (Actual)',
-    '2nd Submission Date (Plan)',      '2nd Submission Date (Adj)',  '2nd Submission Date (Actual)',
-    'Constr. DT Start (Plan)',         'Constr. DT Start (Adj)',
-    'Constr. DT Delivery (Plan)',      'Constr. DT Delivery (Adj)', 'Constr. DT Delivery (Actual)',
-    'Constr. Submission Date (Plan)', 'Constr. Submission Date (Adj)', 'Constr. Submission Date (Actual)',
-  ]
-
-  let queryUrl = `${NOTION_API}/databases/${TASKS_DB}/query`
-  if (schema) {
-    const ids = NEEDED_PROPS.map(n => schema[n]).filter(Boolean)
-    if (ids.length > 0) {
-      queryUrl += '?' + ids.map(id => `filter_properties=${encodeURIComponent(id)}`).join('&')
-    }
-  }
+  const queryUrl = `${NOTION_API}/databases/${TASKS_DB}/query`
 
   const pages  = []
   let   cursor

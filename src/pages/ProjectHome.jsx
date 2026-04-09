@@ -118,12 +118,41 @@ function StatPanel({ label, value, sub, valueColor = C.text }) {
 }
 
 // ── Phase table ───────────────────────────────────────────────────────────────
+const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
+
 function PhaseTable({ items, projectColor }) {
-  const sorted = [...items].sort((a, b) => PHASE_ORDER.indexOf(a.dmPhase) - PHASE_ORDER.indexOf(b.dmPhase));
+  const [filterPhase,    setFilterPhase]    = useState('all');
+  const [filterAssignee, setFilterAssignee] = useState('all');
+  const [activeOnly,     setActiveOnly]     = useState(true);
+
+  const phases    = [...new Set(items.map(i => i.dmPhase).filter(Boolean))].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b));
+  const assignees = [...new Set(items.map(i => i.assignee).filter(Boolean))].sort();
+
+  const visible = [...items]
+    .filter(i => !activeOnly || !COMPLETED_STATUSES.has(i.status))
+    .filter(i => filterPhase    === 'all' || i.dmPhase  === filterPhase)
+    .filter(i => filterAssignee === 'all' || i.assignee === filterAssignee)
+    .sort((a, b) => PHASE_ORDER.indexOf(a.dmPhase) - PHASE_ORDER.indexOf(b.dmPhase));
+
+  const selStyle = { background: '#0b1020', border: `1px solid #1e2d45`, color: '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer' };
+  const btnStyle = (active) => ({ background: active ? '#1e3a5f' : '#0b1020', border: `1px solid ${active ? '#60a5fa' : '#1e2d45'}`, color: active ? '#60a5fa' : '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400 });
+
   return (
     <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, background: C.bgPanel }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>DM Phase Summary</span>
+      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.bgPanel, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.text, marginRight: 4 }}>DM Phase Summary</span>
+        <select value={filterPhase}    onChange={e => setFilterPhase(e.target.value)}    style={selStyle}>
+          <option value="all">All Phases</option>
+          {phases.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={selStyle}>
+          <option value="all">All Assignees</option>
+          {assignees.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <button style={btnStyle(activeOnly)} onClick={() => setActiveOnly(v => !v)}>
+          {activeOnly ? 'Active only' : 'Show all'}
+        </button>
+        <span style={{ fontSize: 10, color: C.textMut, marginLeft: 'auto' }}>{visible.length} items</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -135,7 +164,9 @@ function PhaseTable({ items, projectColor }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((item, idx) => (
+            {visible.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: '16px 12px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>No items match filters</td></tr>
+            ) : visible.map((item, idx) => (
               <tr key={item.id} style={{ background: idx % 2 === 0 ? C.bgCard : '#0b1020', borderBottom: `1px solid ${C.grid}` }}>
                 <td style={{ padding: '8px 12px', width: 18 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: projectColor }} /></td>
                 <td style={{ padding: '8px 12px', color: C.text, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</td>
