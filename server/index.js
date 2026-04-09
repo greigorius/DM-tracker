@@ -44,22 +44,16 @@ const DB = {
 app.get('/api/projects', async (req, res) => {
   if (!notionRequired(res)) return;
 
-  const PROJECT_FILTER_PROPERTIES = [
-    'title', 'bFja', 'BE_g', '_yYv', '%3DBGA', 'mkNI',
-  ];
-
   try {
     const pages = [];
     let startCursor;
 
     do {
       const response = await notion.databases.query({
-        database_id:       DB.projects,
-        start_cursor:      startCursor,
-        filter_properties: PROJECT_FILTER_PROPERTIES,
+        database_id:  DB.projects,
+        start_cursor: startCursor,
         filter: {
           and: [
-            { property: 'Status', status: { does_not_equal: 'Complete' } },
             { property: 'Status', status: { does_not_equal: 'Done' } },
           ],
         },
@@ -82,13 +76,13 @@ app.get('/api/projects', async (req, res) => {
     }));
 
     const enriched = pages.map(p => ({
-      id:     p.id,
-      name:   p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
-      status: p.properties['Status']?.status?.name ?? null,
-      client: clientMap[p.properties['Client']?.relation?.[0]?.id] ?? null,
-      progress: p.properties['_yYv']?.formula?.number ?? null,
-      hoursRequired: p.properties['%3DBGA']?.rollup?.number ?? null,
-      hoursSpent:    p.properties['mkNI']?.rollup?.number   ?? null,
+      id:            p.id,
+      name:          p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
+      status:        p.properties['Status']?.status?.name                  ?? null,
+      client:        clientMap[p.properties['Client']?.relation?.[0]?.id]  ?? null,
+      hoursRequired: p.properties['Total Hours Required']?.rollup?.number  ?? null,
+      hoursSpent:    p.properties['Total Hours Spent']?.rollup?.number     ?? null,
+      hoursLeft:     p.properties['Hrs Left']?.rollup?.number              ?? null,
     }));
 
     res.json(enriched);
@@ -267,19 +261,19 @@ app.get('/api/tdl', async (req, res) => {
     let filter;
     if (ids && ids.length > 0) {
       filter = ids.length === 1
-        ? { property: 'Related Item', relation: { contains: ids[0] } }
-        : { or: ids.map(id => ({ property: 'Related Item', relation: { contains: id } })) };
+        ? { property: 'Item', relation: { contains: ids[0] } }
+        : { or: ids.map(id => ({ property: 'Item', relation: { contains: id } })) };
     }
 
     const pages = await queryAll(DB.todo, filter);
     const items = pages.map(p => ({
       id:          p.id,
-      name:        p.properties['Name']?.title?.[0]?.plain_text ?? null,
+      tdlId:       p.properties['ID']?.unique_id?.number        ?? null,
+      description: p.properties['Item Description']?.title?.[0]?.plain_text ?? null,
       status:      p.properties['Status']?.status?.name         ?? null,
-      assignee:    p.properties['Assignee']?.rich_text?.[0]?.plain_text ?? null,
-      date:        p.properties['Date']?.date?.start            ?? null,
-      category:    p.properties['Category']?.select?.name       ?? null,
-      dmPhase:     p.properties['DM Phase']?.select?.name       ?? null,
+      assignee:    p.properties['Assigned To']?.people?.[0]?.name ?? null,
+      date:        p.properties['Start Date']?.date?.start       ?? null,
+      category:    p.properties['Task Category']?.select?.name   ?? null,
     }));
     res.json(items);
   } catch (err) {
@@ -291,21 +285,23 @@ app.get('/api/tdl', async (req, res) => {
 // ── POST /api/quick-log/todo ──────────────────────────────────────────────────
 app.post('/api/quick-log/todo', async (req, res) => {
   if (!notionRequired(res)) return;
-  const { description, projectId, itemId, assignee, dmPhase, date, type } = req.body;
+  const { description, itemId, assignee, category, date } = req.body;
 
   if (!description) {
     return res.status(400).json({ error: 'description is required' });
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+
   try {
     const page = await notion.pages.create({
       parent: { database_id: DB.todo },
       properties: {
-        'Name': { title: [{ text: { content: description } }] },
-        ...(date && { 'Date': { date: { start: date } } }),
-        ...(dmPhase && { 'DM Phase': { select: { name: dmPhase } } }),
-        ...(type && { 'Category': { select: { name: type } } }),
-        ...(assignee && { 'Assignee': { rich_text: [{ text: { content: assignee } }] } }),
+        'Item Description': { title: [{ text: { content: description } }] },
+        'Start Date': { date: { start: date || today } },
+        ...(itemId   && { 'Item':          { relation: [{ id: itemId }] } }),
+        ...(assignee && { 'Assigned To':   { people:   [{ id: assignee }] } }),
+        ...(category && { 'Task Category': { select:   { name: category } } }),
       },
     });
     res.json({ id: page.id, url: page.url });
