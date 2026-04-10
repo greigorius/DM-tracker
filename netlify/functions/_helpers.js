@@ -99,6 +99,8 @@ export function transformTask(page, drawings = []) {
     noClientApproval: props['No Client Approval']?.checkbox           ?? false,
     inProduction:     props['In Production']?.checkbox                ?? false,
     dmPhase:          props['DM Phase']?.select?.name                 ?? null,
+    s4Status:         selectVal(props, 'S4 Status'),
+    s5Status:         selectVal(props, 'S5 Status'),
     dates: {
       dt1Start:    { plan: d(props, '1st DT Start (Plan)'),            actual: d(props, '1st DT Start (Actual)'),          adj: null },
       dt1Delivery: { plan: d(props, '1st DT Delivery (Plan)'),         adj:    d(props, '1st DT Delivery (Adj)'),           actual: d(props, '1st DT Delivery (Actual)') },
@@ -149,6 +151,8 @@ export function transformItem(page) {
     contractCategory: contractCat(name),
     noClientApproval: checkVal(p, 'No Client Approval'),
     inProduction:     checkVal(p, 'In Production'),
+    s4Status:         selectVal(p, 'S4 Status'),
+    s5Status:         selectVal(p, 'S5 Status'),
     rfiCount,
     tdlCount,
     drawingCount,
@@ -182,13 +186,13 @@ export function transformDrawing(page) {
       actual: d(props,       'S4 Submit Date (Actual)'),
       adj:    anyDate(props, 'S4 Submit Date (Adj)'),
     },
-    s4Status: props['S4 Status (LOR)']?.select?.name ?? null,
+    s4Status: props['S4 Status']?.select?.name ?? null,
     s5Submit: {
       plan:   anyDate(props, 'S5 Submit Date (Plan)'),
       actual: d(props,       'S5 Submit Date (Actual)'),
       adj:    anyDate(props, 'S5 Submit Date (Adj)'),
     },
-    s5Status: props['S5 Status (F&P)']?.select?.name ?? null,
+    s5Status: props['S5 Status']?.select?.name ?? null,
     c01Submit: {
       plan:   anyDate(props, 'C01 Submit Date (Plan)'),
       actual: d(props,       'C01 Submit Date (Actual)'),

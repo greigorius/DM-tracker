@@ -194,20 +194,37 @@ export default function ProjectTimeline({
         setError(null);
         setLoading(false);
 
-        // Fetch drawings separately — only for items that have them
+        // Fetch drawings in small batches to avoid Netlify timeout
         const taskIdsWithDrawings = (data.items || [])
           .filter(item => item.drawingIds?.length > 0)
           .map(item => item.id);
         if (!taskIdsWithDrawings.length) return;
 
-        fetch(`/api/projects/${projectId}/drawings?taskIds=${taskIdsWithDrawings.join(',')}`)
-          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-          .then(drawingsByTask => {
-            if (!cancelled) setFetchedItems(prev =>
-              prev.map(item => ({ ...item, drawings: drawingsByTask[item.id] || [] }))
-            );
-          })
-          .catch(() => {});
+        const BATCH = 8;
+        const batches = [];
+        for (let i = 0; i < taskIdsWithDrawings.length; i += BATCH) {
+          batches.push(taskIdsWithDrawings.slice(i, i + BATCH));
+        }
+
+        (async () => {
+          const merged = {};
+          for (const batch of batches) {
+            if (cancelled) return;
+            try {
+              const r = await fetch(`/api/projects/${projectId}/drawings?taskIds=${batch.join(',')}`);
+              if (!r.ok) continue;
+              const chunk = await r.json();
+              Object.assign(merged, chunk);
+              // Update state after each batch so drawings appear progressively
+              if (!cancelled) setFetchedItems(prev =>
+                prev.map(item => merged[item.id] !== undefined
+                  ? { ...item, drawings: merged[item.id] }
+                  : item
+                )
+              );
+            } catch { /* skip failed batch */ }
+          }
+        })();
       })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
     return () => { cancelled = true; };
@@ -449,11 +466,6 @@ export default function ProjectTimeline({
             <div style={{ fontSize: 10, color: '#818cf8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {dwg.drawingNumber || '—'}
             </div>
-            {dwg.title && (
-              <div style={{ fontSize: 9, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {dwg.title}
-              </div>
-            )}
             <div style={{ display: 'flex', gap: 3 }}>
               {dwg.rev && (
                 <span style={{ fontSize: 8, background: '#1e293b', border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 4px', color: C.textMuted }}>
@@ -704,14 +716,13 @@ export default function ProjectTimeline({
                         </div>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
-                        <span style={{ background: sc.bg, color: sc.text, borderRadius: 3, padding: '1px 5px', fontSize: 8, fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {item.status}
-                        </span>
                         {hasExp && (
                           <span style={{ background: '#1a2540', border: `1px solid ${C.border}`, borderRadius: 8, padding: '0 5px', color: C.textSec, fontSize: 8, flexShrink: 0 }}>
                             {item.drawings.length} dwg{item.drawings.length !== 1 ? 's' : ''}
                           </span>
                         )}
+                        {item.s4Status && statusBadge('S4', item.s4Status)}
+                        {item.s5Status && item.s5Status !== 'NA' && statusBadge('S5', item.s5Status)}
                         {item.contractCategory === 'PCSA' && (
                           <span style={{ background: 'rgba(139,92,246,0.18)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 8, padding: '0 5px', color: '#c4b5fd', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 }}>
                             PCSA
