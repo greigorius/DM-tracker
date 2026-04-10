@@ -157,6 +157,7 @@ export default function ProjectTimeline({
   projectName,
   items: propItems,
   showProjectBadge = false,
+  refreshKey = 0,
 }) {
   const [fetchedItems, setFetchedItems] = useState([]);
   const [loading,      setLoading]      = useState(false);
@@ -230,7 +231,7 @@ export default function ProjectTimeline({
       })
       .catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, refreshKey]);
 
   useEffect(() => {
     if (propItems) scrolledRef.current = false;

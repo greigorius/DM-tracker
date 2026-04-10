@@ -7,14 +7,21 @@ export default function TimelinePage() {
   const { projectId } = useParams();
   const navigate      = useNavigate();
 
-  const [projects,    setProjects]    = useState([]);
-  const [projLoading, setProjLoading] = useState(true);
-
+  const [projects,      setProjects]      = useState([]);
+  const [projLoading,   setProjLoading]   = useState(true);
   const [combinedItems, setCombinedItems] = useState([]);
   const [loadingSet,    setLoadingSet]    = useState(new Set());
+  const [refreshKey,    setRefreshKey]    = useState(0);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const abortRef = useRef(null);
 
-  // ── Fetch project list once ──────────────────────────────────────────────────
+  // Auto-refresh interval (5 minutes)
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Fetch project list ───────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/projects')
       .then(r => r.json())
@@ -27,10 +34,11 @@ export default function TimelinePage() {
           status: p.status ?? p.properties?.['Status']?.status?.name ?? '',
           color:  colorMap.get(p.id) ?? PROJECT_COLORS[0],
         })));
+        setLastRefreshed(new Date());
       })
       .catch(() => {})
       .finally(() => setProjLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   // ── Combined view: fetch all active projects in parallel ──────────────────────
   useEffect(() => {
@@ -169,6 +177,21 @@ export default function TimelinePage() {
           </span>
         )}
 
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {lastRefreshed && (
+            <span style={{ fontSize: 10, color: '#7b90b0' }}>
+              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => setRefreshKey(k => k + 1)}
+            title="Refresh data"
+            style={{ background: 'none', border: '1px solid #1e2d45', borderRadius: 4, color: '#7b90b0', fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
+          >
+            ↻
+          </button>
+        </div>
+
         {!projectId && !isLoadingAll && projects.filter(p => p.status === 'In progress' || p.status === 'Active').length > 1 && (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginLeft: 4 }}>
             {projects
@@ -185,7 +208,7 @@ export default function TimelinePage() {
       </div>
 
       {projectId && (
-        <ProjectTimeline projectId={projectId} projectName={selected?.name} />
+        <ProjectTimeline projectId={projectId} projectName={selected?.name} refreshKey={refreshKey} />
       )}
 
       {!projectId && (combinedItems.length > 0 || isLoadingAll) && (

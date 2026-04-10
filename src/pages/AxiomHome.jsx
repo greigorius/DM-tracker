@@ -224,13 +224,23 @@ function PhaseTable({ items }) {
   );
 }
 
+const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AxiomHome() {
-  const [projects,     setProjects]     = useState([]);
-  const [allItems,     setAllItems]     = useState([]);
-  const [projLoading,  setProjLoading]  = useState(true);
-  const [itemsLoading, setItemsLoading] = useState(false);
+  const [projects,      setProjects]      = useState([]);
+  const [allItems,      setAllItems]      = useState([]);
+  const [projLoading,   setProjLoading]   = useState(true);
+  const [itemsLoading,  setItemsLoading]  = useState(false);
+  const [refreshKey,    setRefreshKey]    = useState(0);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const abortRef = useRef(null);
+
+  // Auto-refresh interval
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey(k => k + 1), REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   // Fetch projects (show cached immediately, refresh in background)
   useEffect(() => {
@@ -246,10 +256,11 @@ export default function AxiomHome() {
         const list = Array.isArray(data) ? data : [];
         setCached('projects', list);
         applyList(list);
+        setLastRefreshed(new Date());
       })
       .catch(() => {})
       .finally(() => setProjLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   // Fetch items for all projects once project list is ready
   useEffect(() => {
@@ -293,7 +304,7 @@ export default function AxiomHome() {
     });
 
     return () => ctrl.abort();
-  }, [projects.length]);
+  }, [projects.length, refreshKey]);
 
   // Build client hierarchy from projects
   const clients = (() => {
@@ -325,8 +336,22 @@ export default function AxiomHome() {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>DM Tracker</h1>
           <div style={{ fontSize: 12, color: C.textMut, marginTop: 4 }}>All clients overview</div>
         </div>
-        <div style={{ fontSize: 11, color: C.textMut }}>
-          {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 11, color: C.textMut }}>
+            {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+          {lastRefreshed && (
+            <span style={{ fontSize: 10, color: C.textMut }}>
+              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => setRefreshKey(k => k + 1)}
+            title="Refresh data"
+            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.textMut, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
+          >
+            ↻
+          </button>
         </div>
       </div>
 
