@@ -74,9 +74,11 @@ const ITEM_MILESTONES = [
 ];
 
 const DWG_MILESTONES = [
-  { key: 's4Submit',  label: 'S4',  ck: 's4dwg'  },
-  { key: 's5Submit',  label: 'S5',  ck: 's5dwg'  },
-  { key: 'c01Submit', label: 'C01', ck: 'c01dwg' },
+  { key: 's4Submit',     label: 'S4',  ck: 's4dwg'  },
+  { key: 's4StatusDate', label: 'S4',  ck: 's4dwg',  statusKey: 's4Status' },
+  { key: 's5Submit',     label: 'S5',  ck: 's5dwg'  },
+  { key: 's5StatusDate', label: 'S5',  ck: 's5dwg',  statusKey: 's5Status' },
+  { key: 'c01Submit',    label: 'C01', ck: 'c01dwg' },
 ];
 
 const LEGEND_ITEMS = [
@@ -488,8 +490,7 @@ export default function ProjectTimeline({
                          : bestDate(d);
               const type = viewMode === 'actual' && d.actual ? 'actual'
                          : viewMode === 'adj'    && d.adj    ? 'adj' : 'plan';
-              const st = m.key === 's4Submit' ? dwg.s4Status
-                       : m.key === 's5Submit' ? dwg.s5Status : null;
+              const st = m.statusKey ? dwg[m.statusKey] : null;
               const label = st && st !== 'NA' ? `${m.label}:${st}` : m.label;
               return date && renderMilestone(date, m.ck, label, type);
             })}
@@ -523,6 +524,23 @@ export default function ProjectTimeline({
         background: good ? '#14532d' : warn ? '#78350f' : '#7f1d1d',
         color:      good ? '#6ee7a0' : warn ? '#fbbf24' : '#f87171',
       }}>{prefix}:{val}</span>
+    );
+  }
+
+  // Aggregated S4/S5 badge — shows unique sorted status letters from all drawings
+  function aggStatusBadge(prefix, letters) {
+    if (!letters.length) return null;
+    const stColor = v => v === 'A' ? '#6ee7a0' : v === 'B' ? '#fbbf24' : '#f87171';
+    return (
+      <span key={prefix} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 2,
+        background: '#0f172a', border: `1px solid ${C.border}`,
+        borderRadius: 3, padding: '1px 4px', fontSize: 8, fontWeight: 700,
+        fontFamily: 'monospace', flexShrink: 0,
+      }}>
+        <span style={{ color: C.textMuted }}>{prefix}</span>
+        {letters.map(v => <span key={v} style={{ color: stColor(v) }}>{v}</span>)}
+      </span>
     );
   }
 
@@ -718,20 +736,26 @@ export default function ProjectTimeline({
                           {item.assignee}
                         </div>
                       )}
+                      {(() => {
+                        const s4L = [...new Set((item.drawings || []).map(d => d.s4Status).filter(v => v && v !== 'NA'))].sort();
+                        const s5L = [...new Set((item.drawings || []).map(d => d.s5Status).filter(v => v && v !== 'NA'))].sort();
+                        return (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
                         {hasExp && (
                           <span style={{ background: '#1a2540', border: `1px solid ${C.border}`, borderRadius: 8, padding: '0 5px', color: C.textSec, fontSize: 8, flexShrink: 0 }}>
                             {item.drawings.length} dwg{item.drawings.length !== 1 ? 's' : ''}
                           </span>
                         )}
-                        {item.s4Status && statusBadge('S4', item.s4Status)}
-                        {item.s5Status && item.s5Status !== 'NA' && statusBadge('S5', item.s5Status)}
+                        {aggStatusBadge('S4', s4L)}
+                        {aggStatusBadge('S5', s5L)}
                         {item.contractCategory === 'PCSA' && (
                           <span style={{ background: 'rgba(139,92,246,0.18)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 8, padding: '0 5px', color: '#c4b5fd', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 }}>
                             PCSA
                           </span>
                         )}
                       </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

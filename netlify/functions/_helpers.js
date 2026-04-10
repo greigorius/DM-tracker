@@ -186,13 +186,15 @@ export function transformDrawing(page) {
       actual: d(props,       'S4 Submit Date (Actual)'),
       adj:    anyDate(props, 'S4 Submit Date (Adj)'),
     },
-    s4Status: props['S4 Status']?.select?.name ?? null,
+    s4Status:     props['S4 Status']?.select?.name ?? null,
+    s4StatusDate: { actual: anyDate(props, 'S4 Status Date'), plan: null, adj: null },
     s5Submit: {
       plan:   anyDate(props, 'S5 Submit Date (Plan)'),
       actual: d(props,       'S5 Submit Date (Actual)'),
       adj:    anyDate(props, 'S5 Submit Date (Adj)'),
     },
-    s5Status: props['S5 Status']?.select?.name ?? null,
+    s5Status:     props['S5 Status']?.select?.name ?? null,
+    s5StatusDate: { actual: anyDate(props, 'S5 Status Date'), plan: null, adj: null },
     c01Submit: {
       plan:   anyDate(props, 'C01 Submit Date (Plan)'),
       actual: d(props,       'C01 Submit Date (Actual)'),
