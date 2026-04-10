@@ -488,7 +488,10 @@ export default function ProjectTimeline({
                          : bestDate(d);
               const type = viewMode === 'actual' && d.actual ? 'actual'
                          : viewMode === 'adj'    && d.adj    ? 'adj' : 'plan';
-              return date && renderMilestone(date, m.ck, m.label, type);
+              const st = m.key === 's4Submit' ? dwg.s4Status
+                       : m.key === 's5Submit' ? dwg.s5Status : null;
+              const label = st && st !== 'NA' ? `${m.label}:${st}` : m.label;
+              return date && renderMilestone(date, m.ck, label, type);
             })}
           </div>
         </div>
