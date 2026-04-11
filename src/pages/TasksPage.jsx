@@ -295,7 +295,7 @@ export default function TasksPage() {
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [editTask,      setEditTask]      = useState(null);
-  const [collapsed,     setCollapsed]     = useState({});
+  const [expanded,      setExpanded]      = useState({});
 
   const [filterProject,  setFilterProject]  = useState('all');
   const [filterItem,     setFilterItem]     = useState('all');
@@ -420,7 +420,7 @@ export default function TasksPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, tasks: groupTasks }) => {
             const projColor = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isCollapsed = !!collapsed[key];
+            const isExpanded = !!expanded[key];
             return (
               <div
                 key={key}
@@ -435,17 +435,17 @@ export default function TasksPage() {
               >
                 {/* Group header */}
                 <div
-                  onClick={() => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))}
-                  style={{ padding: '9px 16px', background: C.bgPanel, borderBottom: isCollapsed ? 'none' : `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
+                  style={{ padding: '9px 16px', background: C.bgPanel, borderBottom: isExpanded ? `1px solid ${C.border}` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
                 >
-                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>{isCollapsed ? '▸' : '▾'}</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</span>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{groupTasks.length} task{groupTasks.length !== 1 ? 's' : ''}</span>
                 </div>
 
                 {/* Task table */}
-                {!isCollapsed && (
+                {isExpanded && (
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <TableHead />
