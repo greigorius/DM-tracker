@@ -56,6 +56,16 @@
   to     = "/.netlify/functions/quick-log-production"
   status = 200
 
+[[redirects]]
+  from   = "/api/tasks/update"
+  to     = "/.netlify/functions/task-update"
+  status = 200
+
+[[redirects]]
+  from   = "/api/tasks"
+  to     = "/.netlify/functions/tasks"
+  status = 200
+
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"

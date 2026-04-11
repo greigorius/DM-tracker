@@ -69,27 +69,17 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
     color: C.text, fontSize: 10, padding: '3px 6px', width: 64,
   };
 
-  const totalItems = PANEL_CONFIG.reduce((n, p) => n + getByType(p.type).length, 0);
-
-  if (totalItems === 0) {
-    return (
-      <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic', padding: '8px 0' }}>
-        No tasks queued
-      </div>
-    );
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {PANEL_CONFIG.map(cfg => {
-        const items       = getByType(cfg.type);
-        if (!items.length) return null;
-        const isCollapsed = collapsed[cfg.type];
+        const items = getByType(cfg.type);
+        const isEmpty     = items.length === 0;
+        const isCollapsed = collapsed[cfg.type] ?? isEmpty; // empty panels start collapsed
         const isSubmitting = submitting[cfg.type];
         const err         = errors[cfg.type];
 
         return (
-          <div key={cfg.type} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+          <div key={cfg.type} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', opacity: isEmpty ? 0.5 : 1 }}>
             {/* Panel header */}
             <div
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', cursor: 'pointer', background: C.panel, borderBottom: isCollapsed ? 'none' : `1px solid ${C.border}` }}
@@ -98,12 +88,14 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.accentColor }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{cfg.label}</span>
-                <span style={{ fontSize: 9, background: '#1e293b', color: cfg.accentColor, padding: '1px 6px', borderRadius: 999, fontWeight: 800 }}>
-                  {items.length}
-                </span>
+                {items.length > 0 && (
+                  <span style={{ fontSize: 9, background: '#1e293b', color: cfg.accentColor, padding: '1px 6px', borderRadius: 999, fontWeight: 800 }}>
+                    {items.length}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {!isCollapsed && (
+                {!isCollapsed && items.length > 0 && (
                   <button
                     onClick={e => { e.stopPropagation(); submitPanel(cfg); }}
                     disabled={isSubmitting}
@@ -118,6 +110,9 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
 
             {!isCollapsed && (
               <div>
+                {isEmpty && (
+                  <div style={{ padding: '10px 14px', fontSize: 10, color: C.muted, fontStyle: 'italic' }}>No items queued</div>
+                )}
                 {err && (
                   <div style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.08)', borderBottom: `1px solid rgba(239,68,68,0.2)`, fontSize: 10, color: '#f87171' }}>
                     Error: {err}
