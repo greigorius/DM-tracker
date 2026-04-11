@@ -290,10 +290,12 @@ const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: 
 export default function TasksPage() {
   const [tasks,         setTasks]         = useState([]);
   const [projects,      setProjects]      = useState([]);
+  const [schemaCategories, setSchemaCategories] = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [editTask,      setEditTask]      = useState(null);
+  const [collapsed,     setCollapsed]     = useState({});
 
   const [filterProject,  setFilterProject]  = useState('all');
   const [filterItem,     setFilterItem]     = useState('all');
@@ -308,6 +310,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     fetch('/api/projects').then(r => r.json()).then(d => setProjects(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/task-categories').then(r => r.json()).then(d => setSchemaCategories(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -329,7 +332,7 @@ export default function TasksPage() {
   // Filter options
   const itemOptions     = [...new Set(tasks.map(t => t.itemName).filter(Boolean))].sort();
   const assigneeOptions = [...new Set(tasks.map(t => t.assignedTo).filter(Boolean))].sort();
-  const categoryOptions = [...new Set(tasks.map(t => t.taskCategory).filter(Boolean))].sort();
+  const categoryOptions = [...new Set([...schemaCategories, ...tasks.map(t => t.taskCategory).filter(Boolean)])].sort();
 
   // Apply filters
   const visible = tasks.filter(t => {
@@ -417,6 +420,7 @@ export default function TasksPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, tasks: groupTasks }) => {
             const projColor = colorMap.get(projectId) ?? PROJECT_COLORS[0];
+            const isCollapsed = !!collapsed[key];
             return (
               <div
                 key={key}
@@ -430,32 +434,35 @@ export default function TasksPage() {
                 }}
               >
                 {/* Group header */}
-                <div style={{ padding: '9px 16px', background: C.bgPanel, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  onClick={() => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))}
+                  style={{ padding: '9px 16px', background: C.bgPanel, borderBottom: isCollapsed ? 'none' : `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+                >
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>{isCollapsed ? '▸' : '▾'}</span>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{groupTasks.length} task{groupTasks.length !== 1 ? 's' : ''}</span>
-                  {groupTasks.some(t => t.changeTask) && (
-                    <span style={{ fontSize: 9, fontWeight: 700, background: '#2e1f5e', color: '#818cf8', padding: '1px 6px', borderRadius: 4, marginLeft: 4 }}>CHANGE</span>
-                  )}
                 </div>
 
                 {/* Task table */}
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <TableHead />
-                    <tbody>
-                      {groupTasks.map((task, idx) => (
-                        <TaskRow
-                          key={task.id}
-                          task={task}
-                          projectColor={projColor}
-                          odd={idx % 2 !== 0}
-                          onClick={() => setEditTask(task)}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {!isCollapsed && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <TableHead />
+                      <tbody>
+                        {groupTasks.map((task, idx) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            projectColor={projColor}
+                            odd={idx % 2 !== 0}
+                            onClick={(e) => { e.stopPropagation(); setEditTask(task); }}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             );
           })}

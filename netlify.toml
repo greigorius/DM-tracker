@@ -66,6 +66,11 @@
   to     = "/.netlify/functions/tasks"
   status = 200
 
+[[redirects]]
+  from   = "/api/task-categories"
+  to     = "/.netlify/functions/task-categories"
+  status = 200
+
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"
