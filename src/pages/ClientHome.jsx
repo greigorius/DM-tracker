@@ -211,7 +211,7 @@ export default function ClientHome() {
       setAllProjects(list.map(p => ({ ...p, color: colorMap.get(p.id) ?? PROJECT_COLORS[0], itemCount: null })));
     };
     const cached = getCached('projects');
-    if (cached) { applyList(cached); setProjLoading(false); }
+    if (cached) { applyList(cached); setProjLoading(false); return; }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
@@ -253,7 +253,12 @@ export default function ClientHome() {
         setAllProjects(prev => prev.map(p => p.id === proj.id ? { ...p, itemCount: data.summary?.total ?? newItems.length } : p));
       };
       const cached = getCached(`items:${proj.id}`);
-      if (cached) applyData(cached);
+      if (cached) {
+        applyData(cached);
+        remaining--;
+        if (remaining === 0) setItemsLoading(false);
+        return;
+      }
       fetch(`/api/projects/${proj.id}/items`, { signal: ctrl.signal })
         .then(r => r.json())
         .then(data => {

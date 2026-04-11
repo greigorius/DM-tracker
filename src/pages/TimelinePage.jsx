@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import ProjectTimeline from '../components/Timeline/ProjectTimeline.jsx';
 import { PROJECT_COLORS, assignProjectColors } from '../data/colors.js';
 import AppNav from '../components/AppNav.jsx';
+import { getCached, setCached } from '../hooks/usePageCache.js';
 
 export default function TimelinePage() {
   const { projectId } = useParams();
@@ -24,17 +25,24 @@ export default function TimelinePage() {
 
   // ── Fetch project list ───────────────────────────────────────────────────────
   useEffect(() => {
+    const applyProjects = d => {
+      const pages = Array.isArray(d) ? d : (d.projects ?? []);
+      const colorMap = assignProjectColors(pages);
+      setProjects(pages.map(p => ({
+        id:     p.id,
+        name:   p.name ?? p.properties?.['Project Name']?.title?.[0]?.plain_text ?? p.id,
+        status: p.status ?? p.properties?.['Status']?.status?.name ?? '',
+        color:  colorMap.get(p.id) ?? PROJECT_COLORS[0],
+      })));
+    };
+    const cached = getCached('projects');
+    if (cached) { applyProjects(cached); setProjLoading(false); return; }
     fetch('/api/projects')
       .then(r => r.json())
       .then(d => {
-        const pages = Array.isArray(d) ? d : (d.projects ?? []);
-        const colorMap = assignProjectColors(pages);
-        setProjects(pages.map(p => ({
-          id:     p.id,
-          name:   p.name ?? p.properties?.['Project Name']?.title?.[0]?.plain_text ?? p.id,
-          status: p.status ?? p.properties?.['Status']?.status?.name ?? '',
-          color:  colorMap.get(p.id) ?? PROJECT_COLORS[0],
-        })));
+        const list = Array.isArray(d) ? d : (d.projects ?? []);
+        setCached('projects', list);
+        applyProjects(list);
         setLastRefreshed(new Date());
       })
       .catch(() => {})
@@ -72,6 +80,12 @@ export default function TimelinePage() {
     };
 
     active.forEach(proj => {
+      const cachedTimeline = getCached(`timeline:${proj.id}`);
+      if (cachedTimeline) {
+        mergeItems(proj, cachedTimeline);
+        setLoadingSet(prev => { const s = new Set(prev); s.delete(proj.id); return s; });
+        return;
+      }
       fetch(`/api/projects/${proj.id}/timeline`, { signal: ctrl.signal })
         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then(data => {
@@ -83,7 +97,10 @@ export default function TimelinePage() {
             .filter(item => item.drawingIds?.length > 0)
             .map(item => item.id);
 
-          if (!taskIdsWithDrawings.length) return;
+          if (!taskIdsWithDrawings.length) {
+            setCached(`timeline:${proj.id}`, data.items || []);
+            return;
+          }
 
           fetch(`/api/projects/${proj.id}/drawings?taskIds=${taskIdsWithDrawings.join(',')}`, { signal: ctrl.signal })
             .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -93,6 +110,7 @@ export default function TimelinePage() {
                 ...item,
                 drawings: drawingsByTask[item.id] || [],
               }));
+              setCached(`timeline:${proj.id}`, itemsWithDrawings);
               mergeItems(proj, itemsWithDrawings);
             })
             .catch(e => { if (e.name !== 'AbortError') console.warn('[drawings]', proj.name, e.message); });
