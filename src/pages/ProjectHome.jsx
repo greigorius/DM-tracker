@@ -205,7 +205,7 @@ export default function ProjectHome() {
       }
     };
     const cached = getCached('projects');
-    if (cached) { applyList(cached); setProjLoading(false); }
+    if (cached) { applyList(cached); setProjLoading(false); return; }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
@@ -217,11 +217,11 @@ export default function ProjectHome() {
       .finally(() => setProjLoading(false));
   }, [projectId]);
 
-  // Fetch project items (show cached immediately, refresh in background)
+  // Fetch project items (cache-first: skip network when cache is fresh)
   useEffect(() => {
     let cancelled = false;
     const cached = getCached(`items:${projectId}`);
-    if (cached) { setItems(cached.items || []); setItemLoading(false); }
+    if (cached) { setItems(cached.items || []); setItemLoading(false); return; }
     setItemLoading(true);
     fetch(`/api/projects/${projectId}/items`)
       .then(r => r.json())

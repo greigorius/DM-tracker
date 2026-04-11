@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { getCached, setCached } from '../../hooks/usePageCache.js';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const DAY_W     = 56    // px per day  →  14 days ≈ 784 px in viewport
@@ -184,11 +185,21 @@ export default function ProjectTimeline({
   // ── Fetch ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!projectId || propItems) return;
-    setLoading(true);
-    setFetchedItems([]);
     setExpanded({});
     scrolledRef.current = false;
     let cancelled = false;
+
+    // Cache-first: skip network when timeline data is fresh
+    const cached = getCached(`timeline:${projectId}`);
+    if (cached) {
+      setFetchedItems(cached);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setFetchedItems([]);
     fetch(`/api/projects/${projectId}/timeline`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => {
@@ -201,7 +212,10 @@ export default function ProjectTimeline({
         const taskIdsWithDrawings = (data.items || [])
           .filter(item => item.drawingIds?.length > 0)
           .map(item => item.id);
-        if (!taskIdsWithDrawings.length) return;
+        if (!taskIdsWithDrawings.length) {
+          setCached(`timeline:${projectId}`, data.items || []);
+          return;
+        }
 
         const BATCH = 8;
         const batches = [];
@@ -219,12 +233,14 @@ export default function ProjectTimeline({
               const chunk = await r.json();
               Object.assign(merged, chunk);
               // Update state after each batch so drawings appear progressively
-              if (!cancelled) setFetchedItems(prev =>
-                prev.map(item => merged[item.id] !== undefined
+              if (!cancelled) setFetchedItems(prev => {
+                const updated = prev.map(item => merged[item.id] !== undefined
                   ? { ...item, drawings: merged[item.id] }
                   : item
-                )
-              );
+                );
+                setCached(`timeline:${projectId}`, updated);
+                return updated;
+              });
             } catch { /* skip failed batch */ }
           }
         })();

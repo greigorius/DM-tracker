@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
+import { getCached, setCached } from '../hooks/usePageCache.js';
 
 const C = {
   bg:      '#0a0f1a',
@@ -309,15 +310,33 @@ export default function TasksPage() {
   useEffect(() => { const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000); return () => clearInterval(id); }, []);
 
   useEffect(() => {
-    fetch('/api/projects').then(r => r.json()).then(d => setProjects(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch('/api/task-categories').then(r => r.json()).then(d => setSchemaCategories(Array.isArray(d) ? d : [])).catch(() => {});
+    const cachedProjects = getCached('projects');
+    if (cachedProjects) {
+      setProjects(cachedProjects);
+    } else {
+      fetch('/api/projects')
+        .then(r => r.json())
+        .then(d => { const list = Array.isArray(d) ? d : []; setCached('projects', list); setProjects(list); })
+        .catch(() => {});
+    }
+    const cachedCats = getCached('task-categories');
+    if (cachedCats) {
+      setSchemaCategories(cachedCats);
+    } else {
+      fetch('/api/task-categories')
+        .then(r => r.json())
+        .then(d => { const list = Array.isArray(d) ? d : []; setCached('task-categories', list); setSchemaCategories(list); })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
+    const cached = getCached('tasks');
+    if (cached) { setTasks(cached); setLoading(false); return; }
     setLoading(true);
     fetch('/api/tasks?showDone=true')
       .then(r => r.json())
-      .then(d => { setTasks(Array.isArray(d) ? d : []); setLastRefreshed(new Date()); })
+      .then(d => { const list = Array.isArray(d) ? d : []; setCached('tasks', list); setTasks(list); setLastRefreshed(new Date()); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [refreshKey]);
