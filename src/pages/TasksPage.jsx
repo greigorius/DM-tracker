@@ -43,8 +43,13 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
   const [itemId,        setItemId]        = useState(task.itemId ?? '');
   const [items,         setItems]         = useState([]);
   const [loadingItems,  setLoadingItems]  = useState(false);
-  const [saving,        setSaving]        = useState(false);
+  const [saveStatus,    setSaveStatus]    = useState('saved'); // 'saved' | 'unsaved' | 'saving' | 'error'
   const [error,         setError]         = useState(null);
+  const autoSaveTimer   = useRef(null);
+  const latestValues    = useRef({});
+
+  // Keep a ref to the latest field values so the debounced fn always reads fresh data
+  latestValues.current = { description, subTaskHours, taskCategory, changeTask, taskDone, itemId };
 
   useEffect(() => {
     if (!projectId) { setItems([]); return; }
@@ -56,8 +61,20 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
       .finally(() => setLoadingItems(false));
   }, [projectId]);
 
-  const handleSave = async () => {
-    setSaving(true);
+  // Mark unsaved whenever any field changes and schedule auto-save
+  const markDirty = () => {
+    setSaveStatus('unsaved');
+    setError(null);
+    clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => saveToNotion(), 1500);
+  };
+
+  // Cleanup debounce on unmount
+  useEffect(() => () => clearTimeout(autoSaveTimer.current), []);
+
+  const saveToNotion = async (andClose = false) => {
+    const v = latestValues.current;
+    setSaveStatus('saving');
     setError(null);
     try {
       const res = await fetch('/api/tasks/update', {
@@ -65,27 +82,43 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id:           task.id,
-          description:  description.trim(),
-          subTaskHours: subTaskHours !== '' ? Number(subTaskHours) : null,
-          taskCategory: taskCategory || null,
-          changeTask,
-          taskDone,
-          itemId:       itemId || null,
+          description:  (v.description ?? '').trim(),
+          subTaskHours: v.subTaskHours !== '' ? Number(v.subTaskHours) : null,
+          taskCategory: v.taskCategory || null,
+          changeTask:   v.changeTask,
+          taskDone:     v.taskDone,
+          itemId:       v.itemId || null,
         }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
 
       // Track done date locally for 7-day retention
-      if (taskDone && !task.taskDone) setDoneDate(task.id, new Date().toISOString());
-      else if (!taskDone && task.taskDone) setDoneDate(task.id, null);
+      if (v.taskDone && !task.taskDone) setDoneDate(task.id, new Date().toISOString());
+      else if (!v.taskDone && task.taskDone) setDoneDate(task.id, null);
 
-      onSave({ ...task, description, subTaskHours: subTaskHours !== '' ? Number(subTaskHours) : null, taskCategory, changeTask, taskDone, projectId, itemId });
+      setSaveStatus('saved');
+      const updated = { ...task, description: v.description, subTaskHours: v.subTaskHours !== '' ? Number(v.subTaskHours) : null, taskCategory: v.taskCategory, changeTask: v.changeTask, taskDone: v.taskDone, projectId, itemId: v.itemId };
+      onSave(updated, /* close */ andClose);
     } catch (e) {
+      setSaveStatus('error');
       setError(e.message);
-    } finally {
-      setSaving(false);
     }
   };
+
+  const handleSaveAndClose = () => {
+    clearTimeout(autoSaveTimer.current);
+    saveToNotion(true);
+  };
+
+  // Wrapped setters that mark dirty
+  const set = (setter) => (val) => { setter(val); markDirty(); };
+  const setD = set(setDescription);
+  const setSTH = set(setSubTaskHours);
+  const setTC = set(setTaskCategory);
+  const setCT = () => { setChangeTask(v => !v); markDirty(); };
+  const setTD = () => { setTaskDone(v => !v); markDirty(); };
+  const setItem = (v) => { setItemId(v); markDirty(); };
+  const setProject = (v) => { setProjectId(v); setItemId(''); markDirty(); };
 
   const inputStyle = { width: '100%', background: C.input, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, padding: '7px 10px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' };
   const labelStyle = { fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5, display: 'block' };
@@ -106,37 +139,45 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
             <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{task.tdlId ?? 'Task'}</div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{task.itemName ?? ''}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.sec, cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '0 2px' }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {{
+              saving:  <span style={{ fontSize: 10, color: '#60a5fa' }}>Saving…</span>,
+              unsaved: <span style={{ fontSize: 10, color: '#f59e0b' }}>Unsaved changes</span>,
+              saved:   <span style={{ fontSize: 10, color: '#34d399' }}>Saved ✓</span>,
+              error:   <span style={{ fontSize: 10, color: '#f87171' }}>Save failed</span>,
+            }[saveStatus]}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.sec, cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '0 2px' }}>×</button>
+          </div>
         </div>
 
         <div style={{ padding: '0 24px 24px', fontFamily: "'DM Mono','ui-monospace',monospace" }}>
 
           <F label="Project">
-            <select value={projectId} onChange={e => { setProjectId(e.target.value); setItemId(''); }} style={inputStyle}>
+            <select value={projectId} onChange={e => setProject(e.target.value)} style={inputStyle}>
               <option value="">— select project —</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </F>
 
           <F label="Item">
-            <select value={itemId} onChange={e => setItemId(e.target.value)} style={inputStyle} disabled={!projectId || loadingItems}>
+            <select value={itemId} onChange={e => setItem(e.target.value)} style={inputStyle} disabled={!projectId || loadingItems}>
               <option value="">{!projectId ? '— select project first —' : loadingItems ? 'Loading…' : '— select item —'}</option>
               {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
             </select>
           </F>
 
           <F label="Item Description">
-            <input value={description} onChange={e => setDescription(e.target.value)} style={inputStyle} />
+            <input value={description} onChange={e => setD(e.target.value)} style={inputStyle} />
           </F>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Sub Task Hours</label>
-              <input type="number" min="0" step="0.5" value={subTaskHours} onChange={e => setSubTaskHours(e.target.value)} style={inputStyle} />
+              <input type="number" min="0" step="0.5" value={subTaskHours} onChange={e => setSTH(e.target.value)} style={inputStyle} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Task Category</label>
-              <select value={taskCategory} onChange={e => setTaskCategory(e.target.value)} style={inputStyle}>
+              <select value={taskCategory} onChange={e => setTC(e.target.value)} style={inputStyle}>
                 <option value="">—</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -145,12 +186,12 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
 
           <div style={{ display: 'flex', gap: 24, marginBottom: 20 }}>
             {[
-              { label: 'Change Task', value: changeTask, set: setChangeTask, color: '#6366f1' },
-              { label: 'Task Done',   value: taskDone,   set: setTaskDone,   color: '#34d399' },
-            ].map(({ label, value, set, color }) => (
+              { label: 'Change Task', value: changeTask, toggle: setCT, color: '#6366f1' },
+              { label: 'Task Done',   value: taskDone,   toggle: setTD, color: '#34d399' },
+            ].map(({ label, value, toggle, color }) => (
               <label key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, color: value ? color : C.sec, fontWeight: 700 }}>
                 <div
-                  onClick={() => set(v => !v)}
+                  onClick={toggle}
                   style={{ width: 16, height: 16, borderRadius: 3, border: `2px solid ${value ? color : C.border}`, background: value ? color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                 >
                   {value && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1, fontWeight: 900 }}>✓</span>}
@@ -167,9 +208,13 @@ function TaskEditModal({ task, projects, categories, onSave, onClose }) {
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button onClick={onClose} style={{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: 'transparent', color: C.sec, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '7px 20px', borderRadius: 6, border: 'none', cursor: saving ? 'not-allowed' : 'pointer', background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}>
-              {saving ? 'Saving…' : 'Save'}
+            <button onClick={onClose} style={{ padding: '7px 14px', borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: 'transparent', color: C.sec, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>Close</button>
+            <button
+              onClick={handleSaveAndClose}
+              disabled={saveStatus === 'saving'}
+              style={{ padding: '7px 20px', borderRadius: 6, border: 'none', cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer', background: saveStatus === 'saved' ? '#14532d' : '#6366f1', color: saveStatus === 'saved' ? '#4ade80' : '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', opacity: saveStatus === 'saving' ? 0.7 : 1, transition: 'background 0.2s, color 0.2s' }}
+            >
+              {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : 'Save'}
             </button>
           </div>
         </div>
@@ -311,10 +356,10 @@ export default function TasksPage() {
     seen.get(key).push(task);
   }
 
-  const handleSaved = (updated) => {
+  const handleSaved = (updated, andClose = false) => {
     doneDates.current = getDoneDates();
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-    setEditTask(null);
+    if (andClose) setEditTask(null);
   };
 
   return (
