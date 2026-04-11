@@ -578,7 +578,7 @@ export default function DrawingsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, itemStatus, drawings: groupDwgs }) => {
             const projColor  = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded = expanded[key] !== false; // default expanded
+            const isExpanded = !!expanded[key]; // default collapsed
 
             return (
               <div
