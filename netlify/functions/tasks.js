@@ -1,7 +1,8 @@
 /**
  * GET /api/tasks
- * Returns all TODO tasks with project & item names resolved.
- * Query params: ?showDone=true to include completed tasks
+ * Returns tasks with project & item names resolved.
+ * Server-side excludes: done tasks created more than 7 days ago (UI 7-day retention).
+ * Query params: ?showDone=true to include done tasks (still within 7d window)
  */
 import {
   corsHeaders, tokenGuard, errResponse,
@@ -18,19 +19,48 @@ async function fetchPage(id) {
   } catch { return null }
 }
 
+/** Fetch pages in serial batches of `size` to avoid hammering Notion rate limits */
+async function batchFetch(ids, size = 10) {
+  const results = []
+  for (let i = 0; i < ids.length; i += size) {
+    const chunk = ids.slice(i, i + size)
+    const pages = await Promise.all(chunk.map(fetchPage))
+    results.push(...pages)
+  }
+  return results
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders, body: '' }
   const guard = tokenGuard(); if (guard) return guard
 
   const showDone = event.queryStringParameters?.showDone === 'true'
 
+  // Cutoff: tasks done AND created before this date are skipped entirely
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
   try {
-    const filter = showDone ? undefined : {
-      or: [
-        { property: 'Task Done', checkbox: { equals: false } },
-        { property: 'Task Done', checkbox: { does_not_equal: true } },
-      ]
-    }
+    // Build filter:
+    //   If showDone=false → only undone tasks
+    //   If showDone=true  → undone tasks OR (done tasks created within last 7 days)
+    const filter = showDone
+      ? {
+          or: [
+            { property: 'Task Done', checkbox: { equals: false } },
+            {
+              and: [
+                { property: 'Task Done', checkbox: { equals: true } },
+                { timestamp: 'created_time', created_time: { after: sevenDaysAgo } },
+              ],
+            },
+          ],
+        }
+      : {
+          or: [
+            { property: 'Task Done', checkbox: { equals: false } },
+            { property: 'Task Done', checkbox: { does_not_equal: true } },
+          ],
+        }
 
     const pages = await queryAll(DB_TODO, filter, {
       sorts: [{ timestamp: 'created_time', direction: 'descending' }],
@@ -43,27 +73,26 @@ export const handler = async (event) => {
       for (const r of rel) itemIdSet.add(r.id)
     }
 
-    // Batch-fetch item pages (to get item name + project relation)
-    const itemIds  = [...itemIdSet]
-    const itemPages = await Promise.all(itemIds.map(fetchPage))
-    const itemMap  = {}           // itemPageId → { name, projectId, projectPageId }
+    // Batch-fetch item pages in chunks of 10
+    const itemIds   = [...itemIdSet]
+    const itemPages = await batchFetch(itemIds, 10)
+    const itemMap   = {}
     const projIdSet = new Set()
 
     itemIds.forEach((id, i) => {
       const page = itemPages[i]
       if (!page) return
-      const props     = page.properties ?? {}
-      const name      = props['Item Name']?.title?.[0]?.plain_text ?? null
-      const projectRel = props['Projects']?.relation ?? []
-      const projectPageId = projectRel[0]?.id ?? null
+      const props         = page.properties ?? {}
+      const name          = props['Item Name']?.title?.[0]?.plain_text ?? null
+      const projectPageId = props['Projects']?.relation?.[0]?.id ?? null
       itemMap[id] = { name, projectPageId }
       if (projectPageId) projIdSet.add(projectPageId)
     })
 
-    // Batch-fetch project pages to get project names
+    // Batch-fetch project pages in chunks of 10
     const projIds   = [...projIdSet]
-    const projPages = await Promise.all(projIds.map(fetchPage))
-    const projMap   = {}  // projectPageId → { name }
+    const projPages = await batchFetch(projIds, 10)
+    const projMap   = {}
 
     projIds.forEach((id, i) => {
       const page = projPages[i]
@@ -73,11 +102,10 @@ export const handler = async (event) => {
     })
 
     const tasks = pages.map(p => {
-      const props     = p.properties ?? {}
-      const itemRel   = props['Item']?.relation ?? []
-      const itemPageId = itemRel[0]?.id ?? null
-      const item      = itemMap[itemPageId] ?? {}
-      const proj      = item.projectPageId ? projMap[item.projectPageId] : null
+      const props      = p.properties ?? {}
+      const itemPageId = props['Item']?.relation?.[0]?.id ?? null
+      const item       = itemMap[itemPageId] ?? {}
+      const proj       = item.projectPageId ? projMap[item.projectPageId] : null
 
       return {
         id:           p.id,
