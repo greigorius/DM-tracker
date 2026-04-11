@@ -4,6 +4,8 @@
 
 [functions]
   node_bundler = "esbuild"
+  # Extend timeout for Notion-heavy endpoints (requires Netlify Pro; free tier caps at 10s)
+  timeout = 30
 
 # ── API rewrites → Netlify Functions ─────────────────────────────────────────
 [[redirects]]

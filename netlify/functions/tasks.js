@@ -19,15 +19,52 @@ async function fetchPage(id) {
   } catch { return null }
 }
 
-/** Fetch pages in serial batches of `size` to avoid hammering Notion rate limits */
-async function batchFetch(ids, size = 10) {
-  const results = []
-  for (let i = 0; i < ids.length; i += size) {
-    const chunk = ids.slice(i, i + size)
+/**
+ * Fetch item pages in concurrent batches, immediately firing project fetches
+ * as project IDs are discovered — eliminates the sequential waterfall where
+ * ALL item fetches had to finish before ANY project fetches could begin.
+ *
+ * Example: 60 items, 5 projects
+ *   Before: 3 item batches (serial) → then 1 project batch = 4 round-trips total
+ *   After:  batch 1 items → fire all project fetches immediately
+ *           batch 2 items → (projects already in flight)
+ *           batch 3 items → await remaining projects = ~2 round-trips total
+ */
+async function resolveRelations(itemIds, batchSize = 25) {
+  const itemMap      = {}
+  const projPromises = {}   // projId → Promise<page | null>
+
+  for (let i = 0; i < itemIds.length; i += batchSize) {
+    const chunk = itemIds.slice(i, i + batchSize)
     const pages = await Promise.all(chunk.map(fetchPage))
-    results.push(...pages)
+
+    for (let j = 0; j < chunk.length; j++) {
+      const id   = chunk[j]
+      const page = pages[j]
+      if (!page) continue
+      const props         = page.properties ?? {}
+      const name          = props['Item Name']?.title?.[0]?.plain_text ?? null
+      const projectPageId = props['Projects']?.relation?.[0]?.id       ?? null
+      itemMap[id] = { name, projectPageId }
+      // Fire project fetch immediately — don't wait for all items to be processed first
+      if (projectPageId && !projPromises[projectPageId]) {
+        projPromises[projectPageId] = fetchPage(projectPageId)
+      }
+    }
   }
-  return results
+
+  // Collect all project results (most will already be resolved by the time we get here)
+  const projMap = {}
+  await Promise.all(
+    Object.entries(projPromises).map(async ([id, promise]) => {
+      const page = await promise
+      if (!page) return
+      const name = page.properties?.['Project Name']?.title?.[0]?.plain_text ?? null
+      projMap[id] = { id, name }
+    }),
+  )
+
+  return { itemMap, projMap }
 }
 
 export const handler = async (event) => {
@@ -73,33 +110,8 @@ export const handler = async (event) => {
       for (const r of rel) itemIdSet.add(r.id)
     }
 
-    // Batch-fetch item pages in chunks of 10
-    const itemIds   = [...itemIdSet]
-    const itemPages = await batchFetch(itemIds, 10)
-    const itemMap   = {}
-    const projIdSet = new Set()
-
-    itemIds.forEach((id, i) => {
-      const page = itemPages[i]
-      if (!page) return
-      const props         = page.properties ?? {}
-      const name          = props['Item Name']?.title?.[0]?.plain_text ?? null
-      const projectPageId = props['Projects']?.relation?.[0]?.id ?? null
-      itemMap[id] = { name, projectPageId }
-      if (projectPageId) projIdSet.add(projectPageId)
-    })
-
-    // Batch-fetch project pages in chunks of 10
-    const projIds   = [...projIdSet]
-    const projPages = await batchFetch(projIds, 10)
-    const projMap   = {}
-
-    projIds.forEach((id, i) => {
-      const page = projPages[i]
-      if (!page) return
-      const name = page.properties?.['Project Name']?.title?.[0]?.plain_text ?? null
-      projMap[id] = { id, name }
-    })
+    // Resolve item names + project names with pipelined concurrent fetching
+    const { itemMap, projMap } = await resolveRelations([...itemIdSet])
 
     const tasks = pages.map(p => {
       const props      = p.properties ?? {}
