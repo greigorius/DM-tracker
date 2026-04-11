@@ -2,6 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import ProjectTimeline from '../components/Timeline/ProjectTimeline.jsx';
 import { PROJECT_COLORS, assignProjectColors } from '../data/colors.js';
+import AppNav from '../components/AppNav.jsx';
 
 export default function TimelinePage() {
   const { projectId } = useParams();
@@ -161,6 +162,8 @@ export default function TimelinePage() {
           {projectId && selected ? 'Project programme timeline' : 'All active projects · programme overview'}
         </div>
       </div>
+
+      <AppNav />
 
       <div style={S.topBar}>
         <span style={S.label}>Project</span>

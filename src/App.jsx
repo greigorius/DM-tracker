@@ -3,6 +3,10 @@ import AxiomHome from './pages/AxiomHome.jsx';
 import ClientHome from './pages/ClientHome.jsx';
 import ProjectHome from './pages/ProjectHome.jsx';
 import TimelinePage from './pages/TimelinePage.jsx';
+import TasksPage from './pages/TasksPage.jsx';
+import TrackersPage from './pages/TrackersPage.jsx';
+import DrawingsPage from './pages/DrawingsPage.jsx';
+import TeamPage from './pages/TeamPage.jsx';
 
 export default function App() {
   return (
@@ -13,6 +17,10 @@ export default function App() {
         <Route path="/project/:projectId" element={<ProjectHome />} />
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/timeline/:projectId" element={<TimelinePage />} />
+        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/trackers" element={<TrackersPage />} />
+        <Route path="/drawings" element={<DrawingsPage />} />
+        <Route path="/team" element={<TeamPage />} />
       </Routes>
     </BrowserRouter>
   );
