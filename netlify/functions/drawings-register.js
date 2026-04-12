@@ -9,54 +9,60 @@ import {
 } from './_helpers.js'
 
 const DB_DRAWINGS = process.env.NOTION_DB_DRAWINGS
-const DB_TASKS    = process.env.NOTION_DB_TASKS
-const DB_PROJECTS = process.env.NOTION_DB_PROJECTS
 const NOTION_API  = 'https://api.notion.com/v1'
 
+/** Safely fetch a single Notion page — never throws, returns null on any error. */
 async function fetchPage(id) {
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() })
-    return r.ok ? r.json() : null
+    if (!r.ok) return null
+    return await r.json()   // ← await inside try so JSON parse errors are caught too
   } catch { return null }
 }
 
 /**
- * Given a list of item page IDs (from drawing relations), batch-fetch
- * item names, statuses, and project IDs — firing project fetches as
- * project IDs are discovered (same pipeline as tasks.js).
+ * Batch-fetch item pages (name, status, projectId) and fire project fetches
+ * as project IDs are discovered — same pipeline as tasks.js.
+ * Never throws; unresolvable items/projects silently become null.
  */
-async function resolveItems(itemIds, batchSize = 25) {
-  const itemMap      = {}
-  const projPromises = {}
+async function resolveItems(itemIds, batchSize = 20) {
+  const itemMap = {}
+  const projMap = {}
 
+  // --- items (batched concurrent fetches) ---
   for (let i = 0; i < itemIds.length; i += batchSize) {
-    const chunk = itemIds.slice(i, i + batchSize)
-    const pages = await Promise.all(chunk.map(fetchPage))
+    const chunk   = itemIds.slice(i, i + batchSize)
+    const results = await Promise.allSettled(chunk.map(fetchPage))
 
     for (let j = 0; j < chunk.length; j++) {
-      const id   = chunk[j]
-      const page = pages[j]
-      if (!page) continue
-      const p              = page.properties ?? {}
-      const name           = p['Item Name']?.title?.[0]?.plain_text ?? null
-      const status         = p['Status']?.status?.name ?? null
-      const projectPageId  = p['Projects']?.relation?.[0]?.id ?? null
-      itemMap[id] = { name, status, projectPageId }
-      if (projectPageId && !projPromises[projectPageId]) {
-        projPromises[projectPageId] = fetchPage(projectPageId)
+      const s = results[j]
+      if (s.status !== 'fulfilled' || !s.value) continue
+      const page = s.value
+      if (!page.properties) continue          // error-shaped page, skip
+      const p             = page.properties
+      const projectPageId = p['Projects']?.relation?.[0]?.id ?? null
+      itemMap[chunk[j]] = {
+        name:           p['Item Name']?.title?.[0]?.plain_text ?? null,
+        status:         p['Status']?.status?.name              ?? null,
+        projectPageId,
       }
     }
   }
 
-  const projMap = {}
-  await Promise.all(
-    Object.entries(projPromises).map(async ([id, promise]) => {
-      const page = await promise
-      if (!page) return
-      const name = page.properties?.['Project Name']?.title?.[0]?.plain_text ?? null
-      projMap[id] = { id, name }
-    }),
-  )
+  // --- projects (concurrent, one fetch per unique project) ---
+  const uniqueProjIds = [...new Set(
+    Object.values(itemMap).map(i => i.projectPageId).filter(Boolean)
+  )]
+
+  const projResults = await Promise.allSettled(uniqueProjIds.map(fetchPage))
+  for (let i = 0; i < uniqueProjIds.length; i++) {
+    const s = projResults[i]
+    if (s.status !== 'fulfilled' || !s.value) continue
+    const page = s.value
+    if (!page.properties) continue
+    const name = page.properties['Project Name']?.title?.[0]?.plain_text ?? null
+    projMap[uniqueProjIds[i]] = { id: uniqueProjIds[i], name }
+  }
 
   return { itemMap, projMap }
 }
@@ -66,15 +72,14 @@ export const handler = async (event) => {
   const guard = tokenGuard(); if (guard) return guard
 
   try {
-    // No sorts — Notion rejects server-side sorts if the property name doesn't
-    // exactly match (title fields are especially fussy). Sort client-side instead.
+    // Fetch all drawings — no server-side sort (Notion rejects sorts when the
+    // property name doesn't match exactly; sort by drawingNumber in JS below).
     const pages = await queryAll(DB_DRAWINGS, null)
 
     // Collect unique item IDs across all drawings
     const itemIdSet = new Set()
     for (const p of pages) {
-      const rel = p.properties?.['Item']?.relation ?? []
-      for (const r of rel) itemIdSet.add(r.id)
+      for (const r of (p.properties?.['Item']?.relation ?? [])) itemIdSet.add(r.id)
     }
 
     const { itemMap, projMap } = await resolveItems([...itemIdSet])
