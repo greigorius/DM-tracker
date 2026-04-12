@@ -9,6 +9,7 @@ function PdfViewer({
   onPinClick,
   onPinDragEnd,
   onPinDelete,
+  onPageClick,   // (fracX, fracY) — fired when canvas is clicked (not on a pin)
 }) {
   const canvasRef    = useRef(null);
   const containerRef = useRef(null);
@@ -127,11 +128,20 @@ function PdfViewer({
       <div
         className="pdf-page-wrapper"
         ref={wrapperRef}
+        onClick={e => {
+          if (!onPageClick || !wrapperRef.current) return;
+          const rect = wrapperRef.current.getBoundingClientRect();
+          onPageClick(
+            (e.clientX - rect.left)  / rect.width,
+            (e.clientY - rect.top)   / rect.height,
+          );
+        }}
         style={{
           position:    'relative',
           display:     'inline-block',
           width:       canvasDims.width  || undefined,
           height:      canvasDims.height || undefined,
+          cursor:      onPageClick ? 'crosshair' : 'default',
         }}
       >
         <canvas ref={canvasRef} className="pdf-canvas" />

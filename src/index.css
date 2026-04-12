@@ -56,6 +56,87 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* ── v-section — collapsible section card used by DTExportSection ────────────── */
+
+.v-section {
+  background: #0d1525;
+  border: 1px solid #1e2d45;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.v-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  background: #0d1830;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  border-bottom: 1px solid #1e2d45;
+  gap: 10px;
+}
+
+.v-section-header:hover {
+  background: #101e35;
+}
+
+.v-section-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.v-chevron {
+  font-size: 11px;
+  color: #7b90b0;
+  display: inline-block;
+  transition: transform 0.15s;
+  line-height: 1;
+}
+
+.v-chevron-closed {
+  transform: rotate(-90deg);
+}
+
+.v-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.v-section-counts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.sc-pass {
+  font-size: 9px;
+  font-weight: 800;
+  background: #14532d;
+  color: #4ade80;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.sc-fail {
+  font-size: 9px;
+  font-weight: 800;
+  background: #7f1d1d;
+  color: #fca5a5;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
 /* ── PdfViewer ───────────────────────────────────────────────────────────────── */
 
 .pdf-container {
