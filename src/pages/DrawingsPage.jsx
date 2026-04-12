@@ -296,26 +296,22 @@ function DrawingRow({ drawing, odd, pending, editOptions, dragState, onDragStart
 // ── Filter bar styles ──────────────────────────────────────────────────────────
 const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: C.sec, fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' };
 
-const CHUNK_SIZE = 25; // item IDs per drawings fetch — stays well under Notion OR-filter limit
+const CHUNK_SIZE = 25; // item IDs per drawings fetch
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DrawingsPage() {
-  // Phase 1 — items (group structure)
-  const [regItems,     setRegItems]     = useState([]); // [{id, name, status, projectId}]
-  const [itemsLoading, setItemsLoading] = useState(true);
-
-  // Phase 2 — drawings (lazy, parallel chunks)
+  const [regItems,      setRegItems]      = useState([]);
+  const [itemsLoading,  setItemsLoading]  = useState(false);
   const [drawings,      setDrawings]      = useState([]);
   const [chunksTotal,   setChunksTotal]   = useState(0);
   const [chunksDone,    setChunksDone]    = useState(0);
-
   const [projects,      setProjects]      = useState([]);
   const [fetchError,    setFetchError]    = useState(null);
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [expanded,      setExpanded]      = useState({});
 
-  // Filters
+  // Project is the primary scope — must be selected before loading
   const [filterProject,     setFilterProject]     = useState('all');
   const [filterItem,        setFilterItem]        = useState('all');
   const [filterDesignStage, setFilterDesignStage] = useState('all');
@@ -323,18 +319,14 @@ export default function DrawingsPage() {
   const [filterS4Status,    setFilterS4Status]    = useState('all');
   const [filterS5Status,    setFilterS5Status]    = useState('all');
 
-  // Pending edits
   const [pending,    setPending]    = useState({});
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveError,  setSaveError]  = useState(null);
-
-  // Drag-to-fill
-  const [dragState, setDragState] = useState(null);
+  const [dragState,  setDragState]  = useState(null);
   const dragRef = useRef(null);
 
   const today = new Date();
 
-  // Auto-refresh every 5 min
   useEffect(() => {
     const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000);
     return () => clearInterval(id);
@@ -349,29 +341,47 @@ export default function DrawingsPage() {
       .catch(() => {});
   }, []);
 
-  // ── Phase 1: load items ─────────────────────────────────────────────────────
+  // ── Phase 1: load items scoped to selected project ──────────────────────────
+  // Mirrors the pattern used by every other page: filter by projectId first.
   useEffect(() => {
-    const cached = getCached('dr-items');
-    if (cached) { setRegItems(cached); setItemsLoading(false); return; }
+    if (filterProject === 'all') {
+      setRegItems([]);
+      setDrawings([]);
+      setFetchError(null);
+      return;
+    }
+
+    const cacheKey = `dr-items:${filterProject}`;
+    const cached   = getCached(cacheKey);
+    if (cached && refreshKey === 0) { setRegItems(cached); return; }
+
     setItemsLoading(true);
     setFetchError(null);
-    fetch('/api/drawings-register/items')
+    setRegItems([]);
+    setDrawings([]);
+
+    fetch(`/api/drawings-register/items?projectId=${filterProject}`)
       .then(r => r.json())
       .then(d => {
         if (!Array.isArray(d)) throw new Error(d?.error ?? 'Failed to load items');
-        setCached('dr-items', d);
+        setCached(cacheKey, d);
         setRegItems(d);
       })
       .catch(err => { console.error('[dr-items]', err); setFetchError(err.message); })
       .finally(() => setItemsLoading(false));
-  }, [refreshKey]);
+  }, [filterProject, refreshKey]);
 
   // ── Phase 2: load drawings in parallel chunks once items are known ──────────
   useEffect(() => {
     if (!regItems.length) return;
 
-    const cachedDwgs = getCached('dr-drawings');
-    if (cachedDwgs) { setDrawings(cachedDwgs); setLastRefreshed(new Date()); return; }
+    const cacheKey  = `dr-drawings:${filterProject}`;
+    const cachedDwgs = getCached(cacheKey);
+    if (cachedDwgs && refreshKey === 0) {
+      setDrawings(cachedDwgs);
+      setLastRefreshed(new Date());
+      return;
+    }
 
     const itemIds = regItems.map(i => i.id);
     const chunks  = [];
@@ -392,7 +402,6 @@ export default function DrawingsPage() {
           .then(r => r.json())
           .then(d => {
             if (!Array.isArray(d)) return;
-            // Merge de-duplicated drawings into state progressively
             setDrawings(prev => {
               const next = [...prev];
               for (const dwg of d) {
@@ -405,7 +414,7 @@ export default function DrawingsPage() {
           .finally(() => setChunksDone(n => n + 1))
       )
     ).then(() => {
-      setCached('dr-drawings', accumulated);
+      setCached(cacheKey, accumulated);
       setLastRefreshed(new Date());
     });
   }, [regItems]);
@@ -654,7 +663,11 @@ export default function DrawingsPage() {
       {/* Content */}
       {fetchError ? (
         <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
-          Failed to load items: {fetchError}
+          Error: {fetchError}
+        </div>
+      ) : filterProject === 'all' ? (
+        <div style={{ padding: '32px 0', textAlign: 'center', color: C.muted, fontSize: 12 }}>
+          Select a project above to load the drawing register
         </div>
       ) : itemsLoading ? (
         <div style={{ color: C.muted, fontSize: 12 }}>Loading items…</div>

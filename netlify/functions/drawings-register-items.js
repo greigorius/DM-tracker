@@ -1,8 +1,7 @@
 /**
- * GET /api/drawings-register/items
- * Returns all items from the MDS (TASKS) DB with the fields needed to
- * build the drawing register groups: id, name, status, projectId.
- * Fast — one paginated queryAll, no individual page fetches.
+ * GET /api/drawings-register/items?projectId=xxx
+ * Returns items for a specific project — scoped query so it never times out.
+ * Mirrors the pattern used by /api/projects/:id/items and the timeline page.
  */
 import { corsHeaders, tokenGuard, errResponse, queryAll } from './_helpers.js'
 
@@ -12,8 +11,14 @@ export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders, body: '' }
   const guard = tokenGuard(); if (guard) return guard
 
+  const projectId = event.queryStringParameters?.projectId
+  if (!projectId) {
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'projectId is required' }) }
+  }
+
   try {
-    const pages = await queryAll(DB_TASKS, null)
+    const filter = { property: 'Projects', relation: { contains: projectId } }
+    const pages  = await queryAll(DB_TASKS, filter)
 
     const items = pages.map(p => {
       const props = p.properties ?? {}
@@ -21,7 +26,7 @@ export const handler = async (event) => {
         id:        p.id,
         name:      props['Item Name']?.title?.[0]?.plain_text ?? null,
         status:    props['Status']?.status?.name              ?? null,
-        projectId: props['Projects']?.relation?.[0]?.id       ?? null,
+        projectId,
       }
     })
 

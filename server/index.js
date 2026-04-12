@@ -375,17 +375,20 @@ app.post('/api/quick-log/production', async (req, res) => {
   }
 });
 
-// ── GET /api/drawings-register/items ─────────────────────────────────────────
-// Returns all items (id, name, status, projectId) for building register groups.
+// ── GET /api/drawings-register/items?projectId=xxx ───────────────────────────
+// Returns items scoped to a project — filtered query, never times out.
 app.get('/api/drawings-register/items', async (req, res) => {
   if (!notionRequired(res)) return;
+  const { projectId } = req.query;
+  if (!projectId) return res.status(400).json({ error: 'projectId is required' });
   try {
-    const pages = await queryAll(DB.tasks, null);
-    const items = pages.map(p => ({
+    const filter = { property: 'Projects', relation: { contains: projectId } };
+    const pages  = await queryAll(DB.tasks, filter);
+    const items  = pages.map(p => ({
       id:        p.id,
       name:      p.properties['Item Name']?.title?.[0]?.plain_text ?? null,
       status:    p.properties['Status']?.status?.name              ?? null,
-      projectId: p.properties['Projects']?.relation?.[0]?.id       ?? null,
+      projectId,
     }));
     res.json(items);
   } catch (err) {
