@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import AppNav from '../components/AppNav.jsx';
-import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
+import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -85,6 +85,8 @@ function GlobalStatusBar({ variations }) {
     </div>
   );
 }
+
+const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: `1px solid ${active ? '#60a5fa' : C.border}`, color: active ? '#60a5fa' : C.sec, fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400, fontFamily: 'inherit' });
 
 // ── Column headers ────────────────────────────────────────────────────────────
 const COLS = ['Var #', 'Title', 'Status', 'Type', 'Value', 'Date Issued', 'Date Approved'];
@@ -176,6 +178,7 @@ export default function VariationSchedulePage() {
 
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus,  setFilterStatus]  = useState('all');
+  const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project'
   const [expanded,      setExpanded]      = useState({});
 
   const today = new Date();
@@ -230,11 +233,13 @@ export default function VariationSchedulePage() {
     return true;
   });
 
-  // Group by project
+  // Group by item or project
   const grouped = [];
   const seen = new Map();
   for (const v of visible) {
-    const key = v.projectName ?? 'No Project';
+    const key = groupBy === 'item'
+      ? (v.itemName ?? 'No Item')
+      : (v.projectName ?? 'No Project');
     if (!seen.has(key)) { seen.set(key, []); grouped.push({ key, projectId: v.projectId, variations: seen.get(key) }); }
     seen.get(key).push(v);
   }
@@ -247,7 +252,7 @@ export default function VariationSchedulePage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>VARIATION SCHEDULE</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contract variations · grouped by project</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contract variations · grouped by {groupBy}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 11, color: C.muted }}>
@@ -277,6 +282,12 @@ export default function VariationSchedulePage() {
             <option value="all">All Statuses</option>
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <span style={{ fontSize: 10, color: C.muted, marginLeft: 4 }}>Group by:</span>
+          {['item','project'].map(g => (
+            <button key={g} style={btnStyle(groupBy === g)} onClick={() => setGroupBy(g)}>
+              {g.charAt(0).toUpperCase() + g.slice(1)}
+            </button>
+          ))}
           <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
             {loading ? 'Loading…' : `${visible.length} variations`}
           </span>
@@ -292,7 +303,7 @@ export default function VariationSchedulePage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, variations: groupVars }) => {
             const projColor  = projectId ? (colorMap.get(projectId) ?? PROJECT_COLORS[0]) : PROJECT_COLORS[0];
-            const isExpanded = !!expanded[key];
+            const isExpanded = expanded[key] !== false; // open by default
             const groupValue = groupVars.reduce((sum, v) => sum + (v.value ?? 0), 0);
 
             return (
@@ -302,7 +313,7 @@ export default function VariationSchedulePage() {
               >
                 {/* Group header */}
                 <div
-                  onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
+                  onClick={() => setExpanded(prev => ({ ...prev, [key]: prev[key] !== false ? false : true }))}
                   style={{ padding: '10px 16px', background: C.bgPanel, borderBottom: isExpanded ? `1px solid ${C.border}` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
                 >
                   <span style={{ fontSize: 11, color: C.muted, width: 12, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</span>

@@ -125,19 +125,27 @@ export const handler = async (event) => {
       }
     }
 
-    // Fetch item pages to derive project IDs
-    const itemProjectMap = {}  // itemId → projectId
-    const projIdSet      = new Set(directProjSet)
-    const uniqueItemIds  = [...new Set(itemsNeedingLookup)]
+    // Fetch item pages to derive project IDs AND item names
+    const itemInfoMap = {}   // itemId → { projectId, name }
+    const projIdSet   = new Set(directProjSet)
+    const uniqueItemIds = [...new Set(itemsNeedingLookup)]
 
-    for (let i = 0; i < uniqueItemIds.length; i += 25) {
-      const chunk     = uniqueItemIds.slice(i, i + 25)
+    // Also fetch items that have a direct projectId so we can get their names
+    const allItemIds = [...new Set([
+      ...uniqueItemIds,
+      ...variations.filter(v => v.itemId).map(v => v.itemId),
+    ])]
+
+    for (let i = 0; i < allItemIds.length; i += 25) {
+      const chunk     = allItemIds.slice(i, i + 25)
       const itemPages = await Promise.all(chunk.map(fetchPage))
       for (let j = 0; j < chunk.length; j++) {
         const page = itemPages[j]
         if (!page) continue
-        const projId = page.properties?.['Projects']?.relation?.[0]?.id ?? null
-        itemProjectMap[chunk[j]] = projId
+        const p      = page.properties ?? {}
+        const projId = p['Projects']?.relation?.[0]?.id ?? null
+        const name   = p['Item Name']?.title?.[0]?.plain_text ?? null
+        itemInfoMap[chunk[j]] = { projectId: projId, name }
         if (projId) projIdSet.add(projId)
       }
     }
@@ -163,13 +171,15 @@ export const handler = async (event) => {
       }))
     }
 
-    // Enrich variations with project info
+    // Enrich variations with project info + item name
     const enriched = variations.map(v => {
-      const projectId = v.projectId ?? (v.itemId ? (itemProjectMap[v.itemId] ?? null) : null)
+      const itemInfo  = v.itemId ? (itemInfoMap[v.itemId] ?? null) : null
+      const projectId = v.projectId ?? itemInfo?.projectId ?? null
       return {
         ...v,
         projectId,
         projectName: projectId ? (projMap[projectId]?.name ?? null) : null,
+        itemName:    itemInfo?.name ?? null,
       }
     })
 

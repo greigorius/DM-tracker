@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AppNav from '../components/AppNav.jsx';
-import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
+import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -17,16 +17,6 @@ const C = {
   input:   '#0b1020',
 };
 
-const STATUS_COLORS = {
-  'In Progress':    '#60a5fa',
-  'Review':         '#f59e0b',
-  'On Hold':        '#f97316',
-  'PC Approved':    '#a78bfa',
-  'In Manufacture': '#34d399',
-  'Complete':       '#4ade80',
-  'Omitted':        '#94a3b8',
-  'Not Started':    '#7b90b0',
-};
 
 const PHASE_SHORT = {
   'Ph1 - Design Intent':      'Ph1',
@@ -66,12 +56,11 @@ const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: 
 // ── Status pill ───────────────────────────────────────────────────────────────
 function StatusPill({ status, compact = false }) {
   if (!status) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
-  const color = STATUS_COLORS[status] ?? C.sec;
+  const cfg = ITEM_STATUS_COLORS[status] ?? ITEM_STATUS_DEFAULT;
   return (
     <span style={{
       fontSize: compact ? 9 : 10, fontWeight: 700,
-      background: hexToRgba(color, 0.12),
-      color, border: `1px solid ${hexToRgba(color, 0.3)}`,
+      background: cfg.bg, color: cfg.text,
       borderRadius: 4, padding: compact ? '1px 5px' : '2px 7px',
       whiteSpace: 'nowrap',
     }}>{status}</span>
@@ -100,14 +89,9 @@ function GlobalStatusBar({ items }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8 }}>
       {sorted.map(([status, count]) => {
-        const color = STATUS_COLORS[status] ?? C.sec;
+        const cfg = ITEM_STATUS_COLORS[status] ?? ITEM_STATUS_DEFAULT;
         return (
-          <span key={status} style={{
-            fontSize: 10, fontWeight: 700,
-            background: hexToRgba(color, 0.1), color,
-            border: `1px solid ${hexToRgba(color, 0.25)}`,
-            borderRadius: 4, padding: '3px 8px',
-          }}>
+          <span key={status} style={{ fontSize: 10, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 4, padding: '3px 8px' }}>
             {status} <span style={{ opacity: 0.7 }}>· {count}</span>
           </span>
         );
@@ -126,9 +110,9 @@ function GroupStatusBar({ items }) {
   return (
     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
       {Object.entries(counts).map(([s, n]) => {
-        const color = STATUS_COLORS[s] ?? C.sec;
+        const cfg = ITEM_STATUS_COLORS[s] ?? ITEM_STATUS_DEFAULT;
         return (
-          <span key={s} style={{ fontSize: 9, fontWeight: 700, background: hexToRgba(color, 0.15), color, borderRadius: 3, padding: '1px 5px' }}>
+          <span key={s} style={{ fontSize: 9, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 3, padding: '1px 5px' }}>
             {s} {n}
           </span>
         );
@@ -409,7 +393,9 @@ export default function ItemSchedulePage() {
     }
   }, [itemDetails]);
 
-  const toggleGroup = (key) => setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  // Groups are open by default; toggle stores explicit false to collapse
+  const toggleGroup = (key) =>
+    setExpandedGroups(prev => ({ ...prev, [key]: prev[key] !== false ? false : true }));
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
@@ -473,7 +459,7 @@ export default function ItemSchedulePage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, items: groupItems }) => {
             const projColor  = projectId ? (colorMap.get(projectId) ?? PROJECT_COLORS[0]) : PROJECT_COLORS[0];
-            const isExpanded = !!expandedGroups[key];
+            const isExpanded = expandedGroups[key] !== false; // open by default
 
             return (
               <div

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AppNav from '../components/AppNav.jsx';
-import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
+import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
 const C = {
@@ -61,19 +61,9 @@ function StatusBadge({ value }) {
 }
 
 // ── Item status badge (task progress) ─────────────────────────────────────────
-const ITEM_STATUS_COLORS = {
-  'Not Started':    { bg: '#1e2d45', text: '#64748b' },
-  'In Progress':    { bg: '#1e3a5f', text: '#60a5fa' },
-  'In Review':      { bg: '#312e81', text: '#a5b4fc' },
-  'PC Approved':    { bg: '#14532d', text: '#4ade80' },
-  'In Manufacture': { bg: '#064e3b', text: '#34d399' },
-  'Complete':       { bg: '#064e3b', text: '#34d399' },
-  'Omitted':        { bg: '#292524', text: '#78716c' },
-  'On Hold':        { bg: '#451a03', text: '#fb923c' },
-};
 function ItemStatusBadge({ value }) {
   if (!value) return null;
-  const sc = ITEM_STATUS_COLORS[value] ?? { bg: '#1e2d45', text: '#94a3b8' };
+  const sc = ITEM_STATUS_COLORS[value] ?? ITEM_STATUS_DEFAULT;
   return (
     <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: sc.bg, color: sc.text }}>
       {value}
