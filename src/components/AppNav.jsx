@@ -16,7 +16,15 @@ const NAV = [
     ],
   },
   { to: '/timeline', label: 'TIMELINE' },
-  { to: '/trackers', label: 'TRACKERS' },
+  {
+    label: 'TRACKERS',
+    match: '/trackers',
+    children: [
+      { to: '/trackers/item-schedule', label: 'Item Schedule',      end: true },
+      { to: '/trackers/rfis',          label: 'RFI Schedule'                  },
+      { to: '/trackers/variations',    label: 'Variation Schedule'             },
+    ],
+  },
   {
     label: 'DRAWINGS',
     match: '/drawings',

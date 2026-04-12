@@ -37,6 +37,26 @@
   status = 200
 
 [[redirects]]
+  from   = "/api/all-items"
+  to     = "/.netlify/functions/all-items"
+  status = 200
+
+[[redirects]]
+  from   = "/api/item-drawings"
+  to     = "/.netlify/functions/item-drawings"
+  status = 200
+
+[[redirects]]
+  from   = "/api/rfi-schedule"
+  to     = "/.netlify/functions/rfi-schedule"
+  status = 200
+
+[[redirects]]
+  from   = "/api/variations"
+  to     = "/.netlify/functions/variations"
+  status = 200
+
+[[redirects]]
   from   = "/api/tdl"
   to     = "/.netlify/functions/tdl"
   status = 200
