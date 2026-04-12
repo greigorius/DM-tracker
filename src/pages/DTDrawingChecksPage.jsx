@@ -1045,8 +1045,8 @@ export default function DTDrawingChecksPage() {
   return (
     <div className="dtc-page">
       <div style={{ padding: '16px 24px 0' }}>
+        <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.02em', fontFamily: "'DM Mono','ui-monospace', Consolas, monospace" }}>Drawing Checks</h1>
         <AppNav />
-        <h1 style={{ margin: '16px 0 0', fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.02em', fontFamily: "'DM Mono','ui-monospace', Consolas, monospace" }}>Drawing Checks</h1>
       </div>
 
       <main className="dtc-main"
