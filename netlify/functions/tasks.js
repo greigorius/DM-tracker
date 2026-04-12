@@ -15,7 +15,8 @@ const NOTION_API = 'https://api.notion.com/v1'
 async function fetchPage(id) {
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() })
-    return r.ok ? r.json() : null
+    if (!r.ok) return null
+    return await r.json()
   } catch { return null }
 }
 

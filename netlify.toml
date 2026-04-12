@@ -52,6 +52,16 @@
   status = 200
 
 [[redirects]]
+  from   = "/api/quick-log/drawing-check"
+  to     = "/.netlify/functions/quick-log-drawing-check"
+  status = 200
+
+[[redirects]]
+  from   = "/api/quick-log/comment-review"
+  to     = "/.netlify/functions/quick-log-comment-review"
+  status = 200
+
+[[redirects]]
   from   = "/api/quick-log/production"
   to     = "/.netlify/functions/quick-log-production"
   status = 200
@@ -64,6 +74,36 @@
 [[redirects]]
   from   = "/api/tasks"
   to     = "/.netlify/functions/tasks"
+  status = 200
+
+[[redirects]]
+  from   = "/api/task-categories"
+  to     = "/.netlify/functions/task-categories"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/update"
+  to     = "/.netlify/functions/drawings-register-update"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/bulk"
+  to     = "/.netlify/functions/drawings-register-bulk"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/items"
+  to     = "/.netlify/functions/drawings-register-items"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/chunk"
+  to     = "/.netlify/functions/drawings-register-chunk"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register"
+  to     = "/.netlify/functions/drawings-register"
   status = 200
 
 # ── SPA fallback ──────────────────────────────────────────────────────────────

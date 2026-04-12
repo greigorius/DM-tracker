@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+/* ── Global dark-theme base ──────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a0f1a;
+  color: #e2e8f0;
+  /* DM Mono is loaded via <link> in index.html; ui-monospace / Consolas as fallback */
+  font-family: 'DM Mono', 'ui-monospace', Consolas, 'Cascadia Code', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #080d17;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2d45;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2d4060;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e2d45 #080d17;
+}
+
+/* ── Native form element theming ─────────────────────────────────────────────── */
+
+input, select, textarea, button {
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+/* Remove default date-picker calendar icon colour tint in Chromium */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
