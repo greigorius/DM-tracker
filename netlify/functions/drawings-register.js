@@ -66,9 +66,9 @@ export const handler = async (event) => {
   const guard = tokenGuard(); if (guard) return guard
 
   try {
-    const pages = await queryAll(DB_DRAWINGS, null, {
-      sorts: [{ property: 'Drawing Number', direction: 'ascending' }],
-    })
+    // No sorts — Notion rejects server-side sorts if the property name doesn't
+    // exactly match (title fields are especially fussy). Sort client-side instead.
+    const pages = await queryAll(DB_DRAWINGS, null)
 
     // Collect unique item IDs across all drawings
     const itemIdSet = new Set()
@@ -79,21 +79,22 @@ export const handler = async (event) => {
 
     const { itemMap, projMap } = await resolveItems([...itemIdSet])
 
-    const drawings = pages.map(p => {
-      const base         = transformDrawing(p)
-      const itemPageId   = base.itemIds[0] ?? null
-      const item         = itemMap[itemPageId] ?? {}
-      const proj         = item.projectPageId ? projMap[item.projectPageId] : null
-
-      return {
-        ...base,
-        itemId:      itemPageId,
-        itemName:    item.name    ?? null,
-        itemStatus:  item.status  ?? null,
-        projectId:   proj?.id     ?? null,
-        projectName: proj?.name   ?? null,
-      }
-    })
+    const drawings = pages
+      .map(p => {
+        const base       = transformDrawing(p)
+        const itemPageId = base.itemIds[0] ?? null
+        const item       = itemMap[itemPageId] ?? {}
+        const proj       = item.projectPageId ? projMap[item.projectPageId] : null
+        return {
+          ...base,
+          itemId:      itemPageId,
+          itemName:    item.name   ?? null,
+          itemStatus:  item.status ?? null,
+          projectId:   proj?.id    ?? null,
+          projectName: proj?.name  ?? null,
+        }
+      })
+      .sort((a, b) => (a.drawingNumber ?? '').localeCompare(b.drawingNumber ?? '', undefined, { numeric: true }))
 
     return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(drawings) }
   } catch (err) {

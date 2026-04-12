@@ -301,6 +301,7 @@ export default function DrawingsPage() {
   const [drawings,     setDrawings]     = useState([]);
   const [projects,     setProjects]     = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [fetchError,   setFetchError]   = useState(null);
   const [refreshKey,   setRefreshKey]   = useState(0);
   const [lastRefreshed,setLastRefreshed]= useState(null);
   const [expanded,     setExpanded]     = useState({});
@@ -339,9 +340,16 @@ export default function DrawingsPage() {
     const cached = getCached('drawings-register');
     if (cached) { setDrawings(cached); setLoading(false); return; }
     setLoading(true);
-    fetch('/api/drawings-register').then(r => r.json())
-      .then(d => { const list = Array.isArray(d) ? d : []; setCached('drawings-register', list); setDrawings(list); setLastRefreshed(new Date()); })
-      .catch(() => {})
+    setFetchError(null);
+    fetch('/api/drawings-register')
+      .then(r => r.json())
+      .then(d => {
+        if (!Array.isArray(d)) throw new Error(d?.error ?? 'Unexpected response from drawings API');
+        setCached('drawings-register', d);
+        setDrawings(d);
+        setLastRefreshed(new Date());
+      })
+      .catch(err => { console.error('[drawings-register]', err); setFetchError(err.message); })
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
@@ -570,7 +578,11 @@ export default function DrawingsPage() {
       )}
 
       {/* Content */}
-      {loading && drawings.length === 0 ? (
+      {fetchError ? (
+        <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
+          Failed to load drawings: {fetchError}
+        </div>
+      ) : loading && drawings.length === 0 ? (
         <div style={{ color: C.muted, fontSize: 12 }}>Loading drawings…</div>
       ) : visible.length === 0 && !loading ? (
         <div style={{ color: C.muted, fontSize: 12 }}>No drawings match filters</div>
