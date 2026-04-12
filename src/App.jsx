@@ -6,6 +6,7 @@ import TimelinePage from './pages/TimelinePage.jsx';
 import TasksPage from './pages/TasksPage.jsx';
 import TrackersPage from './pages/TrackersPage.jsx';
 import DrawingsPage from './pages/DrawingsPage.jsx';
+import DTDrawingChecksPage from './pages/DTDrawingChecksPage.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/trackers" element={<TrackersPage />} />
         <Route path="/drawings" element={<DrawingsPage />} />
+        <Route path="/drawings/dt-checks" element={<DTDrawingChecksPage />} />
         <Route path="/team" element={<TeamPage />} />
       </Routes>
     </BrowserRouter>
