@@ -209,6 +209,7 @@ function TableHead() {
         {th('S4 Status Date / Status', 140, 'center')}
         {th('S5 Submit', 96, 'center')}
         {th('S5 Status Date / Status', 140, 'center')}
+        {th('C01 Submit', 96, 'center')}
       </tr>
     </thead>
   );
@@ -218,17 +219,19 @@ function TableHead() {
 function DrawingRow({ drawing, odd, pending, editOptions, dragState, onDragStart, onDragEnter, onCommit, isInDragRange }) {
   const { id, drawingNumber, title1, title2, title3, designStage, rev,
           s4Submit, s4Status, s4StatusDate,
-          s5Submit, s5Status, s5StatusDate } = drawing;
+          s5Submit, s5Status, s5StatusDate,
+          c01Submit } = drawing;
 
   // Merge pending edits into displayed values
   const p = pending[id] ?? {};
   const vals = {
-    s4SubmitActual: p.s4SubmitActual !== undefined ? p.s4SubmitActual : (s4Submit?.actual ?? null),
-    s4StatusDate:   p.s4StatusDate   !== undefined ? p.s4StatusDate   : (s4StatusDate ?? null),
-    s4Status:       p.s4Status       !== undefined ? p.s4Status       : (s4Status ?? null),
-    s5SubmitActual: p.s5SubmitActual !== undefined ? p.s5SubmitActual : (s5Submit?.actual ?? null),
-    s5StatusDate:   p.s5StatusDate   !== undefined ? p.s5StatusDate   : (s5StatusDate ?? null),
-    s5Status:       p.s5Status       !== undefined ? p.s5Status       : (s5Status ?? null),
+    s4SubmitActual:  p.s4SubmitActual  !== undefined ? p.s4SubmitActual  : (s4Submit?.actual  ?? null),
+    s4StatusDate:    p.s4StatusDate    !== undefined ? p.s4StatusDate    : (s4StatusDate       ?? null),
+    s4Status:        p.s4Status        !== undefined ? p.s4Status        : (s4Status           ?? null),
+    s5SubmitActual:  p.s5SubmitActual  !== undefined ? p.s5SubmitActual  : (s5Submit?.actual  ?? null),
+    s5StatusDate:    p.s5StatusDate    !== undefined ? p.s5StatusDate    : (s5StatusDate       ?? null),
+    s5Status:        p.s5Status        !== undefined ? p.s5Status        : (s5Status           ?? null),
+    c01SubmitActual: p.c01SubmitActual !== undefined ? p.c01SubmitActual : (c01Submit?.actual ?? null),
   };
 
   const hasPending = Object.keys(p).length > 0;
@@ -288,6 +291,11 @@ function DrawingRow({ drawing, odd, pending, editOptions, dragState, onDragStart
           <DateCell value={vals.s5StatusDate} {...cellProps('s5StatusDate')} />
           <SelectCell value={vals.s5Status} options={editOptions.s5Status} {...cellProps('s5Status')} />
         </div>
+      </td>
+
+      {/* Col 7: C01 Submit Date (Actual) */}
+      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
+        <DateCell value={vals.c01SubmitActual} {...cellProps('c01SubmitActual')} />
       </td>
     </tr>
   );
@@ -556,12 +564,13 @@ export default function DrawingsPage() {
       let sourceVal;
       const field = s.field;
       if (pendingSource[field] !== undefined) sourceVal = pendingSource[field];
-      else if (field === 's4SubmitActual') sourceVal = sourceDrawing.s4Submit?.actual ?? null;
-      else if (field === 's4StatusDate')   sourceVal = sourceDrawing.s4StatusDate ?? null;
-      else if (field === 's4Status')       sourceVal = sourceDrawing.s4Status ?? null;
-      else if (field === 's5SubmitActual') sourceVal = sourceDrawing.s5Submit?.actual ?? null;
-      else if (field === 's5StatusDate')   sourceVal = sourceDrawing.s5StatusDate ?? null;
-      else if (field === 's5Status')       sourceVal = sourceDrawing.s5Status ?? null;
+      else if (field === 's4SubmitActual')  sourceVal = sourceDrawing.s4Submit?.actual  ?? null;
+      else if (field === 's4StatusDate')    sourceVal = sourceDrawing.s4StatusDate       ?? null;
+      else if (field === 's4Status')        sourceVal = sourceDrawing.s4Status           ?? null;
+      else if (field === 's5SubmitActual')  sourceVal = sourceDrawing.s5Submit?.actual  ?? null;
+      else if (field === 's5StatusDate')    sourceVal = sourceDrawing.s5StatusDate       ?? null;
+      else if (field === 's5Status')        sourceVal = sourceDrawing.s5Status           ?? null;
+      else if (field === 'c01SubmitActual') sourceVal = sourceDrawing.c01Submit?.actual ?? null;
 
       setPending(prev => {
         const next = { ...prev };
@@ -625,12 +634,13 @@ export default function DrawingsPage() {
         const edits = pending[d.id];
         if (!edits) return d;
         const next = { ...d };
-        if (edits.s4SubmitActual !== undefined) next.s4Submit = { ...d.s4Submit, actual: edits.s4SubmitActual };
-        if (edits.s4StatusDate   !== undefined) next.s4StatusDate   = edits.s4StatusDate;
-        if (edits.s4Status       !== undefined) next.s4Status       = edits.s4Status;
-        if (edits.s5SubmitActual !== undefined) next.s5Submit = { ...d.s5Submit, actual: edits.s5SubmitActual };
-        if (edits.s5StatusDate   !== undefined) next.s5StatusDate   = edits.s5StatusDate;
-        if (edits.s5Status       !== undefined) next.s5Status       = edits.s5Status;
+        if (edits.s4SubmitActual  !== undefined) next.s4Submit  = { ...d.s4Submit,  actual: edits.s4SubmitActual  };
+        if (edits.s4StatusDate    !== undefined) next.s4StatusDate    = edits.s4StatusDate;
+        if (edits.s4Status        !== undefined) next.s4Status        = edits.s4Status;
+        if (edits.s5SubmitActual  !== undefined) next.s5Submit  = { ...d.s5Submit,  actual: edits.s5SubmitActual  };
+        if (edits.s5StatusDate    !== undefined) next.s5StatusDate    = edits.s5StatusDate;
+        if (edits.s5Status        !== undefined) next.s5Status        = edits.s5Status;
+        if (edits.c01SubmitActual !== undefined) next.c01Submit = { ...d.c01Submit, actual: edits.c01SubmitActual };
         return next;
       }));
       // Bust cache so next load picks up fresh data

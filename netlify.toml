@@ -52,6 +52,16 @@
   status = 200
 
 [[redirects]]
+  from   = "/api/quick-log/drawing-check"
+  to     = "/.netlify/functions/quick-log-drawing-check"
+  status = 200
+
+[[redirects]]
+  from   = "/api/quick-log/comment-review"
+  to     = "/.netlify/functions/quick-log-comment-review"
+  status = 200
+
+[[redirects]]
   from   = "/api/quick-log/production"
   to     = "/.netlify/functions/quick-log-production"
   status = 200

@@ -9,12 +9,13 @@ import { corsHeaders, tokenGuard, errResponse, fetchNotion, notionHeaders } from
 const NOTION_API = 'https://api.notion.com/v1'
 
 const FIELD_MAP = {
-  s4SubmitActual: { notion: 'S4 Submit Date (Actual)', type: 'date' },
-  s4StatusDate:   { notion: 'S4 Status Date (Actual)', type: 'date' },
-  s4Status:       { notion: 'S4 Status (LOR)',          type: 'select' },
-  s5SubmitActual: { notion: 'S5 Submit Date (Actual)', type: 'date' },
-  s5StatusDate:   { notion: 'S5 Status Date (Actual)', type: 'date' },
-  s5Status:       { notion: 'S5 Status (F&P)',          type: 'select' },
+  s4SubmitActual:  { notion: 'S4 Submit Date (Actual)',  type: 'date'   },
+  s4StatusDate:    { notion: 'S4 Status Date (Actual)',  type: 'date'   },
+  s4Status:        { notion: 'S4 Status (LOR)',           type: 'select' },
+  s5SubmitActual:  { notion: 'S5 Submit Date (Actual)',  type: 'date'   },
+  s5StatusDate:    { notion: 'S5 Status Date (Actual)',  type: 'date'   },
+  s5Status:        { notion: 'S5 Status (F&P)',           type: 'select' },
+  c01SubmitActual: { notion: 'C01 Submit Date (Actual)', type: 'date'   },
 }
 
 function buildProperties(fields) {
