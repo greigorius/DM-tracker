@@ -304,7 +304,7 @@ const isPCSA = n => (n ?? '').toUpperCase().includes('PCSA');
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DrawingsPage() {
   const [regItems,      setRegItems]      = useState([]);
-  const [itemsLoading,  setItemsLoading]  = useState(false);
+  const [itemsLoading,  setItemsLoading]  = useState(true); // true until first load completes
   const [drawings,      setDrawings]      = useState([]);
   const [chunksTotal,   setChunksTotal]   = useState(0);
   const [chunksDone,    setChunksDone]    = useState(0);
@@ -314,7 +314,6 @@ export default function DrawingsPage() {
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [expanded,      setExpanded]      = useState({});
 
-  // Project is the primary scope — must be selected before loading
   const [filterProject,     setFilterProject]     = useState('all');
   const [filterItem,        setFilterItem]        = useState('all');
   const [filterDesignStage, setFilterDesignStage] = useState('all');
@@ -345,35 +344,41 @@ export default function DrawingsPage() {
       .catch(() => {});
   }, []);
 
-  // ── Phase 1: load items scoped to selected project ──────────────────────────
-  // Mirrors the pattern used by every other page: filter by projectId first.
+  // ── Phase 1: load items for all projects in parallel (or just the selected one)
+  // Firing N scoped requests in parallel avoids any single unfiltered query that
+  // would time out on large databases. Each per-project call is fast.
   useEffect(() => {
-    if (filterProject === 'all') {
-      setRegItems([]);
-      setDrawings([]);
-      setFetchError(null);
-      return;
-    }
-
-    const cacheKey = `dr-items:${filterProject}`;
-    const cached   = getCached(cacheKey);
-    if (cached && refreshKey === 0) { setRegItems(cached); return; }
+    if (!projects.length) return; // wait for project list
 
     setItemsLoading(true);
     setFetchError(null);
     setRegItems([]);
     setDrawings([]);
 
-    fetch(`/api/drawings-register/items?projectId=${filterProject}`)
-      .then(r => r.json())
-      .then(d => {
-        if (!Array.isArray(d)) throw new Error(d?.error ?? 'Failed to load items');
-        setCached(cacheKey, d);
-        setRegItems(d);
+    const projectIds = filterProject === 'all'
+      ? projects.map(p => p.id)
+      : [filterProject];
+
+    Promise.allSettled(
+      projectIds.map(projId => {
+        const cacheKey = `dr-items:${projId}`;
+        const cached   = getCached(cacheKey);
+        if (cached && refreshKey === 0) return Promise.resolve(cached);
+        return fetch(`/api/drawings-register/items?projectId=${projId}`)
+          .then(async r => {
+            const d = await r.json();
+            if (!Array.isArray(d)) return [];
+            setCached(cacheKey, d);
+            return d;
+          })
+          .catch(err => { console.error('[dr-items]', err); return []; });
       })
-      .catch(err => { console.error('[dr-items]', err); setFetchError(err.message); })
-      .finally(() => setItemsLoading(false));
-  }, [filterProject, refreshKey]);
+    ).then(results => {
+      const allItems = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+      setRegItems(allItems);
+      setItemsLoading(false);
+    });
+  }, [filterProject, projects.length, refreshKey]);
 
   // ── Phase 2: load drawings in parallel chunks once items are known ──────────
   useEffect(() => {
@@ -716,10 +721,6 @@ export default function DrawingsPage() {
       {fetchError ? (
         <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
           Error: {fetchError}
-        </div>
-      ) : filterProject === 'all' ? (
-        <div style={{ padding: '32px 0', textAlign: 'center', color: C.muted, fontSize: 12 }}>
-          Select a project above to load the drawing register
         </div>
       ) : itemsLoading ? (
         <div style={{ color: C.muted, fontSize: 12 }}>Loading items…</div>
