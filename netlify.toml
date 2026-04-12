@@ -82,6 +82,16 @@
   status = 200
 
 [[redirects]]
+  from   = "/api/drawings-register/items"
+  to     = "/.netlify/functions/drawings-register-items"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/chunk"
+  to     = "/.netlify/functions/drawings-register-chunk"
+  status = 200
+
+[[redirects]]
   from   = "/api/drawings-register"
   to     = "/.netlify/functions/drawings-register"
   status = 200

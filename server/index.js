@@ -375,6 +375,44 @@ app.post('/api/quick-log/production', async (req, res) => {
   }
 });
 
+// ── GET /api/drawings-register/items ─────────────────────────────────────────
+// Returns all items (id, name, status, projectId) for building register groups.
+app.get('/api/drawings-register/items', async (req, res) => {
+  if (!notionRequired(res)) return;
+  try {
+    const pages = await queryAll(DB.tasks, null);
+    const items = pages.map(p => ({
+      id:        p.id,
+      name:      p.properties['Item Name']?.title?.[0]?.plain_text ?? null,
+      status:    p.properties['Status']?.status?.name              ?? null,
+      projectId: p.properties['Projects']?.relation?.[0]?.id       ?? null,
+    }));
+    res.json(items);
+  } catch (err) {
+    console.error('[drawings-register/items]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/drawings-register/chunk?itemIds=id1,id2,... ─────────────────────
+// Returns drawings filtered by a set of item IDs (OR filter). Called in parallel
+// chunks from the frontend so no single request exceeds the timeout budget.
+app.get('/api/drawings-register/chunk', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const itemIds = (req.query.itemIds ?? '').split(',').filter(Boolean);
+  if (!itemIds.length) return res.json([]);
+  try {
+    const filter = itemIds.length === 1
+      ? { property: 'Item', relation: { contains: itemIds[0] } }
+      : { or: itemIds.map(id => ({ property: 'Item', relation: { contains: id } })) };
+    const pages = await queryAll(DB.drawings, filter);
+    res.json(pages.map(transformDrawing));
+  } catch (err) {
+    console.error('[drawings-register/chunk]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/drawings-register ────────────────────────────────────────────────
 // Returns all drawings from MDS DB enriched with item name, item status, project.
 app.get('/api/drawings-register', async (req, res) => {

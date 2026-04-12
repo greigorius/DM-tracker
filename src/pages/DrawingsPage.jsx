@@ -296,15 +296,24 @@ function DrawingRow({ drawing, odd, pending, editOptions, dragState, onDragStart
 // ── Filter bar styles ──────────────────────────────────────────────────────────
 const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: C.sec, fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' };
 
+const CHUNK_SIZE = 25; // item IDs per drawings fetch — stays well under Notion OR-filter limit
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DrawingsPage() {
-  const [drawings,     setDrawings]     = useState([]);
-  const [projects,     setProjects]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [fetchError,   setFetchError]   = useState(null);
-  const [refreshKey,   setRefreshKey]   = useState(0);
-  const [lastRefreshed,setLastRefreshed]= useState(null);
-  const [expanded,     setExpanded]     = useState({});
+  // Phase 1 — items (group structure)
+  const [regItems,     setRegItems]     = useState([]); // [{id, name, status, projectId}]
+  const [itemsLoading, setItemsLoading] = useState(true);
+
+  // Phase 2 — drawings (lazy, parallel chunks)
+  const [drawings,      setDrawings]      = useState([]);
+  const [chunksTotal,   setChunksTotal]   = useState(0);
+  const [chunksDone,    setChunksDone]    = useState(0);
+
+  const [projects,      setProjects]      = useState([]);
+  const [fetchError,    setFetchError]    = useState(null);
+  const [refreshKey,    setRefreshKey]    = useState(0);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [expanded,      setExpanded]      = useState({});
 
   // Filters
   const [filterProject,     setFilterProject]     = useState('all');
@@ -314,20 +323,24 @@ export default function DrawingsPage() {
   const [filterS4Status,    setFilterS4Status]    = useState('all');
   const [filterS5Status,    setFilterS5Status]    = useState('all');
 
-  // Pending edits: { [drawingId]: { [fieldKey]: newValue } }
-  const [pending, setPending]         = useState({});
-  const [saveStatus, setSaveStatus]   = useState('idle'); // idle | saving | saved | error
-  const [saveError, setSaveError]     = useState(null);
+  // Pending edits
+  const [pending,    setPending]    = useState({});
+  const [saveStatus, setSaveStatus] = useState('idle');
+  const [saveError,  setSaveError]  = useState(null);
 
-  // Drag-to-fill state
-  const [dragState, setDragState]   = useState(null); // { active, startId, field, endId }
+  // Drag-to-fill
+  const [dragState, setDragState] = useState(null);
   const dragRef = useRef(null);
 
   const today = new Date();
 
   // Auto-refresh every 5 min
-  useEffect(() => { const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
+  // ── Projects ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const cached = getCached('projects');
     if (cached) { setProjects(cached); return; }
@@ -336,56 +349,116 @@ export default function DrawingsPage() {
       .catch(() => {});
   }, []);
 
+  // ── Phase 1: load items ─────────────────────────────────────────────────────
   useEffect(() => {
-    const cached = getCached('drawings-register');
-    if (cached) { setDrawings(cached); setLoading(false); return; }
-    setLoading(true);
+    const cached = getCached('dr-items');
+    if (cached) { setRegItems(cached); setItemsLoading(false); return; }
+    setItemsLoading(true);
     setFetchError(null);
-    fetch('/api/drawings-register')
+    fetch('/api/drawings-register/items')
       .then(r => r.json())
       .then(d => {
-        if (!Array.isArray(d)) throw new Error(d?.error ?? 'Unexpected response from drawings API');
-        setCached('drawings-register', d);
-        setDrawings(d);
-        setLastRefreshed(new Date());
+        if (!Array.isArray(d)) throw new Error(d?.error ?? 'Failed to load items');
+        setCached('dr-items', d);
+        setRegItems(d);
       })
-      .catch(err => { console.error('[drawings-register]', err); setFetchError(err.message); })
-      .finally(() => setLoading(false));
+      .catch(err => { console.error('[dr-items]', err); setFetchError(err.message); })
+      .finally(() => setItemsLoading(false));
   }, [refreshKey]);
 
-  // Colour map
-  const allProjIds = [...new Set([...projects.map(p => p.id), ...drawings.map(d => d.projectId).filter(Boolean)])];
+  // ── Phase 2: load drawings in parallel chunks once items are known ──────────
+  useEffect(() => {
+    if (!regItems.length) return;
+
+    const cachedDwgs = getCached('dr-drawings');
+    if (cachedDwgs) { setDrawings(cachedDwgs); setLastRefreshed(new Date()); return; }
+
+    const itemIds = regItems.map(i => i.id);
+    const chunks  = [];
+    for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
+      chunks.push(itemIds.slice(i, i + CHUNK_SIZE));
+    }
+
+    setDrawings([]);
+    setChunksTotal(chunks.length);
+    setChunksDone(0);
+
+    const accumulated = [];
+    const seenIds     = new Set();
+
+    Promise.allSettled(
+      chunks.map(chunk =>
+        fetch(`/api/drawings-register/chunk?itemIds=${chunk.join(',')}`)
+          .then(r => r.json())
+          .then(d => {
+            if (!Array.isArray(d)) return;
+            // Merge de-duplicated drawings into state progressively
+            setDrawings(prev => {
+              const next = [...prev];
+              for (const dwg of d) {
+                if (!seenIds.has(dwg.id)) { seenIds.add(dwg.id); next.push(dwg); accumulated.push(dwg); }
+              }
+              return next;
+            });
+          })
+          .catch(err => console.error('[dr-chunk]', err))
+          .finally(() => setChunksDone(n => n + 1))
+      )
+    ).then(() => {
+      setCached('dr-drawings', accumulated);
+      setLastRefreshed(new Date());
+    });
+  }, [regItems]);
+
+  // ── Colour map ──────────────────────────────────────────────────────────────
+  const allProjIds = [...new Set([...projects.map(p => p.id), ...regItems.map(i => i.projectId).filter(Boolean)])];
   const colorMap   = assignProjectColors(allProjIds.map(id => ({ id })));
 
-  // Derive filter options from data
-  const itemOptions        = [...new Set(drawings.map(d => d.itemName).filter(Boolean))].sort();
+  // ── Lookup maps ─────────────────────────────────────────────────────────────
+  // drawings indexed by their first itemId for quick per-group retrieval
+  const drawingsByItemId = new Map();
+  for (const dwg of drawings) {
+    const iid = dwg.itemIds?.[0] ?? null;
+    if (!iid) continue;
+    if (!drawingsByItemId.has(iid)) drawingsByItemId.set(iid, []);
+    drawingsByItemId.get(iid).push(dwg);
+  }
+
+  // ── Filter options ──────────────────────────────────────────────────────────
+  const itemOptions        = [...new Set(regItems.map(i => i.name).filter(Boolean))].sort();
   const designStageOptions = [...new Set(drawings.map(d => d.designStage).filter(Boolean))].sort();
   const revOptions         = [...new Set(drawings.map(d => d.rev).filter(Boolean))].sort();
   const s4StatusOptions    = [...new Set(drawings.map(d => d.s4Status).filter(Boolean))].sort();
   const s5StatusOptions    = [...new Set(drawings.map(d => d.s5Status).filter(Boolean))].sort();
 
-  // Apply filters
-  const visible = drawings.filter(d => {
-    if (filterProject     !== 'all' && d.projectId   !== filterProject)     return false;
-    if (filterItem        !== 'all' && d.itemName     !== filterItem)        return false;
-    if (filterDesignStage !== 'all' && d.designStage  !== filterDesignStage) return false;
-    if (filterRev         !== 'all' && d.rev          !== filterRev)         return false;
-    if (filterS4Status    !== 'all' && d.s4Status     !== filterS4Status)    return false;
-    if (filterS5Status    !== 'all' && d.s5Status     !== filterS5Status)    return false;
-    return true;
-  });
+  // ── Grouping: driven by items, filtered by drawing-level criteria ────────────
+  // An item group is visible if it passes item-level filters AND (if drawing
+  // filters are active) has at least one drawing matching those filters.
+  const grouped = regItems
+    .filter(item => {
+      if (filterProject !== 'all' && item.projectId !== filterProject) return false;
+      if (filterItem    !== 'all' && item.name      !== filterItem)    return false;
+      return true;
+    })
+    .map(item => {
+      const allDwgs = drawingsByItemId.get(item.id) ?? [];
+      const dwgs    = allDwgs.filter(d => {
+        if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
+        if (filterRev         !== 'all' && d.rev         !== filterRev)         return false;
+        if (filterS4Status    !== 'all' && d.s4Status    !== filterS4Status)    return false;
+        if (filterS5Status    !== 'all' && d.s5Status    !== filterS5Status)    return false;
+        return true;
+      });
+      // Hide item group when drawing-level filters are active and no drawings match
+      const hasDrawingFilter = filterDesignStage !== 'all' || filterRev !== 'all' || filterS4Status !== 'all' || filterS5Status !== 'all';
+      if (hasDrawingFilter && dwgs.length === 0) return null;
+      return { key: item.name ?? item.id, projectId: item.projectId, itemId: item.id, itemStatus: item.status, drawings: dwgs };
+    })
+    .filter(Boolean);
 
-  // Group by item
-  const grouped = [];
-  const seen    = new Map();
-  for (const dwg of visible) {
-    const key = dwg.itemName ?? 'No Item';
-    if (!seen.has(key)) {
-      seen.set(key, []);
-      grouped.push({ key, projectId: dwg.projectId, itemStatus: dwg.itemStatus, drawings: seen.get(key) });
-    }
-    seen.get(key).push(dwg);
-  }
+  // flat visible drawings list (for drag-range ordering)
+  const visible    = grouped.flatMap(g => g.drawings);
+  const orderedIds = visible.map(d => d.id);
 
   // Build ordered IDs per field for drag range calculation
   const orderedIds = visible.map(d => d.id);
@@ -557,7 +630,11 @@ export default function DrawingsPage() {
           {s5StatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
-          {loading ? 'Loading…' : `${visible.length} drawings`}
+          {itemsLoading
+            ? 'Loading items…'
+            : chunksDone < chunksTotal
+              ? `Loading drawings… ${chunksDone}/${chunksTotal}`
+              : `${visible.length} drawings`}
         </span>
       </div>
 
@@ -580,17 +657,18 @@ export default function DrawingsPage() {
       {/* Content */}
       {fetchError ? (
         <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
-          Failed to load drawings: {fetchError}
+          Failed to load items: {fetchError}
         </div>
-      ) : loading && drawings.length === 0 ? (
-        <div style={{ color: C.muted, fontSize: 12 }}>Loading drawings…</div>
-      ) : visible.length === 0 && !loading ? (
-        <div style={{ color: C.muted, fontSize: 12 }}>No drawings match filters</div>
+      ) : itemsLoading ? (
+        <div style={{ color: C.muted, fontSize: 12 }}>Loading items…</div>
+      ) : grouped.length === 0 ? (
+        <div style={{ color: C.muted, fontSize: 12 }}>No items match filters</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {grouped.map(({ key, projectId, itemStatus, drawings: groupDwgs }) => {
-            const projColor  = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded = !!expanded[key]; // default collapsed
+          {grouped.map(({ key, projectId, itemId, itemStatus, drawings: groupDwgs }) => {
+            const projColor      = colorMap.get(projectId) ?? PROJECT_COLORS[0];
+            const isExpanded     = !!expanded[key]; // default collapsed
+            const groupLoading   = chunksDone < chunksTotal; // drawings still arriving
 
             return (
               <div
@@ -612,33 +690,43 @@ export default function DrawingsPage() {
                   <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</span>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>{groupDwgs.length} dwg{groupDwgs.length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 10, color: C.muted }}>
+                    {groupLoading && groupDwgs.length === 0
+                      ? '…'
+                      : `${groupDwgs.length} dwg${groupDwgs.length !== 1 ? 's' : ''}`}
+                  </span>
                   {itemStatus && <ItemStatusBadge value={itemStatus} />}
                 </div>
 
                 {/* Drawing table */}
                 {isExpanded && (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <TableHead />
-                      <tbody>
-                        {groupDwgs.map((dwg, idx) => (
-                          <DrawingRow
-                            key={dwg.id}
-                            drawing={dwg}
-                            odd={idx % 2 !== 0}
-                            pending={pending}
-                            editOptions={editOptions}
-                            dragState={dragState}
-                            onDragStart={handleDragStart}
-                            onDragEnter={handleDragEnter}
-                            onCommit={handleCommit}
-                            isInDragRange={isInDragRange(dwg.id, dragState?.field)}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  groupLoading && groupDwgs.length === 0 ? (
+                    <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>Loading drawings…</div>
+                  ) : groupDwgs.length === 0 ? (
+                    <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>No drawings</div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <TableHead />
+                        <tbody>
+                          {groupDwgs.map((dwg, idx) => (
+                            <DrawingRow
+                              key={dwg.id}
+                              drawing={dwg}
+                              odd={idx % 2 !== 0}
+                              pending={pending}
+                              editOptions={editOptions}
+                              dragState={dragState}
+                              onDragStart={handleDragStart}
+                              onDragEnter={handleDragEnter}
+                              onCommit={handleCommit}
+                              isInDragRange={isInDragRange(dwg.id, dragState?.field)}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 )}
               </div>
             );
