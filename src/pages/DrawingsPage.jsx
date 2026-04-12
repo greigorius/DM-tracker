@@ -460,9 +460,6 @@ export default function DrawingsPage() {
   const visible    = grouped.flatMap(g => g.drawings);
   const orderedIds = visible.map(d => d.id);
 
-  // Build ordered IDs per field for drag range calculation
-  const orderedIds = visible.map(d => d.id);
-
   // ── Drag-to-fill handlers ─────────────────────────────────────────────────
   const handleDragStart = useCallback((drawingId, field) => {
     const state = { active: true, startId: drawingId, field, endId: drawingId };
