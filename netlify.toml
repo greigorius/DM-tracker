@@ -71,6 +71,21 @@
   to     = "/.netlify/functions/task-categories"
   status = 200
 
+[[redirects]]
+  from   = "/api/drawings-register/update"
+  to     = "/.netlify/functions/drawings-register-update"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register/bulk"
+  to     = "/.netlify/functions/drawings-register-bulk"
+  status = 200
+
+[[redirects]]
+  from   = "/api/drawings-register"
+  to     = "/.netlify/functions/drawings-register"
+  status = 200
+
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"
