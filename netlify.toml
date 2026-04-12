@@ -106,6 +106,31 @@
   to     = "/.netlify/functions/drawings-register"
   status = 200
 
+[[redirects]]
+  from   = "/api/dt-checker-projects"
+  to     = "/.netlify/functions/dt-checker-projects"
+  status = 200
+
+[[redirects]]
+  from   = "/api/dt-checker-suffixes"
+  to     = "/.netlify/functions/dt-checker-suffixes"
+  status = 200
+
+[[redirects]]
+  from   = "/api/dt-checker-drawings"
+  to     = "/.netlify/functions/dt-checker-drawings"
+  status = 200
+
+[[redirects]]
+  from   = "/api/dt-checker-finishes"
+  to     = "/.netlify/functions/dt-checker-finishes"
+  status = 200
+
+[[redirects]]
+  from   = "/api/dt-checker-export-pdf"
+  to     = "/.netlify/functions/dt-checker-export-pdf"
+  status = 200
+
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"

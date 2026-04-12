@@ -55,3 +55,234 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
   cursor: pointer;
 }
+
+/* ── PdfViewer ───────────────────────────────────────────────────────────────── */
+
+.pdf-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #080d17;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.pdf-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #7b90b0;
+  pointer-events: none;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+  display: inline-block;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+.pdf-canvas {
+  display: block;
+}
+
+.pdf-pin-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-pin {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  pointer-events: all;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: transform 0.1s, box-shadow 0.1s;
+  user-select: none;
+}
+
+.pdf-pin:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(220,38,38,0.5);
+}
+
+.pdf-pin-active {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+/* ── DTExportSection ─────────────────────────────────────────────────────────── */
+
+.export-inline-body {
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.export-cols {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.export-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.export-col-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #7b90b0;
+  margin-bottom: 2px;
+}
+
+.export-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #e2e8f0;
+}
+
+.export-check-title {
+  font-size: 11px;
+  color: #e2e8f0;
+}
+
+.export-check-hint {
+  font-size: 9px;
+  color: #7b90b0;
+  margin-top: 2px;
+}
+
+.export-no-checks {
+  font-size: 11px;
+  color: #7b90b0;
+  font-style: italic;
+  margin: 0;
+}
+
+.export-drawings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.export-drawing-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.export-drawing-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.export-drawing-pages {
+  flex-shrink: 0;
+  color: #7b90b0;
+}
+
+.export-progress-row {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: #60a5fa;
+}
+
+.export-result {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+
+.export-result-ok {
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.25);
+  color: #4ade80;
+}
+
+.export-result-err {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  color: #f87171;
+}
+
+/* ── Shared button / spinner utilities ───────────────────────────────────────── */
+
+.btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  transition: opacity 0.1s;
+  align-self: flex-start;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-export {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.btn-export:not(:disabled):hover {
+  background: #2563eb;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #1e2d45;
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.spinner-small {
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
