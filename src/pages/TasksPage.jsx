@@ -348,13 +348,17 @@ export default function TasksPage() {
   ])];
   const colorMap = assignProjectColors(allProjectIds.map(id => ({ id })));
 
+  // PCSA items are excluded globally
+  const isPCSA = n => (n ?? '').toUpperCase().includes('PCSA');
+
   // Filter options
-  const itemOptions     = [...new Set(tasks.map(t => t.itemName).filter(Boolean))].sort();
+  const itemOptions     = [...new Set(tasks.filter(t => !isPCSA(t.itemName)).map(t => t.itemName).filter(Boolean))].sort();
   const assigneeOptions = [...new Set(tasks.map(t => t.assignedTo).filter(Boolean))].sort();
   const categoryOptions = [...new Set([...schemaCategories, ...tasks.map(t => t.taskCategory).filter(Boolean)])].sort();
 
   // Apply filters
   const visible = tasks.filter(t => {
+    if (isPCSA(t.itemName)) return false;
     if (filterProject  !== 'all' && t.projectId   !== filterProject)  return false;
     if (filterItem     !== 'all' && t.itemName     !== filterItem)     return false;
     if (filterAssignee !== 'all' && t.assignedTo   !== filterAssignee) return false;

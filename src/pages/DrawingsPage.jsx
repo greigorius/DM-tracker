@@ -298,6 +298,9 @@ const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: 
 
 const CHUNK_SIZE = 25; // item IDs per drawings fetch
 
+// ── PCSA filter — items containing "PCSA" in their name are ignored globally ──
+const isPCSA = n => (n ?? '').toUpperCase().includes('PCSA');
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DrawingsPage() {
   const [regItems,      setRegItems]      = useState([]);
@@ -318,6 +321,7 @@ export default function DrawingsPage() {
   const [filterRev,         setFilterRev]         = useState('all');
   const [filterS4Status,    setFilterS4Status]    = useState('all');
   const [filterS5Status,    setFilterS5Status]    = useState('all');
+  const [groupBy,           setGroupBy]           = useState('item');
 
   const [pending,    setPending]    = useState({});
   const [saveStatus, setSaveStatus] = useState('idle');
@@ -434,36 +438,78 @@ export default function DrawingsPage() {
   }
 
   // ── Filter options ──────────────────────────────────────────────────────────
-  const itemOptions        = [...new Set(regItems.map(i => i.name).filter(Boolean))].sort();
+  const itemOptions        = [...new Set(regItems.filter(i => !isPCSA(i.name)).map(i => i.name).filter(Boolean))].sort();
   const designStageOptions = [...new Set(drawings.map(d => d.designStage).filter(Boolean))].sort();
   const revOptions         = [...new Set(drawings.map(d => d.rev).filter(Boolean))].sort();
   const s4StatusOptions    = [...new Set(drawings.map(d => d.s4Status).filter(Boolean))].sort();
   const s5StatusOptions    = [...new Set(drawings.map(d => d.s5Status).filter(Boolean))].sort();
 
-  // ── Grouping: driven by items, filtered by drawing-level criteria ────────────
-  // An item group is visible if it passes item-level filters AND (if drawing
-  // filters are active) has at least one drawing matching those filters.
-  const grouped = regItems
-    .filter(item => {
-      if (filterProject !== 'all' && item.projectId !== filterProject) return false;
-      if (filterItem    !== 'all' && item.name      !== filterItem)    return false;
-      return true;
-    })
-    .map(item => {
-      const allDwgs = drawingsByItemId.get(item.id) ?? [];
-      const dwgs    = allDwgs.filter(d => {
-        if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
-        if (filterRev         !== 'all' && d.rev         !== filterRev)         return false;
-        if (filterS4Status    !== 'all' && d.s4Status    !== filterS4Status)    return false;
-        if (filterS5Status    !== 'all' && d.s5Status    !== filterS5Status)    return false;
-        return true;
-      });
-      // Hide item group when drawing-level filters are active and no drawings match
-      const hasDrawingFilter = filterDesignStage !== 'all' || filterRev !== 'all' || filterS4Status !== 'all' || filterS5Status !== 'all';
-      if (hasDrawingFilter && dwgs.length === 0) return null;
-      return { key: item.name ?? item.id, projectId: item.projectId, itemId: item.id, itemStatus: item.status, drawings: dwgs };
-    })
-    .filter(Boolean);
+  // ── Grouping ─────────────────────────────────────────────────────────────────
+  // PCSA items are excluded globally. Then filter by item-level and drawing-level
+  // criteria, then group according to groupBy state.
+  const eligibleItems = regItems.filter(item => {
+    if (isPCSA(item.name)) return false;
+    if (filterProject !== 'all' && item.projectId !== filterProject) return false;
+    if (filterItem    !== 'all' && item.name      !== filterItem)    return false;
+    return true;
+  });
+
+  const matchesDwgFilter = d => {
+    if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
+    if (filterRev         !== 'all' && d.rev         !== filterRev)         return false;
+    if (filterS4Status    !== 'all' && d.s4Status    !== filterS4Status)    return false;
+    if (filterS5Status    !== 'all' && d.s5Status    !== filterS5Status)    return false;
+    return true;
+  };
+
+  const hasDrawingFilter = filterDesignStage !== 'all' || filterRev !== 'all' || filterS4Status !== 'all' || filterS5Status !== 'all';
+  const itemDrawings = eligibleItems.map(item => ({
+    item,
+    dwgs: (drawingsByItemId.get(item.id) ?? []).filter(matchesDwgFilter),
+  })).filter(({ dwgs }) => !hasDrawingFilter || dwgs.length > 0);
+
+  const grouped = (() => {
+    if (groupBy === 'project') {
+      const map = new Map();
+      for (const { item, dwgs } of itemDrawings) {
+        const projId   = item.projectId;
+        const projName = projects.find(p => p.id === projId)?.name ?? projId ?? 'Unknown Project';
+        if (!map.has(projId)) map.set(projId, { key: projName, projectId: projId, drawings: [] });
+        map.get(projId).drawings.push(...dwgs);
+      }
+      return [...map.values()];
+    }
+    if (groupBy === 'designStage') {
+      const map = new Map();
+      for (const { dwgs } of itemDrawings) {
+        for (const d of dwgs) {
+          const k = d.designStage ?? 'No Stage';
+          if (!map.has(k)) map.set(k, { key: k, projectId: null, drawings: [] });
+          map.get(k).drawings.push(d);
+        }
+      }
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+    }
+    if (groupBy === 'rev') {
+      const map = new Map();
+      for (const { dwgs } of itemDrawings) {
+        for (const d of dwgs) {
+          const k = d.rev ?? 'No Rev';
+          if (!map.has(k)) map.set(k, { key: k, projectId: null, drawings: [] });
+          map.get(k).drawings.push(d);
+        }
+      }
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+    }
+    // Default: group by item
+    return itemDrawings.map(({ item, dwgs }) => ({
+      key:        item.name ?? item.id,
+      projectId:  item.projectId,
+      itemId:     item.id,
+      itemStatus: item.status,
+      drawings:   dwgs,
+    }));
+  })();
 
   // flat visible drawings list (for drag-range ordering)
   const visible    = grouped.flatMap(g => g.drawings);
@@ -596,7 +642,7 @@ export default function DrawingsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>DRAWINGS</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Drawing register · grouped by item</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Drawing register · grouped by {groupBy === 'designStage' ? 'design stage' : groupBy}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 11, color: C.muted }}>
@@ -634,6 +680,12 @@ export default function DrawingsPage() {
         <select value={filterS5Status} onChange={e => setFilterS5Status(e.target.value)} style={selStyle}>
           <option value="all">All S5 Status</option>
           {s5StatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ ...selStyle, marginLeft: 8, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          <option value="item">Group: Item</option>
+          <option value="project">Group: Project</option>
+          <option value="designStage">Group: Design Stage</option>
+          <option value="rev">Group: Rev</option>
         </select>
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {itemsLoading
