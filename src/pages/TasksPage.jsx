@@ -373,14 +373,15 @@ export default function TasksPage() {
     return true;
   });
 
-  // Group by item name
+  // Group by item name — groups and tasks within each group sorted ascending
   const grouped = [];
   const seen    = new Map();
-  for (const task of visible) {
+  for (const task of [...visible].sort((a, b) => (a.tdlId ?? '').localeCompare(b.tdlId ?? ''))) {
     const key = task.itemName ?? 'No Item';
     if (!seen.has(key)) { seen.set(key, []); grouped.push({ key, projectId: task.projectId, tasks: seen.get(key) }); }
     seen.get(key).push(task);
   }
+  grouped.sort((a, b) => a.key.localeCompare(b.key));
 
   const handleSaved = (updated, andClose = false) => {
     doneDates.current = getDoneDates();

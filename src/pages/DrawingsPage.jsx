@@ -457,7 +457,7 @@ export default function DrawingsPage() {
     if (filterProject !== 'all' && item.projectId !== filterProject) return false;
     if (filterItem    !== 'all' && item.name      !== filterItem)    return false;
     return true;
-  });
+  }).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
   const matchesDwgFilter = d => {
     if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
@@ -473,6 +473,8 @@ export default function DrawingsPage() {
     dwgs: (drawingsByItemId.get(item.id) ?? []).filter(matchesDwgFilter),
   })).filter(({ dwgs }) => !hasDrawingFilter || dwgs.length > 0);
 
+  const sortDwgs = dwgs => [...dwgs].sort((a, b) => (a.drawingNumber ?? '').localeCompare(b.drawingNumber ?? ''));
+
   const grouped = (() => {
     if (groupBy === 'project') {
       const map = new Map();
@@ -482,7 +484,9 @@ export default function DrawingsPage() {
         if (!map.has(projId)) map.set(projId, { key: projName, projectId: projId, drawings: [] });
         map.get(projId).drawings.push(...dwgs);
       }
-      return [...map.values()];
+      return [...map.values()]
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'designStage') {
       const map = new Map();
@@ -493,7 +497,9 @@ export default function DrawingsPage() {
           map.get(k).drawings.push(d);
         }
       }
-      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+      return [...map.values()]
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'rev') {
       const map = new Map();
@@ -504,16 +510,20 @@ export default function DrawingsPage() {
           map.get(k).drawings.push(d);
         }
       }
-      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+      return [...map.values()]
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
-    // Default: group by item
-    return itemDrawings.map(({ item, dwgs }) => ({
-      key:        item.name ?? item.id,
-      projectId:  item.projectId,
-      itemId:     item.id,
-      itemStatus: item.status,
-      drawings:   dwgs,
-    }));
+    // Default: group by item — sorted alphabetically, drawings sorted by number
+    return itemDrawings
+      .map(({ item, dwgs }) => ({
+        key:        item.name ?? item.id,
+        projectId:  item.projectId,
+        itemId:     item.id,
+        itemStatus: item.status,
+        drawings:   sortDwgs(dwgs),
+      }))
+      .sort((a, b) => a.key.localeCompare(b.key));
   })();
 
   // flat visible drawings list (for drag-range ordering)
