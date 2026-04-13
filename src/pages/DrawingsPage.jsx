@@ -386,8 +386,9 @@ export default function DrawingsPage() {
   const [fetchError,    setFetchError]    = useState(null);
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
-  const [expanded,      setExpanded]      = useState({});
-  const [showColPanel,  setShowColPanel]  = useState(false);
+  const [expanded,          setExpanded]          = useState({});
+  const [showColPanel,      setShowColPanel]      = useState(false);
+  const [filterAssignedOnly, setFilterAssignedOnly] = useState(false);
   const [colConfig,     setColConfig]     = useState(initColConfig);
 
   const [filterProject,     setFilterProject]     = useState('all');
@@ -548,9 +549,9 @@ export default function DrawingsPage() {
     return true;
   }).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
-  // Drawing-level filter: only show drawings with dwgNoAssigned value
+  // Drawing-level filter
   const matchesDwgFilter = d => {
-    if (!d.dwgNoAssigned) return false;
+    if (filterAssignedOnly && !d.dwgNoAssigned) return false;
     if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
     if (filterRev         !== 'all' && d.rev         !== filterRev)         return false;
     if (filterS4Status    !== 'all' && d.s4Status    !== filterS4Status)    return false;
@@ -714,6 +715,15 @@ export default function DrawingsPage() {
           style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
           ⚙ Columns
         </button>
+
+        {/* Assigned only toggle */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+          fontSize: 10, color: filterAssignedOnly ? '#93c5fd' : C.muted, userSelect: 'none' }}>
+          <input type="checkbox" checked={filterAssignedOnly}
+            onChange={e => setFilterAssignedOnly(e.target.checked)}
+            style={{ accentColor: '#3b82f6', cursor: 'pointer' }} />
+          Assigned only
+        </label>
 
         {/* Export */}
         <button onClick={() => exportToCSV(visibleCols, grouped)}
