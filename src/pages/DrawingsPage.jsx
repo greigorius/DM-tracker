@@ -397,7 +397,7 @@ export default function DrawingsPage() {
   const [filterRev,         setFilterRev]         = useState('all');
   const [filterS4Status,    setFilterS4Status]    = useState('all');
   const [filterS5Status,    setFilterS5Status]    = useState('all');
-  const [groupBy,           setGroupBy]           = useState('item');
+  const [groupBy,           setGroupBy]           = useState('dwgType');
 
   const colConfigRef = useRef(colConfig);
   useEffect(() => { colConfigRef.current = colConfig; }, [colConfig]);
@@ -613,6 +613,10 @@ export default function DrawingsPage() {
       }
       return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
+    if (groupBy === 'none') {
+      const allDwgs = sortDwgs(itemDrawings.flatMap(({ dwgs }) => dwgs));
+      return [{ key: '__none__', projectId: null, drawings: allDwgs }];
+    }
     // Default: group by item
     return itemDrawings
       .map(({ item, dwgs }) => ({
@@ -632,7 +636,7 @@ export default function DrawingsPage() {
   const expandAll   = () => { const s = {}; for (const g of grouped) s[g.key] = true; setExpanded(s); };
   const collapseAll = () => setExpanded({});
 
-  const groupByLabel = { item: 'item', project: 'project', designStage: 'design stage', rev: 'rev', dwgType: 'drawing type' };
+  const groupByLabel = { item: 'item', project: 'project', designStage: 'design stage', rev: 'rev', dwgType: 'drawing type', none: 'none' };
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
@@ -693,11 +697,12 @@ export default function DrawingsPage() {
         {/* Group by */}
         <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
           style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          <option value="dwgType">Group: Dwg Type</option>
           <option value="item">Group: Item</option>
           <option value="project">Group: Project</option>
           <option value="designStage">Group: Design Stage</option>
           <option value="rev">Group: Rev</option>
-          <option value="dwgType">Group: Dwg Type</option>
+          <option value="none">No Grouping</option>
         </select>
 
         {/* Expand / collapse all */}
@@ -754,8 +759,38 @@ export default function DrawingsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, itemStatus, drawings: groupDwgs }) => {
             const projColor    = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded   = !!expanded[key];
+            const isExpanded   = groupBy === 'none' ? true : !!expanded[key];
             const groupLoading = chunksDone < chunksTotal;
+            const noGrouping   = groupBy === 'none';
+
+            const table = (
+              groupLoading && groupDwgs.length === 0 ? (
+                <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>Loading drawings…</div>
+              ) : groupDwgs.length === 0 ? null : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
+                    width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
+                    <TableHead visibleCols={visibleCols} onResizeStart={startResize} />
+                    <tbody>
+                      {groupDwgs.map((dwg, idx) => (
+                        <DrawingRow key={dwg.id} drawing={dwg} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            );
+
+            if (noGrouping) {
+              return (
+                <div key={key} style={{
+                  background: C.bgCard, border: `1px solid ${C.border}`,
+                  borderRadius: 10, overflow: 'hidden',
+                }}>
+                  {table}
+                </div>
+              );
+            }
 
             return (
               <div key={key} style={{
@@ -782,27 +817,7 @@ export default function DrawingsPage() {
                   </span>
                   {itemStatus && <ItemStatusBadge value={itemStatus} />}
                 </div>
-
-                {/* Drawing table */}
-                {isExpanded && (
-                  groupLoading && groupDwgs.length === 0 ? (
-                    <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>Loading drawings…</div>
-                  ) : groupDwgs.length === 0 ? (
-                    <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>No drawings</div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
-                        width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
-                        <TableHead visibleCols={visibleCols} onResizeStart={startResize} />
-                        <tbody>
-                          {groupDwgs.map((dwg, idx) => (
-                            <DrawingRow key={dwg.id} drawing={dwg} odd={idx % 2 !== 0} visibleCols={visibleCols} />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )
-                )}
+                {isExpanded && table}
               </div>
             );
           })}
