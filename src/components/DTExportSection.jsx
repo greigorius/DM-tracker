@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import JSZip from 'jszip';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const ISSUED_FOR_OPTIONS = [
   { value: 'A4.5',         label: 'A4.5 - AUTHORISED MFG. and CONST. DESIGN' },
@@ -108,6 +109,64 @@ function drawPinAnnotations(ctx, pinsForPage, failItems, canvasWidth, canvasHeig
       ctx.fillText((fi.expected ? String(fi.expected).slice(0, 35) : '(none)'), listX + 30, y + 30); ctx.restore();
     });
   }
+}
+
+async function buildAnnotatedPdf(pdfPageData) {
+  const FAIL_RED   = rgb(0.86, 0.15, 0.15);
+  const LABEL_GRAY = rgb(0.42, 0.45, 0.50);
+  const WHITE      = rgb(1, 1, 1);
+  const PIN_RADIUS = 8;
+  const CALLOUT_W  = 120;
+  const CALLOUT_H  = 28;
+
+  const exportDoc      = await PDFDocument.create();
+  const helvetica      = await exportDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold  = await exportDoc.embedFont(StandardFonts.HelveticaBold);
+
+  for (const { pngBase64, pageWidthPt, pageHeightPt, annotations = [], unplaced = [] } of pdfPageData) {
+    const pngBytes = Uint8Array.from(atob(pngBase64), c => c.charCodeAt(0));
+    const pngImage = await exportDoc.embedPng(pngBytes);
+    const page     = exportDoc.addPage([pageWidthPt, pageHeightPt]);
+
+    page.drawImage(pngImage, { x: 0, y: 0, width: pageWidthPt, height: pageHeightPt });
+
+    for (const ann of annotations) {
+      const px = ann.x * pageWidthPt;
+      const py = (1 - ann.y) * pageHeightPt;
+      const calloutX = Math.max(10, px - CALLOUT_W - 12);
+      const calloutY = Math.max(10, Math.min(pageHeightPt - CALLOUT_H - 10, py - CALLOUT_H / 2));
+
+      page.drawRectangle({ x: calloutX, y: calloutY, width: CALLOUT_W, height: CALLOUT_H, color: WHITE, borderColor: FAIL_RED, borderWidth: 1 });
+      page.drawText(ann.label.toUpperCase(), { x: calloutX + 5, y: calloutY + CALLOUT_H - 11, font: helvetica, size: 5, color: LABEL_GRAY });
+      const expectedStr = ann.expected ? String(ann.expected).slice(0, 35) : '(none)';
+      page.drawText(expectedStr, { x: calloutX + 5, y: calloutY + 5, font: helveticaBold, size: 6, color: FAIL_RED });
+      page.drawLine({ start: { x: calloutX + CALLOUT_W, y: py }, end: { x: px - PIN_RADIUS, y: py }, thickness: 0.75, color: FAIL_RED, lineDashPattern: [4, 3] });
+      page.drawCircle({ x: px, y: py, size: PIN_RADIUS, color: FAIL_RED });
+      const nStr = String(ann.n);
+      const textWidth = helveticaBold.widthOfTextAtSize(nStr, 7);
+      page.drawText(nStr, { x: px - textWidth / 2, y: py - 7 * 0.35, font: helveticaBold, size: 7, color: WHITE });
+    }
+
+    if (unplaced.length > 0) {
+      const LIST_W = 130, LIST_H = 28, LIST_GAP = 4;
+      const listX  = pageWidthPt - LIST_W - 10;
+      unplaced.forEach((ann, i) => {
+        const boxY = pageHeightPt - 10 - (i + 1) * (LIST_H + LIST_GAP);
+        page.drawRectangle({ x: listX, y: boxY, width: LIST_W, height: LIST_H, color: WHITE, borderColor: FAIL_RED, borderWidth: 1 });
+        const badgeX = listX + 10, badgeY = boxY + LIST_H / 2;
+        page.drawCircle({ x: badgeX, y: badgeY, size: 7, color: FAIL_RED });
+        const nStr = String(ann.n);
+        const nW   = helveticaBold.widthOfTextAtSize(nStr, 6);
+        page.drawText(nStr,               { x: badgeX - nW / 2, y: badgeY - 6 * 0.35, font: helveticaBold, size: 6, color: WHITE });
+        page.drawText(ann.label.toUpperCase(), { x: listX + 22, y: boxY + LIST_H - 11, font: helvetica,     size: 5, color: LABEL_GRAY });
+        const expStr = ann.expected ? String(ann.expected).slice(0, 22) : '(none)';
+        page.drawText(expStr,             { x: listX + 22, y: boxY + 5,           font: helveticaBold, size: 6, color: FAIL_RED });
+      });
+    }
+  }
+
+  const pdfBytes = await exportDoc.save();
+  return new Blob([pdfBytes], { type: 'application/pdf' });
 }
 
 function canvasToBlob(canvas) {
@@ -255,12 +314,7 @@ export default function DTExportSection({
       let pdfBlob = null;
       if (exportPdf && pdfPageData.length > 0) {
         setProgress('Generating PDF\u2026');
-        const res = await fetch('/api/dt-checker-export-pdf', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pages: pdfPageData }),
-        });
-        if (!res.ok) throw new Error(`PDF generation failed (HTTP ${res.status})`);
-        pdfBlob = new Blob([await res.arrayBuffer()], { type: 'application/pdf' });
+        pdfBlob = await buildAnnotatedPdf(pdfPageData);
       }
 
       setProgress('Saving\u2026');
