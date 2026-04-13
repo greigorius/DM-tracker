@@ -28,21 +28,21 @@ function fmtDate(iso) {
 
 // ── Status colour coding ──────────────────────────────────────────────────────
 const STATUS_COLORS = {
-  'A':                   { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'A1':                  { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'A2':                  { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'B':                   { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'B1':                  { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'B2':                  { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'C':                   { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
-  'C1':                  { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
-  'C2':                  { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
+  'A':  { bg: '#14532d', text: '#4ade80', border: '#166534' },
+  'A1': { bg: '#14532d', text: '#4ade80', border: '#166534' },
+  'A2': { bg: '#14532d', text: '#4ade80', border: '#166534' },
+  'B':  { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
+  'B1': { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
+  'B2': { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
+  'C':  { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
+  'C1': { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
+  'C2': { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
 };
 const STATUS_DEFAULT = { bg: '#1e2d45', text: '#94a3b8', border: '#2d3f5a' };
 
 function statusStyle(s) {
   if (!s) return STATUS_DEFAULT;
-  const key = s.split(/[\s–\-]/)[0]; // first word/letter
+  const key = s.split(/[\s–\-]/)[0];
   return STATUS_COLORS[key] ?? STATUS_DEFAULT;
 }
 
@@ -53,256 +53,332 @@ function StatusBadge({ value }) {
     <span style={{
       display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
       padding: '2px 6px', borderRadius: 4, background: st.bg, color: st.text,
-      border: `1px solid ${st.border}`, whiteSpace: 'nowrap', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis',
+      border: `1px solid ${st.border}`, whiteSpace: 'nowrap', maxWidth: 140,
+      overflow: 'hidden', textOverflow: 'ellipsis',
     }} title={value}>
       {value}
     </span>
   );
 }
 
-// ── Item status badge (task progress) ─────────────────────────────────────────
 function ItemStatusBadge({ value }) {
   if (!value) return null;
   const sc = ITEM_STATUS_COLORS[value] ?? ITEM_STATUS_DEFAULT;
   return (
-    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: sc.bg, color: sc.text }}>
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '2px 6px', borderRadius: 3, background: sc.bg, color: sc.text }}>
       {value}
     </span>
   );
 }
 
-// ── Editable date cell ────────────────────────────────────────────────────────
-function DateCell({ value, fieldKey, drawingId, onCommit, dragState, onDragStart, onDragEnter, isSelected, isPending }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState(value ?? '');
-  const inputRef = useRef(null);
+// ── Column definitions ────────────────────────────────────────────────────────
+const DEFAULT_COLUMNS = [
+  { key: 'drawingNumber',    label: 'Dwg No',          defaultWidth: 130, minWidth: 80  },
+  { key: 'title',            label: 'Title',            defaultWidth: 240, minWidth: 120 },
+  { key: 'designStage',      label: 'Stage',            defaultWidth: 80,  minWidth: 50  },
+  { key: 'rev',              label: 'Rev',              defaultWidth: 60,  minWidth: 40  },
+  { key: 'dwgNoAssigned',    label: 'Dwg Type',         defaultWidth: 90,  minWidth: 60  },
+  { key: 's4SubmitActual',   label: 'S4 Submit',        defaultWidth: 96,  minWidth: 70  },
+  { key: 's4StatusDate',     label: 'S4 Status Date',   defaultWidth: 110, minWidth: 80  },
+  { key: 's4Status',         label: 'S4 Status',        defaultWidth: 130, minWidth: 80  },
+  { key: 's5SubmitActual',   label: 'S5 Submit',        defaultWidth: 96,  minWidth: 70  },
+  { key: 's5StatusDate',     label: 'S5 Status Date',   defaultWidth: 110, minWidth: 80  },
+  { key: 's5Status',         label: 'S5 Status',        defaultWidth: 130, minWidth: 80  },
+  { key: 'c01SubmitActual',  label: 'C01 Submit',       defaultWidth: 96,  minWidth: 70  },
+  { key: 'c01SignOffActual', label: 'C01 Sign Off',     defaultWidth: 110, minWidth: 70  },
+];
 
-  useEffect(() => { setDraft(value ?? ''); }, [value]);
-  useEffect(() => { if (editing && inputRef.current) inputRef.current.focus(); }, [editing]);
+const COL_CONFIG_KEY = 'dmtracker:dr-col-config';
 
-  const commit = (v) => {
-    setEditing(false);
-    const clean = v?.trim() || null;
-    if (clean !== (value ?? null)) onCommit(drawingId, fieldKey, clean || null);
-  };
-
-  const highlight = isSelected || isPending;
-
-  return (
-    <div style={{ position: 'relative', minWidth: 88 }}>
-      {editing ? (
-        <input
-          ref={inputRef}
-          type="date"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={e => commit(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') commit(draft); if (e.key === 'Escape') { setEditing(false); setDraft(value ?? ''); } }}
-          style={{ width: '100%', background: '#0b1225', border: `1px solid #60a5fa`, borderRadius: 4, color: C.text, fontSize: 11, padding: '3px 6px', outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }}
-        />
-      ) : (
-        <div
-          onClick={() => setEditing(true)}
-          onMouseDown={e => { if (e.target === e.currentTarget) { e.preventDefault(); onDragStart?.(drawingId, fieldKey); } }}
-          onMouseEnter={() => dragState?.active && onDragEnter?.(drawingId, fieldKey)}
-          style={{
-            padding: '3px 6px', borderRadius: 4, cursor: 'text', minHeight: 22,
-            background: highlight ? hexToRgba('#3b82f6', 0.18) : 'transparent',
-            border: `1px solid ${highlight ? '#3b82f6' : 'transparent'}`,
-            color: value ? (isPending ? '#93c5fd' : C.text) : C.muted,
-            fontSize: 11, fontFamily: 'inherit', display: 'flex', alignItems: 'center',
-            transition: 'background 0.1s, border-color 0.1s',
-            userSelect: 'none',
-          }}
-        >
-          {value ? fmtDate(value) : '—'}
-          {/* drag handle */}
-          <span
-            onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onDragStart?.(drawingId, fieldKey); }}
-            style={{ marginLeft: 'auto', paddingLeft: 4, cursor: 'row-resize', color: C.muted, fontSize: 9, opacity: 0.5, lineHeight: 1 }}
-            title="Drag to fill down"
-          >▼</span>
-        </div>
-      )}
-    </div>
-  );
+function initColConfig() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(COL_CONFIG_KEY) || 'null');
+    if (!stored || !Array.isArray(stored)) return DEFAULT_COLUMNS.map(c => ({ key: c.key, visible: true, width: c.defaultWidth }));
+    const defMap    = new Map(DEFAULT_COLUMNS.map(c => [c.key, c]));
+    const storedMap = new Map(stored.map(c => [c.key, c]));
+    // Ordered by stored order; append any new default columns at end
+    const orderedKeys = [...stored.map(c => c.key).filter(k => defMap.has(k))];
+    for (const def of DEFAULT_COLUMNS) {
+      if (!orderedKeys.includes(def.key)) orderedKeys.push(def.key);
+    }
+    return orderedKeys.map(k => {
+      const def = defMap.get(k);
+      const s   = storedMap.get(k);
+      return { key: k, visible: s?.visible ?? true, width: s?.width ?? def?.defaultWidth ?? 100 };
+    });
+  } catch {
+    return DEFAULT_COLUMNS.map(c => ({ key: c.key, visible: true, width: c.defaultWidth }));
+  }
 }
 
-// ── Editable select cell ──────────────────────────────────────────────────────
-function SelectCell({ value, fieldKey, drawingId, options, onCommit, dragState, onDragStart, onDragEnter, isSelected, isPending }) {
-  const [editing, setEditing] = useState(false);
-  const selectRef = useRef(null);
+function persistColConfig(config) {
+  try { localStorage.setItem(COL_CONFIG_KEY, JSON.stringify(config)); } catch {}
+}
 
-  useEffect(() => { if (editing && selectRef.current) selectRef.current.focus(); }, [editing]);
+// ── Column config panel ───────────────────────────────────────────────────────
+function ColumnConfigPanel({ colConfig, onClose, onChange }) {
+  const [local, setLocal] = useState(colConfig);
+  const defMap = new Map(DEFAULT_COLUMNS.map(c => [c.key, c]));
 
-  const commit = (v) => {
-    setEditing(false);
-    const clean = v || null;
-    if (clean !== (value ?? null)) onCommit(drawingId, fieldKey, clean);
-  };
+  const toggle = key => setLocal(prev => prev.map(c => c.key === key ? { ...c, visible: !c.visible } : c));
+  const move   = (key, dir) => setLocal(prev => {
+    const idx  = prev.findIndex(c => c.key === key);
+    const next = [...prev];
+    const to   = idx + dir;
+    if (to < 0 || to >= next.length) return prev;
+    [next[idx], next[to]] = [next[to], next[idx]];
+    return next;
+  });
 
-  const highlight = isSelected || isPending;
-
-  if (editing) {
-    return (
-      <select
-        ref={selectRef}
-        defaultValue={value ?? ''}
-        onChange={e => commit(e.target.value)}
-        onBlur={() => setEditing(false)}
-        style={{ width: '100%', background: C.input, border: `1px solid #60a5fa`, borderRadius: 4, color: C.text, fontSize: 11, padding: '3px 6px', outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }}
-      >
-        <option value="">—</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    );
-  }
+  const apply = () => { onChange(local); onClose(); };
+  const reset = () => setLocal(DEFAULT_COLUMNS.map(c => ({ key: c.key, visible: true, width: c.defaultWidth })));
 
   return (
     <div
-      onClick={() => setEditing(true)}
-      onMouseDown={e => { if (!editing) { e.preventDefault(); onDragStart?.(drawingId, fieldKey); } }}
-      onMouseEnter={() => dragState?.active && onDragEnter?.(drawingId, fieldKey)}
-      style={{
-        padding: '3px 6px', borderRadius: 4, cursor: 'pointer', minHeight: 22, minWidth: 80,
-        background: highlight ? hexToRgba('#3b82f6', 0.18) : 'transparent',
-        border: `1px solid ${highlight ? '#3b82f6' : 'transparent'}`,
-        transition: 'background 0.1s, border-color 0.1s',
-        userSelect: 'none',
-      }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+        display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <StatusBadge value={isPending ? value : value} />
-      {value && (
-        <span
-          onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onDragStart?.(drawingId, fieldKey); }}
-          style={{ marginLeft: 4, cursor: 'row-resize', color: C.muted, fontSize: 9, opacity: 0.5 }}
-          title="Drag to fill down"
-        >▼</span>
-      )}
+      <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10,
+        padding: 24, width: 320, maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12,
+        fontFamily: "'DM Mono','ui-monospace',monospace" }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Configure Columns</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {local.map((col, idx) => (
+            <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 0', borderBottom: `1px solid ${C.grid}` }}>
+              <input type="checkbox" checked={col.visible} onChange={() => toggle(col.key)}
+                style={{ cursor: 'pointer', accentColor: '#3b82f6', flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 11, color: col.visible ? C.text : C.muted }}>
+                {defMap.get(col.key)?.label ?? col.key}
+              </span>
+              <button onClick={() => move(col.key, -1)} disabled={idx === 0}
+                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 3,
+                  color: C.muted, cursor: idx === 0 ? 'default' : 'pointer',
+                  fontSize: 9, padding: '2px 5px', opacity: idx === 0 ? 0.3 : 1, fontFamily: 'inherit' }}>▲</button>
+              <button onClick={() => move(col.key, 1)} disabled={idx === local.length - 1}
+                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 3,
+                  color: C.muted, cursor: idx === local.length - 1 ? 'default' : 'pointer',
+                  fontSize: 9, padding: '2px 5px', opacity: idx === local.length - 1 ? 0.3 : 1, fontFamily: 'inherit' }}>▼</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={reset}
+            style={{ padding: '5px 12px', borderRadius: 5, border: `1px solid ${C.border}`,
+              background: 'transparent', color: C.sec, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Reset
+          </button>
+          <button onClick={apply}
+            style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: '#1d4ed8',
+              color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Apply
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Column headers ─────────────────────────────────────────────────────────────
-function TableHead() {
-  const th = (label, width, align = 'left') => (
-    <th key={label} style={{ padding: '7px 10px', textAlign: align, fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap', width, borderBottom: `1px solid ${C.border}`, background: '#080d17' }}>
-      {label}
-    </th>
+// ── Cell content renderer ─────────────────────────────────────────────────────
+function CellContent({ colKey, drawing }) {
+  switch (colKey) {
+    case 'drawingNumber':
+      return (
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: 'nowrap',
+          overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {drawing.drawingNumber || '—'}
+        </div>
+      );
+
+    case 'title':
+      return (
+        <div>
+          {drawing.title1 && <div style={{ fontSize: 12, color: C.text, lineHeight: 1.35 }}>{drawing.title1}</div>}
+          {drawing.title2 && <div style={{ fontSize: 11, color: C.sec, lineHeight: 1.35 }}>{drawing.title2}</div>}
+          {drawing.title3 && <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.35 }}>{drawing.title3}</div>}
+          {!drawing.title1 && !drawing.title2 && !drawing.title3 &&
+            <span style={{ color: C.muted, fontSize: 10 }}>—</span>}
+        </div>
+      );
+
+    case 'designStage':
+      return drawing.designStage
+        ? <span style={{ fontSize: 11, color: C.sec }}>{drawing.designStage}</span>
+        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+
+    case 'rev':
+      return drawing.rev
+        ? <span style={{ fontSize: 11, color: C.sec }}>Rev {drawing.rev}</span>
+        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+
+    case 'dwgNoAssigned':
+      return drawing.dwgNoAssigned
+        ? <span style={{ fontSize: 10, fontWeight: 600, color: C.sec }}>{drawing.dwgNoAssigned}</span>
+        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+
+    case 's4SubmitActual': {
+      const v = drawing.s4Submit?.actual;
+      return <span style={{ fontSize: 11, color: v ? C.text : C.muted }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    case 's4StatusDate': {
+      const v     = drawing.s4StatusDate;
+      const color = v ? statusStyle(drawing.s4Status).text : C.muted;
+      return <span style={{ fontSize: 11, color, fontWeight: v ? 600 : 400 }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    case 's4Status':
+      return <StatusBadge value={drawing.s4Status} />;
+
+    case 's5SubmitActual': {
+      const v = drawing.s5Submit?.actual;
+      return <span style={{ fontSize: 11, color: v ? C.text : C.muted }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    case 's5StatusDate': {
+      const v     = drawing.s5StatusDate;
+      const color = v ? statusStyle(drawing.s5Status).text : C.muted;
+      return <span style={{ fontSize: 11, color, fontWeight: v ? 600 : 400 }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    case 's5Status':
+      return <StatusBadge value={drawing.s5Status} />;
+
+    case 'c01SubmitActual': {
+      const v = drawing.c01Submit?.actual;
+      return <span style={{ fontSize: 11, color: v ? C.text : C.muted }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    case 'c01SignOffActual': {
+      const v = drawing.c01SignOff?.actual;
+      return <span style={{ fontSize: 11, color: v ? C.text : C.muted }}>{v ? fmtDate(v) : '—'}</span>;
+    }
+
+    default:
+      return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+  }
+}
+
+// ── Drawing row ───────────────────────────────────────────────────────────────
+function DrawingRow({ drawing, odd, visibleCols }) {
+  return (
+    <tr style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
+      {visibleCols.map(col => {
+        const isLeft = col.key === 'drawingNumber' || col.key === 'title';
+        return (
+          <td key={col.key} style={{
+            padding: '6px 10px',
+            textAlign: isLeft ? 'left' : 'center',
+            verticalAlign: isLeft ? 'top' : 'middle',
+            overflow: 'hidden',
+          }}>
+            <CellContent colKey={col.key} drawing={drawing} />
+          </td>
+        );
+      })}
+    </tr>
   );
+}
+
+// ── Table header with resize handles ─────────────────────────────────────────
+function TableHead({ visibleCols, onResizeStart }) {
   return (
     <thead>
       <tr>
-        {th('Dwg No / Stage / Rev', 130)}
-        {th('Title', undefined)}
-        {th('S4 Submit', 96, 'center')}
-        {th('S4 Status Date / Status', 140, 'center')}
-        {th('S5 Submit', 96, 'center')}
-        {th('S5 Status Date / Status', 140, 'center')}
-        {th('C01 Submit', 96, 'center')}
+        {visibleCols.map(col => {
+          const isLeft = col.key === 'drawingNumber' || col.key === 'title';
+          const def    = DEFAULT_COLUMNS.find(c => c.key === col.key);
+          return (
+            <th key={col.key} style={{
+              position: 'relative',
+              padding: '7px 10px',
+              textAlign: isLeft ? 'left' : 'center',
+              fontSize: 9, fontWeight: 700, color: C.muted,
+              letterSpacing: '0.07em', textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              width: col.width,
+              minWidth: def?.minWidth ?? 40,
+              borderBottom: `1px solid ${C.border}`,
+              background: '#080d17',
+              userSelect: 'none',
+            }}>
+              {def?.label ?? col.key}
+              <div
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onResizeStart(e, col.key); }}
+                style={{
+                  position: 'absolute', right: 0, top: 0, bottom: 0, width: 5,
+                  cursor: 'col-resize', zIndex: 1,
+                  background: 'transparent',
+                }}
+              />
+            </th>
+          );
+        })}
       </tr>
     </thead>
   );
 }
 
-// ── Drawing row ───────────────────────────────────────────────────────────────
-function DrawingRow({ drawing, odd, pending, editOptions, dragState, onDragStart, onDragEnter, onCommit, isInDragRange }) {
-  const { id, drawingNumber, title1, title2, title3, designStage, rev,
-          s4Submit, s4Status, s4StatusDate,
-          s5Submit, s5Status, s5StatusDate,
-          c01Submit } = drawing;
+// ── CSV / Excel export ────────────────────────────────────────────────────────
+function exportToCSV(visibleCols, grouped) {
+  const defMap = new Map(DEFAULT_COLUMNS.map(c => [c.key, c]));
+  const headers = visibleCols.map(c => defMap.get(c.key)?.label ?? c.key);
 
-  // Merge pending edits into displayed values
-  const p = pending[id] ?? {};
-  const vals = {
-    s4SubmitActual:  p.s4SubmitActual  !== undefined ? p.s4SubmitActual  : (s4Submit?.actual  ?? null),
-    s4StatusDate:    p.s4StatusDate    !== undefined ? p.s4StatusDate    : (s4StatusDate       ?? null),
-    s4Status:        p.s4Status        !== undefined ? p.s4Status        : (s4Status           ?? null),
-    s5SubmitActual:  p.s5SubmitActual  !== undefined ? p.s5SubmitActual  : (s5Submit?.actual  ?? null),
-    s5StatusDate:    p.s5StatusDate    !== undefined ? p.s5StatusDate    : (s5StatusDate       ?? null),
-    s5Status:        p.s5Status        !== undefined ? p.s5Status        : (s5Status           ?? null),
-    c01SubmitActual: p.c01SubmitActual !== undefined ? p.c01SubmitActual : (c01Submit?.actual ?? null),
-  };
+  function raw(dwg, key) {
+    switch (key) {
+      case 'drawingNumber':    return dwg.drawingNumber ?? '';
+      case 'title':            return [dwg.title1, dwg.title2, dwg.title3].filter(Boolean).join(' — ');
+      case 'designStage':      return dwg.designStage ?? '';
+      case 'rev':              return dwg.rev ?? '';
+      case 'dwgNoAssigned':    return dwg.dwgNoAssigned ?? '';
+      case 's4SubmitActual':   return fmtDate(dwg.s4Submit?.actual) ?? '';
+      case 's4StatusDate':     return fmtDate(dwg.s4StatusDate) ?? '';
+      case 's4Status':         return dwg.s4Status ?? '';
+      case 's5SubmitActual':   return fmtDate(dwg.s5Submit?.actual) ?? '';
+      case 's5StatusDate':     return fmtDate(dwg.s5StatusDate) ?? '';
+      case 's5Status':         return dwg.s5Status ?? '';
+      case 'c01SubmitActual':  return fmtDate(dwg.c01Submit?.actual) ?? '';
+      case 'c01SignOffActual': return fmtDate(dwg.c01SignOff?.actual) ?? '';
+      default: return '';
+    }
+  }
 
-  const hasPending = Object.keys(p).length > 0;
+  const esc  = v => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [headers.map(esc).join(',')];
+  for (const group of grouped) {
+    for (const dwg of group.drawings) {
+      rows.push(visibleCols.map(c => esc(raw(dwg, c.key))).join(','));
+    }
+  }
 
-  const cellProps = (fieldKey) => ({
-    drawingId: id, fieldKey, onCommit,
-    dragState,
-    onDragStart,
-    onDragEnter,
-    isSelected: dragState?.active && dragState.field === fieldKey && isInDragRange,
-    isPending: p[fieldKey] !== undefined,
-  });
-
-  return (
-    <tr style={{
-      background: odd ? '#0b1020' : C.bgCard,
-      borderBottom: `1px solid ${C.grid}`,
-      outline: hasPending ? `1px solid ${hexToRgba('#3b82f6', 0.3)}` : 'none',
-      outlineOffset: -1,
-    }}>
-      {/* Col 1: Drawing Number / Design Stage / Rev */}
-      <td style={{ padding: '6px 10px', verticalAlign: 'top' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: 'inherit' }}>{drawingNumber || '—'}</div>
-        {designStage && <div style={{ fontSize: 10, color: C.sec, marginTop: 2 }}>{designStage}</div>}
-        {rev && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>Rev {rev}</div>}
-      </td>
-
-      {/* Col 2: Titles stacked */}
-      <td style={{ padding: '6px 10px', verticalAlign: 'top', maxWidth: 280 }}>
-        {title1 && <div style={{ fontSize: 12, color: C.text, lineHeight: 1.35 }}>{title1}</div>}
-        {title2 && <div style={{ fontSize: 11, color: C.sec, lineHeight: 1.35 }}>{title2}</div>}
-        {title3 && <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.35 }}>{title3}</div>}
-        {!title1 && !title2 && !title3 && <span style={{ color: C.muted, fontSize: 10 }}>—</span>}
-      </td>
-
-      {/* Col 3: S4 Submit Date (Actual) */}
-      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-        <DateCell value={vals.s4SubmitActual} {...cellProps('s4SubmitActual')} />
-      </td>
-
-      {/* Col 4: S4 Status Date + S4 Status */}
-      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <DateCell value={vals.s4StatusDate} {...cellProps('s4StatusDate')} />
-          <SelectCell value={vals.s4Status} options={editOptions.s4Status} {...cellProps('s4Status')} />
-        </div>
-      </td>
-
-      {/* Col 5: S5 Submit Date (Actual) */}
-      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-        <DateCell value={vals.s5SubmitActual} {...cellProps('s5SubmitActual')} />
-      </td>
-
-      {/* Col 6: S5 Status Date + S5 Status */}
-      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <DateCell value={vals.s5StatusDate} {...cellProps('s5StatusDate')} />
-          <SelectCell value={vals.s5Status} options={editOptions.s5Status} {...cellProps('s5Status')} />
-        </div>
-      </td>
-
-      {/* Col 7: C01 Submit Date (Actual) */}
-      <td style={{ padding: '6px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-        <DateCell value={vals.c01SubmitActual} {...cellProps('c01SubmitActual')} />
-      </td>
-    </tr>
-  );
+  const csv  = '\uFEFF' + rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `drawings-register-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-// ── Filter bar styles ──────────────────────────────────────────────────────────
-const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: C.sec, fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' };
+// ── Filter bar select style ───────────────────────────────────────────────────
+const selStyle = {
+  background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
+  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+};
 
-const CHUNK_SIZE = 25; // item IDs per drawings fetch
-
-// ── PCSA filter — items containing "PCSA" in their name are ignored globally ──
+const CHUNK_SIZE = 25;
 const isPCSA = n => (n ?? '').toUpperCase().includes('PCSA');
 
-// ── Main page ──────────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function DrawingsPage() {
   const [regItems,      setRegItems]      = useState([]);
-  const [itemsLoading,  setItemsLoading]  = useState(true); // true until first load completes
+  const [itemsLoading,  setItemsLoading]  = useState(true);
   const [drawings,      setDrawings]      = useState([]);
   const [chunksTotal,   setChunksTotal]   = useState(0);
   const [chunksDone,    setChunksDone]    = useState(0);
@@ -311,6 +387,8 @@ export default function DrawingsPage() {
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [expanded,      setExpanded]      = useState({});
+  const [showColPanel,  setShowColPanel]  = useState(false);
+  const [colConfig,     setColConfig]     = useState(initColConfig);
 
   const [filterProject,     setFilterProject]     = useState('all');
   const [filterItem,        setFilterItem]        = useState('all');
@@ -320,20 +398,43 @@ export default function DrawingsPage() {
   const [filterS5Status,    setFilterS5Status]    = useState('all');
   const [groupBy,           setGroupBy]           = useState('item');
 
-  const [pending,    setPending]    = useState({});
-  const [saveStatus, setSaveStatus] = useState('idle');
-  const [saveError,  setSaveError]  = useState(null);
-  const [dragState,  setDragState]  = useState(null);
-  const dragRef = useRef(null);
+  const colConfigRef = useRef(colConfig);
+  useEffect(() => { colConfigRef.current = colConfig; }, [colConfig]);
 
   const today = new Date();
 
+  // Persist column config with debounce
+  useEffect(() => {
+    const t = setTimeout(() => persistColConfig(colConfig), 400);
+    return () => clearTimeout(t);
+  }, [colConfig]);
+
+  // Column resize via mouse drag
+  const startResize = useCallback((e, colKey) => {
+    const startX     = e.clientX;
+    const def        = DEFAULT_COLUMNS.find(c => c.key === colKey);
+    const minW       = def?.minWidth ?? 40;
+    const startWidth = colConfigRef.current.find(c => c.key === colKey)?.width ?? 100;
+
+    const onMove = me => {
+      const newW = Math.max(minW, startWidth + (me.clientX - startX));
+      setColConfig(prev => prev.map(c => c.key === colKey ? { ...c, width: newW } : c));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  // Auto-refresh
   useEffect(() => {
     const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Projects ────────────────────────────────────────────────────────────────
+  // Projects
   useEffect(() => {
     const cached = getCached('projects');
     if (cached) { setProjects(cached); return; }
@@ -342,20 +443,15 @@ export default function DrawingsPage() {
       .catch(() => {});
   }, []);
 
-  // ── Phase 1: load items for all projects in parallel (or just the selected one)
-  // Firing N scoped requests in parallel avoids any single unfiltered query that
-  // would time out on large databases. Each per-project call is fast.
+  // Phase 1: items
   useEffect(() => {
-    if (!projects.length) return; // wait for project list
-
+    if (!projects.length) return;
     setItemsLoading(true);
     setFetchError(null);
     setRegItems([]);
     setDrawings([]);
 
-    const projectIds = filterProject === 'all'
-      ? projects.map(p => p.id)
-      : [filterProject];
+    const projectIds = filterProject === 'all' ? projects.map(p => p.id) : [filterProject];
 
     Promise.allSettled(
       projectIds.map(projId => {
@@ -378,11 +474,11 @@ export default function DrawingsPage() {
     });
   }, [filterProject, projects.length, refreshKey]);
 
-  // ── Phase 2: load drawings in parallel chunks once items are known ──────────
+  // Phase 2: drawings
   useEffect(() => {
     if (!regItems.length) return;
 
-    const cacheKey  = `dr-drawings:${filterProject}`;
+    const cacheKey   = `dr-drawings:${filterProject}`;
     const cachedDwgs = getCached(cacheKey);
     if (cachedDwgs && refreshKey === 0) {
       setDrawings(cachedDwgs);
@@ -392,9 +488,7 @@ export default function DrawingsPage() {
 
     const itemIds = regItems.map(i => i.id);
     const chunks  = [];
-    for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
-      chunks.push(itemIds.slice(i, i + CHUNK_SIZE));
-    }
+    for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) chunks.push(itemIds.slice(i, i + CHUNK_SIZE));
 
     setDrawings([]);
     setChunksTotal(chunks.length);
@@ -426,12 +520,11 @@ export default function DrawingsPage() {
     });
   }, [regItems]);
 
-  // ── Colour map ──────────────────────────────────────────────────────────────
+  // Colour map
   const allProjIds = [...new Set([...projects.map(p => p.id), ...regItems.map(i => i.projectId).filter(Boolean)])];
   const colorMap   = assignProjectColors(allProjIds.map(id => ({ id })));
 
-  // ── Lookup maps ─────────────────────────────────────────────────────────────
-  // drawings indexed by their first itemId for quick per-group retrieval
+  // Index drawings by item ID
   const drawingsByItemId = new Map();
   for (const dwg of drawings) {
     const iid = dwg.itemIds?.[0] ?? null;
@@ -440,16 +533,14 @@ export default function DrawingsPage() {
     drawingsByItemId.get(iid).push(dwg);
   }
 
-  // ── Filter options ──────────────────────────────────────────────────────────
+  // Filter options derived from data
   const itemOptions        = [...new Set(regItems.filter(i => !isPCSA(i.name)).map(i => i.name).filter(Boolean))].sort();
   const designStageOptions = [...new Set(drawings.map(d => d.designStage).filter(Boolean))].sort();
   const revOptions         = [...new Set(drawings.map(d => d.rev).filter(Boolean))].sort();
   const s4StatusOptions    = [...new Set(drawings.map(d => d.s4Status).filter(Boolean))].sort();
   const s5StatusOptions    = [...new Set(drawings.map(d => d.s5Status).filter(Boolean))].sort();
 
-  // ── Grouping ─────────────────────────────────────────────────────────────────
-  // PCSA items are excluded globally. Then filter by item-level and drawing-level
-  // criteria, then group according to groupBy state.
+  // Eligible items (non-PCSA, matching project/item filters)
   const eligibleItems = regItems.filter(item => {
     if (isPCSA(item.name)) return false;
     if (filterProject !== 'all' && item.projectId !== filterProject) return false;
@@ -457,7 +548,9 @@ export default function DrawingsPage() {
     return true;
   }).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
+  // Drawing-level filter: only show drawings with dwgNoAssigned value
   const matchesDwgFilter = d => {
+    if (!d.dwgNoAssigned) return false;
     if (filterDesignStage !== 'all' && d.designStage !== filterDesignStage) return false;
     if (filterRev         !== 'all' && d.rev         !== filterRev)         return false;
     if (filterS4Status    !== 'all' && d.s4Status    !== filterS4Status)    return false;
@@ -466,6 +559,7 @@ export default function DrawingsPage() {
   };
 
   const hasDrawingFilter = filterDesignStage !== 'all' || filterRev !== 'all' || filterS4Status !== 'all' || filterS5Status !== 'all';
+
   const itemDrawings = eligibleItems.map(item => ({
     item,
     dwgs: (drawingsByItemId.get(item.id) ?? []).filter(matchesDwgFilter),
@@ -473,6 +567,7 @@ export default function DrawingsPage() {
 
   const sortDwgs = dwgs => [...dwgs].sort((a, b) => (a.drawingNumber ?? '').localeCompare(b.drawingNumber ?? ''));
 
+  // Grouping
   const grouped = (() => {
     if (groupBy === 'project') {
       const map = new Map();
@@ -482,9 +577,7 @@ export default function DrawingsPage() {
         if (!map.has(projId)) map.set(projId, { key: projName, projectId: projId, drawings: [] });
         map.get(projId).drawings.push(...dwgs);
       }
-      return [...map.values()]
-        .sort((a, b) => a.key.localeCompare(b.key))
-        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'designStage') {
       const map = new Map();
@@ -495,9 +588,7 @@ export default function DrawingsPage() {
           map.get(k).drawings.push(d);
         }
       }
-      return [...map.values()]
-        .sort((a, b) => a.key.localeCompare(b.key))
-        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'rev') {
       const map = new Map();
@@ -508,11 +599,20 @@ export default function DrawingsPage() {
           map.get(k).drawings.push(d);
         }
       }
-      return [...map.values()]
-        .sort((a, b) => a.key.localeCompare(b.key))
-        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
-    // Default: group by item — sorted alphabetically, drawings sorted by number
+    if (groupBy === 'dwgType') {
+      const map = new Map();
+      for (const { dwgs } of itemDrawings) {
+        for (const d of dwgs) {
+          const k = d.dwgNoAssigned ?? 'Other';
+          if (!map.has(k)) map.set(k, { key: k, projectId: null, drawings: [] });
+          map.get(k).drawings.push(d);
+        }
+      }
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
+    }
+    // Default: group by item
     return itemDrawings
       .map(({ item, dwgs }) => ({
         key:        item.name ?? item.id,
@@ -524,153 +624,45 @@ export default function DrawingsPage() {
       .sort((a, b) => a.key.localeCompare(b.key));
   })();
 
-  // flat visible drawings list (for drag-range ordering)
   const visible    = grouped.flatMap(g => g.drawings);
-  const orderedIds = visible.map(d => d.id);
+  const visibleCols = colConfig.filter(c => c.visible);
 
-  // ── Drag-to-fill handlers ─────────────────────────────────────────────────
-  const handleDragStart = useCallback((drawingId, field) => {
-    const state = { active: true, startId: drawingId, field, endId: drawingId };
-    dragRef.current = state;
-    setDragState(state);
+  // Expand / collapse all
+  const expandAll   = () => { const s = {}; for (const g of grouped) s[g.key] = true; setExpanded(s); };
+  const collapseAll = () => setExpanded({});
 
-    const onMouseUp = () => {
-      const s = dragRef.current;
-      if (!s) return;
-      setDragState(null);
-      dragRef.current = null;
-
-      // Compute range and fill
-      const start = orderedIds.indexOf(s.startId);
-      const end   = orderedIds.indexOf(s.endId);
-      if (start === -1 || end === -1 || start === end) return;
-
-      const lo = Math.min(start, end), hi = Math.max(start, end);
-      const sourceDrawing = drawings.find(d => d.id === s.startId);
-      if (!sourceDrawing) return;
-
-      // Get source value (including any pending edit)
-      const pendingSource = pending[s.startId] ?? {};
-      let sourceVal;
-      const field = s.field;
-      if (pendingSource[field] !== undefined) sourceVal = pendingSource[field];
-      else if (field === 's4SubmitActual')  sourceVal = sourceDrawing.s4Submit?.actual  ?? null;
-      else if (field === 's4StatusDate')    sourceVal = sourceDrawing.s4StatusDate       ?? null;
-      else if (field === 's4Status')        sourceVal = sourceDrawing.s4Status           ?? null;
-      else if (field === 's5SubmitActual')  sourceVal = sourceDrawing.s5Submit?.actual  ?? null;
-      else if (field === 's5StatusDate')    sourceVal = sourceDrawing.s5StatusDate       ?? null;
-      else if (field === 's5Status')        sourceVal = sourceDrawing.s5Status           ?? null;
-      else if (field === 'c01SubmitActual') sourceVal = sourceDrawing.c01Submit?.actual ?? null;
-
-      setPending(prev => {
-        const next = { ...prev };
-        for (let i = lo; i <= hi; i++) {
-          const tid = orderedIds[i];
-          if (tid === s.startId) continue; // skip source
-          next[tid] = { ...(next[tid] ?? {}), [field]: sourceVal };
-        }
-        return next;
-      });
-    };
-
-    window.addEventListener('mouseup', onMouseUp, { once: true });
-  }, [drawings, orderedIds, pending]);
-
-  const handleDragEnter = useCallback((drawingId, field) => {
-    if (!dragRef.current || dragRef.current.field !== field) return;
-    dragRef.current = { ...dragRef.current, endId: drawingId };
-    setDragState(prev => prev ? { ...prev, endId: drawingId } : prev);
-  }, []);
-
-  function isInDragRange(drawingId, field) {
-    if (!dragState || !dragState.active || dragState.field !== field) return false;
-    const start = orderedIds.indexOf(dragState.startId);
-    const end   = orderedIds.indexOf(dragState.endId);
-    const pos   = orderedIds.indexOf(drawingId);
-    if (start === -1 || end === -1 || pos === -1) return false;
-    return pos >= Math.min(start, end) && pos <= Math.max(start, end);
-  }
-
-  // ── Commit a single cell edit ─────────────────────────────────────────────
-  const handleCommit = useCallback((drawingId, fieldKey, value) => {
-    setPending(prev => ({
-      ...prev,
-      [drawingId]: { ...(prev[drawingId] ?? {}), [fieldKey]: value },
-    }));
-    setSaveStatus('idle');
-  }, []);
-
-  // ── Save all pending edits ────────────────────────────────────────────────
-  const pendingCount = Object.values(pending).reduce((n, fields) => n + Object.keys(fields).length, 0);
-
-  const saveAll = async () => {
-    const updates = Object.entries(pending).map(([id, fields]) => ({ id, fields })).filter(({ fields }) => Object.keys(fields).length > 0);
-    if (!updates.length) return;
-
-    setSaveStatus('saving');
-    setSaveError(null);
-    try {
-      const res = await fetch('/api/drawings-register/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `HTTP ${res.status}`); }
-      const data = await res.json();
-      if (!data.ok) throw new Error(`${data.failed?.length ?? 0} updates failed`);
-
-      // Merge pending into drawings state, clear pending
-      setDrawings(prev => prev.map(d => {
-        const edits = pending[d.id];
-        if (!edits) return d;
-        const next = { ...d };
-        if (edits.s4SubmitActual  !== undefined) next.s4Submit  = { ...d.s4Submit,  actual: edits.s4SubmitActual  };
-        if (edits.s4StatusDate    !== undefined) next.s4StatusDate    = edits.s4StatusDate;
-        if (edits.s4Status        !== undefined) next.s4Status        = edits.s4Status;
-        if (edits.s5SubmitActual  !== undefined) next.s5Submit  = { ...d.s5Submit,  actual: edits.s5SubmitActual  };
-        if (edits.s5StatusDate    !== undefined) next.s5StatusDate    = edits.s5StatusDate;
-        if (edits.s5Status        !== undefined) next.s5Status        = edits.s5Status;
-        if (edits.c01SubmitActual !== undefined) next.c01Submit = { ...d.c01Submit, actual: edits.c01SubmitActual };
-        return next;
-      }));
-      // Bust cache so next load picks up fresh data
-      setCached('drawings-register', null);
-      setPending({});
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 3000);
-    } catch (e) {
-      setSaveStatus('error');
-      setSaveError(e.message);
-    }
-  };
-
-  const discardAll = () => { setPending({}); setSaveStatus('idle'); setSaveError(null); };
-
-  const editOptions = { s4Status: s4StatusOptions, s5Status: s5StatusOptions };
+  const groupByLabel = { item: 'item', project: 'project', designStage: 'design stage', rev: 'rev', dwgType: 'drawing type' };
 
   return (
-    <div
-      style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}
-      onMouseLeave={() => { if (dragRef.current) { dragRef.current = null; setDragState(null); } }}
-    >
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>DRAWINGS</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Drawing register · grouped by {groupBy === 'designStage' ? 'design stage' : groupBy}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+            Drawing register · grouped by {groupByLabel[groupBy] ?? groupBy}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 11, color: C.muted }}>
             {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
-          {lastRefreshed && <span style={{ fontSize: 10, color: C.muted }}>updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={() => { setCached('drawings-register', null); setRefreshKey(k => k + 1); }} title="Refresh" style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}>↻</button>
+          {lastRefreshed && (
+            <span style={{ fontSize: 10, color: C.muted }}>
+              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => { setCached('drawings-register', null); setRefreshKey(k => k + 1); }}
+            title="Refresh"
+            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}
+          >↻</button>
         </div>
       </div>
 
       <AppNav />
 
-      {/* Filter bar */}
+      {/* Filter / toolbar */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={selStyle}>
           <option value="all">All Projects</option>
@@ -696,71 +688,81 @@ export default function DrawingsPage() {
           <option value="all">All S5 Status</option>
           {s5StatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ ...selStyle, marginLeft: 8, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+
+        {/* Group by */}
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
+          style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
           <option value="item">Group: Item</option>
           <option value="project">Group: Project</option>
           <option value="designStage">Group: Design Stage</option>
           <option value="rev">Group: Rev</option>
+          <option value="dwgType">Group: Dwg Type</option>
         </select>
+
+        {/* Expand / collapse all */}
+        <button onClick={expandAll}
+          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          Expand All
+        </button>
+        <button onClick={collapseAll}
+          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          Collapse All
+        </button>
+
+        {/* Column configurator */}
+        <button onClick={() => setShowColPanel(true)}
+          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          ⚙ Columns
+        </button>
+
+        {/* Export */}
+        <button onClick={() => exportToCSV(visibleCols, grouped)}
+          style={{ ...selStyle, cursor: 'pointer', borderColor: '#166534', color: '#4ade80' }}>
+          ↓ Export CSV
+        </button>
+
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {itemsLoading
             ? 'Loading items…'
             : chunksDone < chunksTotal
               ? `Loading drawings… ${chunksDone}/${chunksTotal}`
-              : `${visible.length} drawings`}
+              : `${visible.length} drawing${visible.length !== 1 ? 's' : ''}`}
         </span>
       </div>
 
-      {/* Pending changes save bar */}
-      {(pendingCount > 0 || saveStatus !== 'idle') && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '8px 14px', borderRadius: 8, background: saveStatus === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(59,130,246,0.08)', border: `1px solid ${saveStatus === 'error' ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)'}` }}>
-          {saveStatus === 'saving' && <span style={{ fontSize: 11, color: '#60a5fa' }}>Saving {Object.keys(pending).length} drawing(s)…</span>}
-          {saveStatus === 'saved'  && <span style={{ fontSize: 11, color: '#34d399' }}>All changes saved ✓</span>}
-          {saveStatus === 'error'  && <span style={{ fontSize: 11, color: '#f87171' }}>Save failed: {saveError}</span>}
-          {saveStatus === 'idle'   && <span style={{ fontSize: 11, color: '#93c5fd' }}>{pendingCount} unsaved change{pendingCount !== 1 ? 's' : ''} across {Object.keys(pending).length} drawing{Object.keys(pending).length !== 1 ? 's' : ''}</span>}
-          {pendingCount > 0 && saveStatus !== 'saving' && (
-            <>
-              <button onClick={saveAll} style={{ marginLeft: 'auto', padding: '4px 14px', borderRadius: 5, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save to Notion</button>
-              <button onClick={discardAll} style={{ padding: '4px 10px', borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.sec, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Discard</button>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Content */}
       {fetchError ? (
-        <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
+        <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
           Error: {fetchError}
         </div>
       ) : itemsLoading ? (
         <div style={{ color: C.muted, fontSize: 12 }}>Loading items…</div>
       ) : grouped.length === 0 ? (
-        <div style={{ color: C.muted, fontSize: 12 }}>No items match filters</div>
+        <div style={{ color: C.muted, fontSize: 12 }}>No drawings match filters</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {grouped.map(({ key, projectId, itemId, itemStatus, drawings: groupDwgs }) => {
-            const projColor      = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded     = !!expanded[key]; // default collapsed
-            const groupLoading   = chunksDone < chunksTotal; // drawings still arriving
+          {grouped.map(({ key, projectId, itemStatus, drawings: groupDwgs }) => {
+            const projColor    = colorMap.get(projectId) ?? PROJECT_COLORS[0];
+            const isExpanded   = !!expanded[key];
+            const groupLoading = chunksDone < chunksTotal;
 
             return (
-              <div
-                key={key}
-                style={{
-                  background:   C.bgCard,
-                  border:       `1px solid ${C.border}`,
-                  borderLeft:   `3px solid ${projColor}`,
-                  borderRadius: 10,
-                  overflow:     'hidden',
-                  boxShadow:    `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
-                }}
-              >
+              <div key={key} style={{
+                background: C.bgCard, border: `1px solid ${C.border}`,
+                borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
+                boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
+              }}>
                 {/* Group header */}
                 <div
                   onClick={() => setExpanded(prev => ({ ...prev, [key]: !isExpanded }))}
-                  style={{ padding: '9px 16px', background: C.bgPanel, borderBottom: isExpanded ? `1px solid ${C.border}` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+                  style={{ padding: '9px 16px', background: C.bgPanel,
+                    borderBottom: isExpanded ? `1px solid ${C.border}` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
                 >
-                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>
+                    {isExpanded ? '▾' : '▸'}
+                  </span>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>
@@ -779,22 +781,12 @@ export default function DrawingsPage() {
                     <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>No drawings</div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                        <TableHead />
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
+                        width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
+                        <TableHead visibleCols={visibleCols} onResizeStart={startResize} />
                         <tbody>
                           {groupDwgs.map((dwg, idx) => (
-                            <DrawingRow
-                              key={dwg.id}
-                              drawing={dwg}
-                              odd={idx % 2 !== 0}
-                              pending={pending}
-                              editOptions={editOptions}
-                              dragState={dragState}
-                              onDragStart={handleDragStart}
-                              onDragEnter={handleDragEnter}
-                              onCommit={handleCommit}
-                              isInDragRange={isInDragRange(dwg.id, dragState?.field)}
-                            />
+                            <DrawingRow key={dwg.id} drawing={dwg} odd={idx % 2 !== 0} visibleCols={visibleCols} />
                           ))}
                         </tbody>
                       </table>
@@ -805,6 +797,15 @@ export default function DrawingsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Column config panel */}
+      {showColPanel && (
+        <ColumnConfigPanel
+          colConfig={colConfig}
+          onClose={() => setShowColPanel(false)}
+          onChange={newConfig => { setColConfig(newConfig); persistColConfig(newConfig); }}
+        />
       )}
     </div>
   );
