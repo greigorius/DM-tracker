@@ -1,11 +1,13 @@
 /**
  * POST /api/dt-checker-suffixes
  * Returns unique {suffixNumber, itemPageId} pairs for a project from the drawings DB.
- * Env mapping: NOTION_DRAWING_SCHEDULE_DB_ID → NOTION_DB_DRAWINGS
- * Body: { projectName: string }
+ * Uses projectPageId to look up items via Tasks DB, then drawings via Drawings DB.
+ * This avoids a brittle formula/rollup filter on the 'Project' property.
+ * Body: { projectPageId: string }
  */
-import { corsHeaders, tokenGuard, errResponse, fetchNotion, notionHeaders } from './_helpers.js'
+import { corsHeaders, tokenGuard, errResponse, queryAll } from './_helpers.js'
 
+const DB_TASKS    = process.env.NOTION_DB_TASKS
 const DB_DRAWINGS = process.env.NOTION_DB_DRAWINGS
 
 export const handler = async (event) => {
@@ -15,40 +17,38 @@ export const handler = async (event) => {
   let body
   try { body = JSON.parse(event.body || '{}') } catch { body = {} }
 
-  const { projectName } = body
-  if (!projectName) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ suffixes: [], error: 'projectName is required' }) }
+  const { projectPageId } = body
+  if (!projectPageId) {
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ suffixes: [], error: 'projectPageId is required' }) }
   }
 
-  // Use first token of project name as a reliable contains filter on the formula string
-  const projectIdentifier = projectName.split(' ')[0]
-
   try {
-    let allRows = []
-    let cursor
-    do {
-      const reqBody = {
-        page_size: 100,
-        filter: { property: 'Project', formula: { string: { contains: projectIdentifier } } },
-        ...(cursor ? { start_cursor: cursor } : {}),
-      }
-      const r = await fetchNotion(
-        `https://api.notion.com/v1/databases/${DB_DRAWINGS}/query`,
-        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(reqBody) }
-      )
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '')
-        throw Object.assign(new Error(`Notion query failed: ${r.status} ${txt.slice(0, 200)}`), { status: r.status })
-      }
-      const data = await r.json()
-      allRows = allRows.concat(data.results || [])
-      cursor = data.has_more ? data.next_cursor : undefined
-    } while (cursor)
+    // Step 1: Get all items (tasks) for this project via the known relation property
+    const itemPages = await queryAll(DB_TASKS, {
+      property: 'Projects', relation: { contains: projectPageId },
+    })
+    const itemIds = itemPages.map(p => p.id)
 
-    // Extract unique {suffixNumber, itemPageId} pairs
+    if (itemIds.length === 0) {
+      return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ suffixes: [], error: null }) }
+    }
+
+    // Step 2: Fetch drawings for those items (chunked to respect Notion's OR-filter limit)
+    const CHUNK = 100
+    let allDrawingRows = []
+    for (let i = 0; i < itemIds.length; i += CHUNK) {
+      const chunk  = itemIds.slice(i, i + CHUNK)
+      const filter = chunk.length === 1
+        ? { property: 'Item', relation: { contains: chunk[0] } }
+        : { or: chunk.map(id => ({ property: 'Item', relation: { contains: id } })) }
+      const rows = await queryAll(DB_DRAWINGS, filter)
+      allDrawingRows = allDrawingRows.concat(rows)
+    }
+
+    // Step 3: Extract unique {suffixNumber, itemPageId} pairs
     const seen = new Set()
     const suffixes = []
-    for (const row of allRows) {
+    for (const row of allDrawingRows) {
       const p = row.properties
       const suffixNumber = p['Suffix #']?.rich_text?.[0]?.plain_text
         ?? p['Suffix #']?.title?.[0]?.plain_text
