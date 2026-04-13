@@ -639,6 +639,17 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .btn-header-action:hover { border-color: #3b82f6; color: #93c5fd; }
 .btn-header-action:disabled { opacity: 0.4; cursor: default; }
 
+.btn-load-finishes {
+  padding: 5px 12px;
+  font-size: 11px;
+  background: #1e3a5f;
+  color: #93c5fd;
+  border: 1px solid #2563eb;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-load-finishes:hover { background: #1e40af; }
+
 /* ── Validation table ── */
 .v-table {
   width: 100%;
@@ -1021,10 +1032,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   gap: 3px;
 }
 
+.export-pdf-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .export-drawing-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+}
+
+.export-drawing-item-parent {
+  font-weight: 500;
+}
+
+.export-drawing-item-page {
+  padding-left: 16px;
+  opacity: 0.85;
 }
 
 .export-drawing-name {

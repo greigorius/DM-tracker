@@ -90,7 +90,7 @@ const DEFAULT_CHECK_OPTIONS = {
   'revtable-revision': true, 'revtable-description': true, 'revtable-date': true,
 };
 
-const CUSTOM_SECTIONS = ['Hardware', 'General Notes', 'Outstanding Information', 'Reference Drawings', 'Map Key'];
+const CUSTOM_SECTIONS = ['Drawing Comment', 'Hardware', 'General Notes', 'Outstanding Information', 'Reference Drawings', 'Map Key'];
 
 // ═══════════════════════════════════════════════════════════
 //  SUB-COMPONENTS
@@ -191,8 +191,9 @@ function ValidationSection({
   );
 }
 
-function FinishesSection({ rows, error, sectionKey, collapsed, toggleCollapse, pdfId, getOverride, setOverride, clearOverride, failNumbers, onRefresh }) {
-  const loading = rows === null;
+function FinishesSection({ rows, error, sectionKey, collapsed, toggleCollapse, pdfId, getOverride, setOverride, clearOverride, failNumbers, onRefresh, onLoad }) {
+  const notLoaded = rows === undefined;
+  const loading   = rows === null;
   const effectiveRows = (rows || []).map((row, i) => ({ ...row, status: getOverride?.(pdfId, i) || 'pass' }));
   const summary = { pass: 0, warning: 0, fail: 0 };
   effectiveRows.forEach(r => { if (r.status in summary) summary[r.status]++; });
@@ -207,10 +208,11 @@ function FinishesSection({ rows, error, sectionKey, collapsed, toggleCollapse, p
             <h3 className="v-section-title">Finishes</h3>
           </div>
           <div className="v-section-counts">
+            {notLoaded && <span className="sc-warning">Not loaded</span>}
             {loading && <span className="sc-warning">Loading…</span>}
-            {!loading && error && <span className="sc-fail">Error</span>}
-            {!loading && !error && rows !== null && rows.length === 0 && <span className="sc-warning">No records</span>}
-            {!loading && !error && rows !== null && rows.length > 0 && (
+            {!notLoaded && !loading && error && <span className="sc-fail">Error</span>}
+            {!notLoaded && !loading && !error && rows !== null && rows.length === 0 && <span className="sc-warning">No records</span>}
+            {!notLoaded && !loading && !error && rows !== null && rows.length > 0 && (
               <>
                 {summary.pass    > 0 && <span className="sc-pass">{summary.pass} passed</span>}
                 {summary.warning > 0 && <span className="sc-warning">{summary.warning} warnings</span>}
@@ -219,7 +221,12 @@ function FinishesSection({ rows, error, sectionKey, collapsed, toggleCollapse, p
             )}
           </div>
         </button>
-        {onRefresh && (
+        {notLoaded && onLoad && (
+          <button className="btn-header-action" onClick={() => onLoad(pdfId)} title="Fetch finishes from Notion">
+            Load Finishes
+          </button>
+        )}
+        {!notLoaded && onRefresh && (
           <button className="btn-header-action" onClick={() => onRefresh(pdfId)} disabled={loading} title="Re-fetch finishes from Notion">
             ↻ Refresh
           </button>
@@ -227,7 +234,11 @@ function FinishesSection({ rows, error, sectionKey, collapsed, toggleCollapse, p
       </div>
 
       {!isCollapsed && (
-        loading ? (
+        notLoaded ? (
+          <div className="v-section-body-msg">
+            <button className="btn-load-finishes" onClick={() => onLoad?.(pdfId)}>Load Finishes</button>
+          </div>
+        ) : loading ? (
           <div className="v-section-body-msg"><span className="spinner-tiny" /> Loading finishes data…</div>
         ) : error ? (
           <div className="v-section-body-msg v-section-body-error">{error}</div>
@@ -684,6 +695,7 @@ export default function DTDrawingChecksPage() {
       ...p, manualProject: project,
       availableProjectSuffixes: null, availableProjectDrawings: null,
       projectSuffixesLoading: project ? true : false, projectDrawingsLoading: false,
+      finishesRows: undefined, finishesError: null,
       manualSelections: p.manualSelections.map(s => s ? { ...s, suffixNumber: null, itemPageId: null, drawingNumber: null, notionRow: null, issuedFor: s.issuedFor } : s),
     }));
     if (!project) return;
@@ -944,7 +956,7 @@ export default function DTDrawingChecksPage() {
         newEntries.push({
           id: entryId, displayName: file.name, pdfDoc: loadedPdf,
           totalPages: loadedPdf.numPages, checked: true, expanded: true,
-          status: 'uploaded', finishesRows: null, finishesError: null,
+          status: 'uploaded', finishesRows: undefined, finishesError: null,
           manualProject: null, availableProjectDrawings: null,
           projectSuffixesLoading: false, projectDrawingsLoading: false,
           notionRefreshing: false, manualSelections: [], revisionTableDates: {}, customFields: {},
@@ -955,7 +967,7 @@ export default function DTDrawingChecksPage() {
           id: entryId, displayName: file.name, pdfDoc: null,
           totalPages: 0, checked: false, expanded: false,
           status: 'upload-error', uploadError: err.message,
-          finishesRows: null, finishesError: null, manualProject: null,
+          finishesRows: undefined, finishesError: null, manualProject: null,
           availableProjectDrawings: null, projectSuffixesLoading: false,
           projectDrawingsLoading: false, notionRefreshing: false,
           manualSelections: [], revisionTableDates: {}, customFields: {},
@@ -1193,6 +1205,7 @@ export default function DTDrawingChecksPage() {
                 onPinClick={handlePinClick}
                 onPinDragEnd={handlePinDragEnd}
                 onPinDelete={handlePinDelete}
+                onScaleChange={setPdfScale}
               />
             ) : (
               <div
@@ -1260,7 +1273,6 @@ export default function DTDrawingChecksPage() {
                     onSelectProject={(project) => setManualProject(selectedPdfId, project)}
                     onSelectSuffix={(suffixNumber, itemPageId) => {
                       setManualSuffix(selectedPdfId, selectedPage, suffixNumber, itemPageId);
-                      if (selectedPage === 0) triggerFinishesLookup(selectedPdfId, suffixNumber, selectedPdf?.manualProject?.pageId);
                     }}
                     onSelectDrawing={(drawingNumber, notionRow) => setManualPageSelection(selectedPdfId, selectedPage, { drawingNumber, notionRow })}
                     onSelectIssuedFor={(issuedFor) => setManualPageSelection(selectedPdfId, selectedPage, { issuedFor })}
@@ -1329,13 +1341,13 @@ export default function DTDrawingChecksPage() {
                   })()}
 
                   <FinishesSection
-                    rows={selectedPdf?.finishesRows ?? null}
+                    rows={selectedPdf?.finishesRows}
                     error={selectedPdf?.finishesError ?? null}
                     sectionKey={`finishes-${selectedPdfId}`}
                     collapsed={collapsed} toggleCollapse={toggleCollapse}
                     pdfId={selectedPdfId}
                     getOverride={getFinishesOverride} setOverride={setFinishesOverride} clearOverride={clearFinishesOverride}
-                    failNumbers={failNumbers} onRefresh={refreshFinishes}
+                    failNumbers={failNumbers} onRefresh={refreshFinishes} onLoad={refreshFinishes}
                   />
 
                   <CustomFieldsPanel

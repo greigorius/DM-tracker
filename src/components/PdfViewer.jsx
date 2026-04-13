@@ -10,11 +10,14 @@ function PdfViewer({
   onPinDragEnd,
   onPinDelete,
   onPageClick,   // (fracX, fracY) — fired when canvas is clicked (not on a pin)
+  onScaleChange, // (newScale: number) — fired on scroll-wheel zoom
 }) {
-  const canvasRef    = useRef(null);
-  const containerRef = useRef(null);
-  const wrapperRef   = useRef(null);
-  const renderTaskRef = useRef(null);
+  const canvasRef       = useRef(null);
+  const containerRef    = useRef(null);
+  const wrapperRef      = useRef(null);
+  const renderTaskRef   = useRef(null);
+  const effectiveScaleRef = useRef(1);
+  const isPanningRef    = useRef(false);
   const [loading, setLoading]       = useState(false);
   const [canvasDims, setCanvasDims] = useState({ width: 0, height: 0 });
 
@@ -44,6 +47,7 @@ function PdfViewer({
           const scaleY = container.clientHeight / viewport0.height;
           effectiveScale = Math.min(scaleX, scaleY);
         }
+        effectiveScaleRef.current = effectiveScale;
 
         const vp  = page.getViewport({ scale: effectiveScale });
         const dpr = window.devicePixelRatio || 1;
@@ -81,13 +85,63 @@ function PdfViewer({
     };
   }, [pdfDoc, pageNumber, scale]);
 
+  // ── Scroll-wheel zoom ──
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onWheel = (e) => {
+      if (!onScaleChange) return;
+      e.preventDefault();
+      const factor   = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const newScale = Math.max(0.2, Math.min(4.0, effectiveScaleRef.current * factor));
+      onScaleChange(newScale);
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [onScaleChange]);
+
+  // ── Drag-to-pan ──
+  const handleContainerMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const origX  = e.clientX;
+    const origY  = e.clientY;
+    const startScrollLeft = container.scrollLeft;
+    const startScrollTop  = container.scrollTop;
+    let moved = false;
+
+    const onMove = (me) => {
+      if (!moved && (Math.abs(me.clientX - origX) > 3 || Math.abs(me.clientY - origY) > 3)) {
+        moved = true;
+        isPanningRef.current = true;
+        container.style.cursor = 'grabbing';
+      }
+      if (moved) {
+        container.scrollLeft = startScrollLeft - (me.clientX - origX);
+        container.scrollTop  = startScrollTop  - (me.clientY - origY);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      container.style.cursor = '';
+      // defer reset so the wrapper onClick can check isPanningRef first
+      setTimeout(() => { isPanningRef.current = false; }, 0);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  }, []);
+
+  // ── Pin drag ──
   const handlePinDragStart = useCallback((e, pin) => {
     e.preventDefault();
     e.stopPropagation();
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    const pinEl       = e.currentTarget;
+    const pinEl        = e.currentTarget;
     const startClientX = e.clientX;
     const startClientY = e.clientY;
     let hasMoved = false;
@@ -123,13 +177,19 @@ function PdfViewer({
   }, [onPinDragEnd]);
 
   return (
-    <div className="pdf-container" ref={containerRef}>
+    <div
+      className="pdf-container"
+      ref={containerRef}
+      onMouseDown={handleContainerMouseDown}
+      style={{ overflow: 'auto', cursor: onPageClick ? 'crosshair' : 'grab' }}
+    >
       {loading && <div className="pdf-loading">Loading page...</div>}
       <div
         className="pdf-page-wrapper"
         ref={wrapperRef}
         onClick={e => {
           if (!onPageClick || !wrapperRef.current) return;
+          if (isPanningRef.current) return;
           const rect = wrapperRef.current.getBoundingClientRect();
           onPageClick(
             (e.clientX - rect.left)  / rect.width,
@@ -141,7 +201,7 @@ function PdfViewer({
           display:     'inline-block',
           width:       canvasDims.width  || undefined,
           height:      canvasDims.height || undefined,
-          cursor:      onPageClick ? 'crosshair' : 'default',
+          cursor:      'inherit',
         }}
       >
         <canvas ref={canvasRef} className="pdf-canvas" />

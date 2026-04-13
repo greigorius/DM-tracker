@@ -211,26 +211,58 @@ export default function DTExportSection({
   pins = {},
   finishesOverrides = {},
 }) {
-  const isCollapsed  = collapsed[SECTION_KEY];
-  const checkedDone  = pdfs.filter(p => p.checked && p.pdfDoc);
-  const totalPages   = checkedDone.reduce((s, p) => s + p.totalPages, 0);
+  const isCollapsed = collapsed[SECTION_KEY];
+  const checkedDone = pdfs.filter(p => p.checked && p.pdfDoc);
 
-  const [exportPdf, setExportPdf] = useState(true);
-  const [exportPng, setExportPng] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [progress,  setProgress]  = useState('');
-  const [result,    setResult]    = useState(null);
+  const [exportPdf,     setExportPdf]     = useState(true);
+  const [exportPng,     setExportPng]     = useState(true);
+  const [exporting,     setExporting]     = useState(false);
+  const [progress,      setProgress]      = useState('');
+  const [result,        setResult]        = useState(null);
+  // { [pdfId]: Set<pageIndex> } — which pages to include in the export
+  const [selectedPages, setSelectedPages] = useState({});
 
-  const canExport = (exportPdf || exportPng) && checkedDone.length > 0;
+  // Keep selectedPages in sync as checkedDone changes
+  useEffect(() => {
+    setSelectedPages(prev => {
+      const next = {};
+      for (const pdf of checkedDone) {
+        next[pdf.id] = prev[pdf.id] instanceof Set
+          ? prev[pdf.id]
+          : new Set(Array.from({ length: pdf.totalPages }, (_, i) => i));
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedDone.map(p => p.id).join(',')]);
+
+  const togglePage = useCallback((pdfId, pi) => {
+    setSelectedPages(prev => {
+      const cur = new Set(prev[pdfId] || []);
+      if (cur.has(pi)) cur.delete(pi); else cur.add(pi);
+      return { ...prev, [pdfId]: cur };
+    });
+  }, []);
+
+  const toggleAllPdfPages = useCallback((pdfId, totalPages) => {
+    setSelectedPages(prev => {
+      const cur = prev[pdfId] || new Set();
+      const all = cur.size === totalPages;
+      return { ...prev, [pdfId]: all ? new Set() : new Set(Array.from({ length: totalPages }, (_, i) => i)) };
+    });
+  }, []);
+
+  const totalSelectedPages = checkedDone.reduce((s, pdf) => s + (selectedPages[pdf.id]?.size ?? pdf.totalPages), 0);
+  const canExport = (exportPdf || exportPng) && totalSelectedPages > 0;
 
   const handleExport = useCallback(async () => {
     if (!canExport) return;
 
-    const now        = new Date();
-    const yy         = String(now.getFullYear()).slice(2);
-    const mm         = String(now.getMonth() + 1).padStart(2, '0');
-    const dd         = String(now.getDate()).padStart(2, '0');
-    const datePrefix = `${yy}${mm}${dd}`;
+    const now         = new Date();
+    const yy          = String(now.getFullYear()).slice(2);
+    const mm          = String(now.getMonth() + 1).padStart(2, '0');
+    const dd          = String(now.getDate()).padStart(2, '0');
+    const datePrefix  = `${yy}${mm}${dd}`;
     const zipBasename = `${datePrefix}_DM_Checks`;
 
     const firstDrawingNum = checkedDone[0]?.manualSelections?.[0]?.drawingNumber || '';
@@ -238,9 +270,9 @@ export default function DTExportSection({
     const pdfBasename     = drawingNumX ? `${zipBasename}_${drawingNumX}` : zipBasename;
 
     let outputType;
-    if (exportPdf && !exportPng)                                 outputType = 'pdf';
-    else if (!exportPdf && exportPng && totalPages === 1)        outputType = 'png';
-    else                                                          outputType = 'zip';
+    if (exportPdf && !exportPng)                                          outputType = 'pdf';
+    else if (!exportPdf && exportPng && totalSelectedPages === 1)         outputType = 'png';
+    else                                                                   outputType = 'zip';
 
     const suggestedName =
       outputType === 'pdf' ? `${pdfBasename}.pdf`
@@ -260,9 +292,12 @@ export default function DTExportSection({
       let pageNum = 0;
 
       for (const pdf of checkedDone) {
-        for (let pi = 0; pi < pdf.totalPages; pi++) {
+        const pageSet    = selectedPages[pdf.id] || new Set(Array.from({ length: pdf.totalPages }, (_, i) => i));
+        const pagesSorted = [...pageSet].sort((a, b) => a - b);
+
+        for (const pi of pagesSorted) {
           pageNum++;
-          setProgress(`Rendering page ${pageNum} of ${totalPages}\u2026`);
+          setProgress(`Rendering page ${pageNum} of ${totalSelectedPages}\u2026`);
 
           const manualSel     = pdf.manualSelections?.[pi] || {};
           const manualProject = pdf.manualProject || null;
@@ -335,7 +370,7 @@ export default function DTExportSection({
       else            downloadBlob(finalBlob, suggestedName);
 
       const parts = [];
-      if (exportPdf && pdfBlob)            parts.push('1 PDF');
+      if (exportPdf && pdfBlob)             parts.push('1 PDF');
       if (exportPng && pngBlobs.length > 0) parts.push(`${pngBlobs.length} PNG${pngBlobs.length !== 1 ? 's' : ''}`);
       setResult({ ok: true, msg: `Exported ${parts.join(' and ')}` });
     } catch (err) {
@@ -344,7 +379,7 @@ export default function DTExportSection({
     } finally {
       setExporting(false); setProgress('');
     }
-  }, [canExport, checkedDone, totalPages, filterByOptions, getOverride, exportPdf, exportPng, pins, finishesOverrides]);
+  }, [canExport, checkedDone, totalSelectedPages, selectedPages, filterByOptions, getOverride, exportPdf, exportPng, pins, finishesOverrides]);
 
   return (
     <div className="v-section">
@@ -353,9 +388,9 @@ export default function DTExportSection({
           <span className={`v-chevron ${isCollapsed ? 'v-chevron-closed' : ''}`}>&#9662;</span>
           <h3 className="v-section-title">Export Mark-ups</h3>
         </div>
-        {checkedDone.length > 0 && (
+        {totalSelectedPages > 0 && (
           <div className="v-section-counts">
-            <span className="sc-pass">{totalPages} page{totalPages !== 1 ? 's' : ''}</span>
+            <span className="sc-pass">{totalSelectedPages} page{totalSelectedPages !== 1 ? 's' : ''}</span>
           </div>
         )}
       </button>
@@ -375,17 +410,47 @@ export default function DTExportSection({
               </label>
             </div>
             <div className="export-col">
-              <div className="export-col-label">Drawings</div>
+              <div className="export-col-label">Pages</div>
               {checkedDone.length === 0 ? (
                 <p className="export-no-checks">No drawings selected.</p>
               ) : (
                 <div className="export-drawings-list">
-                  {checkedDone.map(pdf => (
-                    <div key={pdf.id} className="export-drawing-item">
-                      <span className="export-drawing-name" title={pdf.displayName}>{pdf.displayName}</span>
-                      <span className="export-drawing-pages">{pdf.totalPages}p</span>
-                    </div>
-                  ))}
+                  {checkedDone.map(pdf => {
+                    const pageSet  = selectedPages[pdf.id] || new Set();
+                    const allSel   = pageSet.size === pdf.totalPages;
+                    const drawName = pdf.manualSelections?.[0]?.drawingNumber || pdf.displayName;
+                    return (
+                      <div key={pdf.id} className="export-pdf-group">
+                        {/* PDF-level toggle row */}
+                        <label className="export-drawing-item export-drawing-item-parent">
+                          <input
+                            type="checkbox"
+                            checked={allSel}
+                            onChange={() => toggleAllPdfPages(pdf.id, pdf.totalPages)}
+                            disabled={exporting}
+                          />
+                          <span className="export-drawing-name" title={pdf.displayName}>{drawName}</span>
+                          <span className="export-drawing-pages">{pageSet.size}/{pdf.totalPages}p</span>
+                        </label>
+                        {/* Per-page rows (always shown for multi-page) */}
+                        {pdf.totalPages > 1 && Array.from({ length: pdf.totalPages }, (_, pi) => {
+                          const pageDrawNum = pdf.manualSelections?.[pi]?.drawingNumber;
+                          const pageLabel   = pageDrawNum || `Page ${pi + 1}`;
+                          return (
+                            <label key={pi} className="export-drawing-item export-drawing-item-page">
+                              <input
+                                type="checkbox"
+                                checked={pageSet.has(pi)}
+                                onChange={() => togglePage(pdf.id, pi)}
+                                disabled={exporting}
+                              />
+                              <span className="export-drawing-name">{pageLabel}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
