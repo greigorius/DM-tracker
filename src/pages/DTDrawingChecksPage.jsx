@@ -688,7 +688,7 @@ export default function DTDrawingChecksPage() {
     }));
     if (!project) return;
     try {
-      const res  = await fetch('/api/dt-checker-suffixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectName: project.projectName }) });
+      const res  = await fetch('/api/dt-checker-suffixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPageId: project.pageId }) });
       const data = await res.json();
       setPdfs(prev => prev.map(p => p.id !== pdfId ? p : { ...p, availableProjectSuffixes: data.suffixes || [], projectSuffixesLoading: false }));
     } catch {
@@ -758,7 +758,7 @@ export default function DTDrawingChecksPage() {
     } catch {}
     if (pdf.manualProject) {
       try {
-        const suffRes  = await fetch('/api/dt-checker-suffixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectName: pdf.manualProject.projectName }) });
+        const suffRes  = await fetch('/api/dt-checker-suffixes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPageId: pdf.manualProject.pageId }) });
         const suffData = await suffRes.json();
         setPdfs(prev => prev.map(p => p.id !== pdfId ? p : { ...p, availableProjectSuffixes: suffData.suffixes || [] }));
         const page0sel = pdf.manualSelections?.[0];
