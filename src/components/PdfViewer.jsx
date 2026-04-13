@@ -47,6 +47,7 @@ function PdfViewer({
           const scaleY = container.clientHeight / viewport0.height;
           effectiveScale = Math.min(scaleX, scaleY);
         }
+        if (!effectiveScale || effectiveScale <= 0) effectiveScale = 1.0;
         effectiveScaleRef.current = effectiveScale;
 
         const vp  = page.getViewport({ scale: effectiveScale });
