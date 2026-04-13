@@ -262,10 +262,7 @@ export function transformDrawing(page) {
       actual: d(props, 'C01 Sign Off (Actual)'),
     },
 
-    dwgNoAssigned: props['Dwg No. Assigned']?.select?.name
-                ?? props['Dwg No. Assigned']?.formula?.string
-                ?? props['Dwg No. Assigned']?.rich_text?.[0]?.plain_text
-                ?? null,
+    dwgNoAssigned: props['Dwg No Assigned']?.select?.name ?? null,
 
     itemIds: props['Item']?.relation?.map(r => r.id) ?? [],
   }
