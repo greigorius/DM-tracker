@@ -557,7 +557,7 @@ app.post('/api/drawings-register/bulk', async (req, res) => {
 // ── POST /api/tasks/update ────────────────────────────────────────────────────
 app.post('/api/tasks/update', async (req, res) => {
   if (!notionRequired(res)) return
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = req.body
+  const { id, description, subTaskHours, taskCategory, assignedTo, changeTask, taskDone, itemId, startDate, endDate } = req.body
   if (!id) return res.status(400).json({ error: 'id is required' })
   const properties = {}
   if (description  !== undefined && description !== null)
@@ -566,6 +566,8 @@ app.post('/api/tasks/update', async (req, res) => {
     properties['Sub Task Hours'] = subTaskHours !== null ? { number: Number(subTaskHours) } : { number: null }
   if (taskCategory !== undefined)
     properties['Task Category'] = taskCategory ? { select: { name: taskCategory } } : { select: null }
+  if (assignedTo   !== undefined)
+    properties['Assigned To'] = assignedTo ? { select: { name: assignedTo } } : { select: null }
   if (changeTask   !== undefined)
     properties['Change Task'] = { checkbox: Boolean(changeTask) }
   if (taskDone     !== undefined)

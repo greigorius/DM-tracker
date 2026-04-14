@@ -110,8 +110,24 @@ function VarCell({ v, colKey }) {
   switch (colKey) {
     case 'varNumber':
       return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VAR-${v.varNumber}` : '—'}</span>;
-    case 'title':
-      return <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</span>;
+    case 'title': {
+      // Collect all item names (multi-item support)
+      const itemNames = v.itemNames?.length ? v.itemNames : (v.itemName ? [v.itemName] : []);
+      return (
+        <div>
+          <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</span>
+          {itemNames.length > 0 && (
+            <div style={{ marginTop: 3, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {itemNames.map((name, i) => (
+                <span key={i} style={{ fontSize: 9, color: C.muted, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
     case 'status':
       return <StatusPill status={v.status} />;
     case 'type':
@@ -206,8 +222,9 @@ export default function VariationSchedulePage() {
 
   // Variations
   useEffect(() => {
-    const cached = getCached('variations');
-    if (cached) {
+    const CACHE_KEY = 'variations-v3';
+    const cached = getCached(CACHE_KEY);
+    if (cached && refreshKey === 0) {
       setVariations(cached.items ?? []);
       setConfigured(cached.configured ?? true);
       setLoading(false);
@@ -217,7 +234,7 @@ export default function VariationSchedulePage() {
     fetch('/api/variations')
       .then(r => r.json())
       .then(d => {
-        setCached('variations', d);
+        setCached(CACHE_KEY, d);
         setVariations(d.items ?? []);
         setConfigured(d.configured ?? false);
         setLastRefreshed(new Date());
@@ -272,19 +289,28 @@ export default function VariationSchedulePage() {
     return sortDir === 'desc' ? -cmp : cmp;
   });
 
-  // Group
+  // Group — when groupBy === 'item', duplicate variation across all its item names
   const grouped = (() => {
     if (groupBy === 'none') return [{ key: '__none__', projectId: null, variations: sortedVisible }];
     const map = new Map();
     const list = [];
+
     for (const v of sortedVisible) {
-      const key =
-        groupBy === 'item'    ? (v.itemName    ?? 'No Item')    :
-        groupBy === 'type'    ? (v.type        ?? 'No Type')    :
-        groupBy === 'status'  ? (v.status      ?? 'No Status')  :
-                                (v.projectName ?? 'No Project');
-      if (!map.has(key)) { map.set(key, []); list.push({ key, projectId: v.projectId, variations: map.get(key) }); }
-      map.get(key).push(v);
+      if (groupBy === 'item') {
+        // Collect all item names for this variation (multi-item support)
+        const names = v.itemNames?.length ? v.itemNames : (v.itemName ? [v.itemName] : ['No Item']);
+        for (const name of names) {
+          if (!map.has(name)) { map.set(name, []); list.push({ key: name, projectId: v.projectId, variations: map.get(name) }); }
+          map.get(name).push(v);
+        }
+      } else {
+        const key =
+          groupBy === 'type'   ? (v.type        ?? 'No Type')    :
+          groupBy === 'status' ? (v.status      ?? 'No Status')  :
+                                 (v.projectName ?? 'No Project');
+        if (!map.has(key)) { map.set(key, []); list.push({ key, projectId: v.projectId, variations: map.get(key) }); }
+        map.get(key).push(v);
+      }
     }
     list.sort((a, b) => a.key.localeCompare(b.key));
     return list;
@@ -309,7 +335,7 @@ export default function VariationSchedulePage() {
             {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
           {lastRefreshed && <span style={{ fontSize: 10, color: C.muted }}>updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={() => { setCached('variations', null); setRefreshKey(k => k + 1); }} title="Refresh" style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}>↻</button>
+          <button onClick={() => { setCached('variations-v3', null); setRefreshKey(k => k + 1); }} title="Refresh" style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}>↻</button>
         </div>
       </div>
 
@@ -429,7 +455,7 @@ export default function VariationSchedulePage() {
                       <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
                       <tbody>
                         {groupVars.map((v, idx) => (
-                          <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+                          <VariationRow key={`${key}:${v.id}`} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
                         ))}
                       </tbody>
                     </table>

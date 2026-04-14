@@ -60,7 +60,7 @@ function taskRaw(task, key) {
   }
 }
 
-// ── Task row ──────────────────────────────────────────────────────────────────
+// ── Task row (Assigned table) ─────────────────────────────────────────────────
 function TaskRow({ task, odd, visibleCols, onToggleDone }) {
   const [busy, setBusy] = useState(false);
   const done = task.taskDone;
@@ -136,147 +136,234 @@ function TaskRow({ task, odd, visibleCols, onToggleDone }) {
   );
 }
 
-// ── Quick entry form ──────────────────────────────────────────────────────────
-function QuickEntryForm({ projects, tasks }) {
-  const [projectId,   setProjectId]   = useState('');
-  const [itemId,      setItemId]      = useState('');
-  const [description, setDescription] = useState('');
-  const [category,    setCategory]    = useState('');
-  const [hours,       setHours]       = useState('');
-  const [startDate,   setStartDate]   = useState('');
-  const [endDate,     setEndDate]     = useState('');
-  const [submitting,  setSubmitting]  = useState(false);
-  const [result,      setResult]      = useState(null); // 'ok' | 'error'
+// ── Unassigned task card ──────────────────────────────────────────────────────
+function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
+  const [projectId,  setProjectId]  = useState('');
+  const [itemId,     setItemId]     = useState('');
+  const [category,   setCategory]   = useState(task.taskCategory ?? '');
+  const [assignedTo, setAssignedTo] = useState(task.assignedTo   ?? '');
+  const [hours,      setHours]      = useState(task.subTaskHours != null ? String(task.subTaskHours) : '');
+  const [startDate,  setStartDate]  = useState(task.startDate    ?? '');
+  const [endDate,    setEndDate]    = useState(task.endDate      ?? '');
+  const [changeTask, setChangeTask] = useState(task.changeTask   ?? false);
+  const [taskDone,   setTaskDone]   = useState(task.taskDone     ?? false);
 
-  // Derive items for selected project from existing tasks data
-  const projectItems = projectId
-    ? [...new Map(
-        tasks
-          .filter(t => t.projectId === projectId && t.itemId && t.itemName)
-          .map(t => [t.itemId, { id: t.itemId, name: t.itemName }])
-      ).values()].sort((a,b) => a.name.localeCompare(b.name))
-    : [];
+  const [projectItems, setProjectItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [saveResult,   setSaveResult]   = useState(null); // 'ok' | 'error'
 
-  const categories = [...new Set(tasks.map(t => t.taskCategory).filter(Boolean))].sort();
+  // Load items when project changes
+  useEffect(() => {
+    if (!projectId) { setProjectItems([]); setItemId(''); return; }
+    setLoadingItems(true);
+    fetch(`/api/projects/${projectId}/items`)
+      .then(r => r.json())
+      .then(d => setProjectItems(Array.isArray(d) ? d : (d.items ?? [])))
+      .catch(() => setProjectItems([]))
+      .finally(() => setLoadingItems(false));
+  }, [projectId]);
 
-  const reset = () => {
-    setDescription(''); setCategory(''); setHours(''); setStartDate(''); setEndDate('');
-    setItemId(''); setResult(null);
-  };
+  // Derive assignee options from all tasks
+  const assigneeOptions = [...new Set(allTasks.map(t => t.assignedTo).filter(Boolean))].sort();
 
-  const submit = async () => {
-    if (!description.trim()) return;
-    setSubmitting(true);
-    setResult(null);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveResult(null);
     try {
-      const body = {
-        description: description.trim(),
-        ...(itemId    && { itemId }),
-        ...(category  && { category }),
-        ...(hours     && { subTaskHours: Number(hours) }),
-        ...(startDate && { date: startDate }),
-        ...(endDate   && { endDate }),
-      };
-      const r = await fetch('/api/quick-log/todo', {
-        method: 'POST',
+      const body = { id: task.id };
+      if (itemId)    body.itemId      = itemId;
+      if (category)  body.taskCategory = category;
+      if (assignedTo) body.assignedTo = assignedTo;
+      if (hours !== '') body.subTaskHours = Number(hours);
+      body.changeTask = changeTask;
+      body.taskDone   = taskDone;
+      if (startDate) body.startDate = startDate;
+      if (endDate)   body.endDate   = endDate;
+
+      const r = await fetch('/api/tasks/update', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body:    JSON.stringify(body),
       });
       if (!r.ok) throw new Error(await r.text());
-      setResult('ok');
-      setTimeout(reset, 1500);
+      setSaveResult('ok');
+      setCached('tasks', null);
+      setTimeout(() => onSaved(task.id), 900);
     } catch {
-      setResult('error');
+      setSaveResult('error');
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
-  const inp = { background: C.input, border: `1px solid ${C.border}`, color: C.text,
-    fontSize: 11, borderRadius: 4, padding: '5px 8px', width: '100%',
-    fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' };
-  const lbl = { fontSize: 10, color: C.muted, marginBottom: 3, display: 'block', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' };
+  const inp = {
+    background: C.input, border: `1px solid ${C.border}`, color: C.text,
+    fontSize: 11, borderRadius: 4, padding: '4px 7px', fontFamily: 'inherit',
+    outline: 'none', boxSizing: 'border-box',
+  };
+  const lbl = {
+    fontSize: 9, color: C.muted, marginBottom: 2, display: 'block',
+    fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  };
+
+  // Non-editable populated fields to show
+  const chips = [];
+  if (task.tdlId)        chips.push({ label: task.tdlId,                          color: C.muted });
+  if (task.assignedTo)   chips.push({ label: `👤 ${task.assignedTo}`,              color: '#60a5fa' });
+  if (task.taskCategory) chips.push({ label: task.taskCategory,                   color: C.sec });
+  if (task.subTaskHours) chips.push({ label: `${task.subTaskHours}h`,             color: C.sec });
+  if (task.startDate)    chips.push({ label: `Start: ${fmtDate(task.startDate)}`, color: C.muted });
+  if (task.endDate)      chips.push({ label: `End: ${fmtDate(task.endDate)}`,     color: C.muted });
+  if (task.changeTask)   chips.push({ label: 'Change Task',                       color: '#818cf8' });
 
   return (
-    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10,
-      padding: '20px 24px', maxWidth: 700 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>New Task</div>
-
-      {/* Description */}
-      <div style={{ marginBottom: 12 }}>
-        <label style={lbl}>Description *</label>
-        <input value={description} onChange={e => setDescription(e.target.value)}
-          placeholder="Task description…"
-          style={{ ...inp, fontSize: 13 }}
-          onKeyDown={e => e.key === 'Enter' && submit()} />
+    <div style={{
+      background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10,
+      padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      {/* Description + TDL ID */}
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>
+          {task.description ?? '(no description)'}
+        </div>
+        {chips.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {chips.map((ch, i) => (
+              <span key={i} style={{
+                fontSize: 10, color: ch.color,
+                background: hexToRgba(ch.color.startsWith('#') ? ch.color : '#94a3b8', 0.08),
+                border: `1px solid ${hexToRgba(ch.color.startsWith('#') ? ch.color : '#94a3b8', 0.2)}`,
+                borderRadius: 4, padding: '1px 6px',
+              }}>{ch.label}</span>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+      {/* Editable form */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
         {/* Project */}
         <div>
           <label style={lbl}>Project</label>
-          <select value={projectId} onChange={e => { setProjectId(e.target.value); setItemId(''); }} style={inp}>
+          <select value={projectId} onChange={e => { setProjectId(e.target.value); setItemId(''); }}
+            style={{ ...inp, width: '100%' }}>
             <option value="">— Select project —</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
+
         {/* Item */}
         <div>
           <label style={lbl}>Item</label>
-          <select value={itemId} onChange={e => setItemId(e.target.value)} style={inp} disabled={!projectId}>
-            <option value="">— Select item —</option>
+          <select value={itemId} onChange={e => setItemId(e.target.value)}
+            style={{ ...inp, width: '100%' }} disabled={!projectId || loadingItems}>
+            <option value="">— {loadingItems ? 'Loading…' : 'Select item —'} —</option>
             {projectItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </div>
+
         {/* Category */}
         <div>
           <label style={lbl}>Category</label>
-          <select value={category} onChange={e => setCategory(e.target.value)} style={inp}>
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            style={{ ...inp, width: '100%' }}>
             <option value="">— None —</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+
+        {/* Assignee */}
+        <div>
+          <label style={lbl}>Assigned To</label>
+          <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
+            style={{ ...inp, width: '100%' }}>
+            <option value="">— None —</option>
+            {assigneeOptions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+
         {/* Hours */}
         <div>
           <label style={lbl}>Hours</label>
-          <input type="number" min="0" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
-            placeholder="0.0" style={inp} />
+          <input type="number" min="0" step="0.5" value={hours}
+            onChange={e => setHours(e.target.value)}
+            placeholder="0.0" style={{ ...inp, width: '100%' }} />
         </div>
+
         {/* Start Date */}
         <div>
           <label style={lbl}>Start Date</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inp} />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+            style={{ ...inp, width: '100%' }} />
         </div>
+
         {/* End Date */}
         <div>
           <label style={lbl}>End Date</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inp} />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+            style={{ ...inp, width: '100%' }} />
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      {/* Checkboxes + Save */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        {/* Change Task checkbox */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: changeTask ? '#818cf8' : C.muted }}>
+          <div
+            onClick={() => setChangeTask(v => !v)}
+            style={{
+              width: 14, height: 14, borderRadius: 3, cursor: 'pointer',
+              border: `2px solid ${changeTask ? '#818cf8' : C.border}`,
+              background: changeTask ? '#818cf8' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+            {changeTask && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+          </div>
+          Change Task
+        </label>
+
+        {/* Task Done checkbox */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: taskDone ? '#34d399' : C.muted }}>
+          <div
+            onClick={() => setTaskDone(v => !v)}
+            style={{
+              width: 14, height: 14, borderRadius: 3, cursor: 'pointer',
+              border: `2px solid ${taskDone ? '#34d399' : C.border}`,
+              background: taskDone ? '#34d399' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+            {taskDone && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+          </div>
+          Task Done
+        </label>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Feedback */}
+        {saveResult === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Saved to Notion</span>}
+        {saveResult === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Save failed</span>}
+
+        {/* Save button */}
         <button
-          onClick={submit} disabled={submitting || !description.trim()}
-          style={{ padding: '7px 20px', borderRadius: 5, border: 'none',
-            background: description.trim() ? '#1d4ed8' : '#1e2d45',
-            color: description.trim() ? '#fff' : C.muted,
-            fontSize: 12, fontWeight: 700, cursor: description.trim() ? 'pointer' : 'default',
-            fontFamily: 'inherit', opacity: submitting ? 0.6 : 1 }}>
-          {submitting ? 'Adding…' : 'Add Task'}
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: '6px 18px', borderRadius: 5, border: 'none',
+            background: saving ? '#1e2d45' : '#1d4ed8',
+            color: saving ? C.muted : '#fff',
+            fontSize: 12, fontWeight: 700, cursor: saving ? 'wait' : 'pointer',
+            fontFamily: 'inherit', opacity: saving ? 0.7 : 1,
+          }}>
+          {saving ? 'Saving…' : 'Save & Assign'}
         </button>
-        <button onClick={reset}
-          style={{ padding: '7px 14px', borderRadius: 5, border: `1px solid ${C.border}`,
-            background: 'transparent', color: C.sec, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-          Clear
-        </button>
-        {result === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Added to Notion</span>}
-        {result === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Failed — check console</span>}
       </div>
     </div>
   );
 }
 
-// ── Filter bar style ──────────────────────────────────────────────────────────
+// ── Filter bar styles ──────────────────────────────────────────────────────────
 const selStyle = {
   background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
   fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
@@ -293,25 +380,25 @@ const isPCSA = n => (n ?? '').toUpperCase().includes('PCSA');
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TasksPage() {
-  const [tasks,             setTasks]             = useState([]);
-  const [projects,          setProjects]          = useState([]);
-  const [schemaCategories,  setSchemaCategories]  = useState([]);
-  const [loading,           setLoading]           = useState(true);
-  const [refreshKey,        setRefreshKey]        = useState(0);
-  const [lastRefreshed,     setLastRefreshed]     = useState(null);
-  const [expanded,          setExpanded]          = useState({});
-  const [showColPanel,      setShowColPanel]      = useState(false);
-  const [colConfig,         setColConfig]         = useState(() => initColConfig(DEFAULT_COLUMNS, COL_LS_KEY));
+  const [tasks,            setTasks]            = useState([]);
+  const [projects,         setProjects]         = useState([]);
+  const [schemaCategories, setSchemaCategories] = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [refreshKey,       setRefreshKey]       = useState(0);
+  const [lastRefreshed,    setLastRefreshed]    = useState(null);
+  const [expanded,         setExpanded]         = useState({});
+  const [showColPanel,     setShowColPanel]     = useState(false);
+  const [colConfig,        setColConfig]        = useState(() => initColConfig(DEFAULT_COLUMNS, COL_LS_KEY));
 
-  const [filterProject,     setFilterProject]     = useState('all');
-  const [filterItem,        setFilterItem]        = useState('all');
-  const [filterAssignee,    setFilterAssignee]    = useState('all');
-  const [filterCategory,    setFilterCategory]    = useState('all');
-  const [showDone,          setShowDone]          = useState(false);
-  const [groupBy,           setGroupBy]           = useState('item');
-  const [sortBy,            setSortBy]            = useState('tdlId');   // 'tdlId' | 'startDate'
-  const [sortDir,           setSortDir]           = useState('asc');     // 'asc' | 'desc'
-  const [activeTab,         setActiveTab]         = useState('list');    // 'list' | 'entry'
+  const [filterProject,    setFilterProject]    = useState('all');
+  const [filterItem,       setFilterItem]       = useState('all');
+  const [filterAssignee,   setFilterAssignee]   = useState('all');
+  const [filterCategory,   setFilterCategory]   = useState('all');
+  const [showDone,         setShowDone]         = useState(false);
+  const [groupBy,          setGroupBy]          = useState('item');
+  const [sortBy,           setSortBy]           = useState('tdlId');   // 'tdlId' | 'startDate'
+  const [sortDir,          setSortDir]          = useState('asc');     // 'asc' | 'desc'
+  const [activeTab,        setActiveTab]        = useState('assigned'); // 'assigned' | 'unassigned'
 
   const colConfigRef = useRef(colConfig);
   useEffect(() => { colConfigRef.current = colConfig; }, [colConfig]);
@@ -340,24 +427,31 @@ export default function TasksPage() {
     document.addEventListener('mouseup', onUp);
   }, []);
 
+  // Auto-refresh timer
   useEffect(() => { const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000); return () => clearInterval(id); }, []);
 
+  // Load projects + categories
   useEffect(() => {
     const cp = getCached('projects');
-    if (cp) { setProjects(cp); return; }
-    fetch('/api/projects').then(r => r.json())
-      .then(d => { const l = Array.isArray(d) ? d : []; setCached('projects', l); setProjects(l); })
-      .catch(() => {});
+    if (cp) { setProjects(cp); }
+    else {
+      fetch('/api/projects').then(r => r.json())
+        .then(d => { const l = Array.isArray(d) ? d : []; setCached('projects', l); setProjects(l); })
+        .catch(() => {});
+    }
     const cc = getCached('task-categories');
-    if (cc) { setSchemaCategories(cc); return; }
-    fetch('/api/task-categories').then(r => r.json())
-      .then(d => { const l = Array.isArray(d) ? d : []; setCached('task-categories', l); setSchemaCategories(l); })
-      .catch(() => {});
+    if (cc) { setSchemaCategories(cc); }
+    else {
+      fetch('/api/task-categories').then(r => r.json())
+        .then(d => { const l = Array.isArray(d) ? d : []; setCached('task-categories', l); setSchemaCategories(l); })
+        .catch(() => {});
+    }
   }, []);
 
+  // Load tasks
   useEffect(() => {
     const cached = getCached('tasks');
-    if (cached) { setTasks(cached); setLoading(false); return; }
+    if (cached && refreshKey === 0) { setTasks(cached); setLoading(false); return; }
     setLoading(true);
     fetch('/api/tasks?showDone=true')
       .then(r => r.json())
@@ -369,9 +463,8 @@ export default function TasksPage() {
   // Toggle Done in Notion + update local state optimistically
   const handleToggleDone = useCallback(async (task) => {
     const newDone = !task.taskDone;
-    // Optimistic update
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, taskDone: newDone } : t));
-    setCached('tasks', null); // invalidate cache so next load is fresh
+    setCached('tasks', null);
     try {
       await fetch('/api/tasks/update', {
         method: 'POST',
@@ -379,23 +472,31 @@ export default function TasksPage() {
         body: JSON.stringify({ id: task.id, taskDone: newDone }),
       });
     } catch {
-      // Revert on failure
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, taskDone: task.taskDone } : t));
     }
+  }, []);
+
+  // Remove saved task from unassigned list (optimistic — it'll move to assigned on next refresh)
+  const handleUnassignedSaved = useCallback((taskId) => {
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    setRefreshKey(k => k + 1);
   }, []);
 
   // Color map
   const allProjectIds = [...new Set([...projects.map(p => p.id), ...tasks.map(t => t.projectId).filter(Boolean)])];
   const colorMap      = assignProjectColors(allProjectIds.map(id => ({ id })));
 
-  // Filter options
-  const itemOptions     = [...new Set(tasks.filter(t => !isPCSA(t.itemName)).map(t => t.itemName).filter(Boolean))].sort();
+  // Split into assigned / unassigned
+  const assignedTasks   = tasks.filter(t => !isPCSA(t.itemName) && (t.itemId || t.projectId));
+  const unassignedTasks = tasks.filter(t => !isPCSA(t.itemName) && !t.itemId && !t.projectId);
+
+  // Filter options (from assigned tasks)
+  const itemOptions     = [...new Set(assignedTasks.map(t => t.itemName).filter(Boolean))].sort();
   const assigneeOptions = [...new Set(tasks.map(t => t.assignedTo).filter(Boolean))].sort();
   const categoryOptions = [...new Set([...schemaCategories, ...tasks.map(t => t.taskCategory).filter(Boolean)])].sort();
 
-  // Apply filters
-  const filtered = tasks.filter(t => {
-    if (isPCSA(t.itemName)) return false;
+  // Apply filters to assigned tasks
+  const filtered = assignedTasks.filter(t => {
     if (filterProject  !== 'all' && t.projectId   !== filterProject)  return false;
     if (filterItem     !== 'all' && t.itemName     !== filterItem)     return false;
     if (filterAssignee !== 'all' && t.assignedTo   !== filterAssignee) return false;
@@ -408,7 +509,7 @@ export default function TasksPage() {
     return true;
   });
 
-  // Sort
+  // Sort assigned tasks
   const sorted = [...filtered].sort((a, b) => {
     let va, vb;
     if (sortBy === 'startDate') {
@@ -422,7 +523,7 @@ export default function TasksPage() {
     return sortDir === 'desc' ? -cmp : cmp;
   });
 
-  // Group
+  // Group assigned tasks
   const grouped = (() => {
     if (groupBy === 'none') {
       return [{ key: '__none__', projectId: null, tasks: sorted }];
@@ -463,7 +564,9 @@ export default function TasksPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>TASKS</h1>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            To-do list · {groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}
+            {activeTab === 'assigned'
+              ? `To-do list · ${groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}`
+              : `${unassignedTasks.length} task${unassignedTasks.length !== 1 ? 's' : ''} without project / item`}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -480,19 +583,48 @@ export default function TasksPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: `1px solid ${C.border}`, marginTop: 8 }}>
-        <button style={tabBtnStyle(activeTab === 'list')}  onClick={() => setActiveTab('list')}>Task List</button>
-        <button style={tabBtnStyle(activeTab === 'entry')} onClick={() => setActiveTab('entry')}>Quick Entry</button>
+        <button style={tabBtnStyle(activeTab === 'assigned')}   onClick={() => setActiveTab('assigned')}>
+          Assigned
+          {assignedTasks.length > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 9, background: '#1e3a5f', color: '#60a5fa', padding: '1px 5px', borderRadius: 999 }}>{assignedTasks.length}</span>
+          )}
+        </button>
+        <button style={tabBtnStyle(activeTab === 'unassigned')} onClick={() => setActiveTab('unassigned')}>
+          Unassigned
+          {unassignedTasks.length > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 9, background: '#2d1a1a', color: '#f87171', padding: '1px 5px', borderRadius: 999 }}>{unassignedTasks.length}</span>
+          )}
+        </button>
       </div>
 
-      {/* ── QUICK ENTRY TAB ── */}
-      {activeTab === 'entry' && (
-        <div style={{ padding: '20px 0' }}>
-          <QuickEntryForm projects={projects} tasks={tasks} />
+      {/* ── UNASSIGNED TAB ── */}
+      {activeTab === 'unassigned' && (
+        <div style={{ paddingTop: 20 }}>
+          {loading && unassignedTasks.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>Loading tasks…</div>
+          ) : unassignedTasks.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 12, padding: '24px 0' }}>
+              All tasks are assigned to a project / item ✓
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {unassignedTasks.map(task => (
+                <UnassignedTaskCard
+                  key={task.id}
+                  task={task}
+                  projects={projects}
+                  allTasks={tasks}
+                  categories={categoryOptions}
+                  onSaved={handleUnassignedSaved}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── TASK LIST TAB ── */}
-      {activeTab === 'list' && (
+      {/* ── ASSIGNED TAB ── */}
+      {activeTab === 'assigned' && (
         <>
           {/* Filter / toolbar */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', paddingTop: 16 }}>

@@ -130,7 +130,8 @@ export const handler = async (event) => {
         projectId:    proj?.id    ?? null,
         projectName:  proj?.name  ?? null,
         description:  props['Item Description']?.title?.[0]?.plain_text ?? null,
-        assignedTo:   props['Assigned To']?.people?.[0]?.name           ?? null,
+        assignedTo:   props['Assigned To']?.select?.name                 ??
+                      props['Assigned To']?.people?.[0]?.name           ?? null,
         subTaskHours: props['Sub Task Hours']?.number                    ?? null,
         taskCategory: props['Task Category']?.select?.name              ?? null,
         changeTask:   props['Change Task']?.checkbox                     ?? false,
