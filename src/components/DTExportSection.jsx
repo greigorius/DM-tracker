@@ -13,26 +13,34 @@ const ISSUED_FOR_OPTIONS = [
 ];
 
 function buildPageRows(manualProject, manualSel) {
-  const issuedForLabel = ISSUED_FOR_OPTIONS.find(o => o.value === manualSel?.issuedFor)?.label || null;
+  const issuedFor      = manualSel?.issuedFor || null;
+  const issuedForLabel = ISSUED_FOR_OPTIONS.find(o => o.value === issuedFor)?.label || null;
   const statusBy =
-    manualSel?.issuedFor === 'S5'           ? manualProject?.mainContractor :
-    manualSel?.issuedFor === 'A4.5'         ? manualProject?.architect : null;
+    issuedFor === 'S5'           ? manualProject?.mainContractor :
+    issuedFor === 'A4.5'         ? manualProject?.architect : null;
+  const revTableDate =
+    issuedFor === 'S5'                                  ? (manualSel?.notionRow?.s4DtDeliveryDateActual || null)
+    : (issuedFor === 'A4.5' || issuedFor === 'CONSTRUCTION') ? (manualSel?.notionRow?.s5DtDeliveryDateActual || null)
+    : null;
 
   return [
-    { field: 'projectName',   label: 'Project Name',    expected: manualProject?.projectName    || null },
-    { field: 'projectNumber', label: 'Project Number',  expected: manualProject?.projectNumber  || null },
-    { field: 'clientName',    label: 'Client Name',     expected: manualProject?.mainContractor || null },
-    { field: 'suffixNumber',  label: 'Suffix Number',   expected: manualSel?.suffixNumber                    || null },
-    { field: 'drawingNumber', label: 'Drawing Number',  expected: manualSel?.drawingNumber                   || null },
-    { field: 'drawingTitle',  label: 'Drawing Title 1', expected: manualSel?.notionRow?.drawingTitle1        || null },
-    { field: 'drawingTitle2', label: 'Drawing Title 2', expected: manualSel?.notionRow?.drawingTitle2        || null },
-    { field: 'drawingTitle3', label: 'Drawing Title 3', expected: manualSel?.notionRow?.drawingTitle3        || null },
-    { field: 'revision',      label: 'Revision',        expected: manualSel?.notionRow?.revision             || null },
-    { field: 'issuedFor',     label: 'Issued For',      expected: issuedForLabel },
-    { field: 'status',        label: 'Status',          expected: manualSel?.notionRow?.s5Status             || null },
-    { field: 'statusBy',      label: 'Status By',       expected: statusBy },
-    { field: 'statusDate',    label: 'Status Date',     expected: manualSel?.notionRow?.s5StatusDate         || null },
-    { field: 'author',        label: 'Author',          expected: manualSel?.notionRow?.assignedTo           || null },
+    { field: 'projectName',           label: 'Project Name',    expected: manualProject?.projectName    || null },
+    { field: 'projectNumber',         label: 'Project Number',  expected: manualProject?.projectNumber  || null },
+    { field: 'clientName',            label: 'Client Name',     expected: manualProject?.mainContractor || null },
+    { field: 'suffixNumber',          label: 'Suffix Number',   expected: manualSel?.suffixNumber                    || null },
+    { field: 'drawingNumber',         label: 'Drawing Number',  expected: manualSel?.drawingNumber                   || null },
+    { field: 'drawingTitle',          label: 'Drawing Title 1', expected: manualSel?.notionRow?.drawingTitle1        || null },
+    { field: 'drawingTitle2',         label: 'Drawing Title 2', expected: manualSel?.notionRow?.drawingTitle2        || null },
+    { field: 'drawingTitle3',         label: 'Drawing Title 3', expected: manualSel?.notionRow?.drawingTitle3        || null },
+    { field: 'revision',              label: 'Revision',        expected: manualSel?.notionRow?.revision             || null },
+    { field: 'issuedFor',             label: 'Issued For',      expected: issuedForLabel },
+    { field: 'status',                label: 'Status',          expected: manualSel?.notionRow?.s5Status             || null },
+    { field: 'statusBy',              label: 'Status By',       expected: statusBy },
+    { field: 'statusDate',            label: 'Status Date',     expected: manualSel?.notionRow?.s5StatusDate         || null },
+    { field: 'author',                label: 'Author',          expected: manualSel?.notionRow?.assignedTo           || null },
+    { field: 'revtable-revision',     label: 'Rev Table: Rev',  expected: manualSel?.notionRow?.revision             || null },
+    { field: 'revtable-description',  label: 'Rev Table: Desc', expected: issuedForLabel },
+    { field: 'revtable-date',         label: 'Rev Table: Date', expected: revTableDate },
   ];
 }
 
