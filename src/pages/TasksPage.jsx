@@ -167,7 +167,7 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
   // Derive assignee options from all tasks
   const assigneeOptions = [...new Set(allTasks.map(t => t.assignedTo).filter(Boolean))].sort();
 
-  const canSave = !!projectId && !!itemId && !!assignedTo;
+  const canSave = !!projectId && !!itemId;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -175,9 +175,8 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
     setSaveResult(null);
     try {
       const body = { id: task.id };
-      body.itemId      = itemId;
-      body.assignedTo  = assignedTo;
-      if (category)     body.taskCategory  = category;
+      body.itemId = itemId;
+      if (category) body.taskCategory = category;
       if (hours !== '')  body.subTaskHours  = Number(hours);
       body.changeTask  = changeTask;
       body.taskDone    = taskDone;
@@ -347,7 +346,7 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
         {/* Feedback / hint */}
         {!canSave && !saving && (
           <span style={{ fontSize: 10, color: C.muted, fontStyle: 'italic' }}>
-            {!projectId ? 'Select a project' : !itemId ? 'Select an item' : 'Select an assignee'}
+            {!projectId ? 'Select a project first' : 'Select an item to save'}
           </span>
         )}
         {saveResult === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Saved to Notion</span>}

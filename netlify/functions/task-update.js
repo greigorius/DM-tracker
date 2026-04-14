@@ -24,7 +24,7 @@ export const handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) }
   }
 
-  const { id, description, subTaskHours, taskCategory, assignedTo, changeTask, taskDone, itemId, startDate, endDate } = body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = body
   if (!id) return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'id is required' }) }
 
   const properties = {}
@@ -37,9 +37,6 @@ export const handler = async (event) => {
 
   if (taskCategory !== undefined)
     properties['Task Category'] = taskCategory ? { select: { name: taskCategory } } : { select: null }
-
-  if (assignedTo !== undefined)
-    properties['Assigned To'] = assignedTo ? { select: { name: assignedTo } } : { select: null }
 
   if (changeTask !== undefined)
     properties['Change Task'] = { checkbox: Boolean(changeTask) }
