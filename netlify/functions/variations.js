@@ -19,29 +19,42 @@ const NOTION_API    = 'https://api.notion.com/v1'
 function transformVariation(page) {
   const p = page.properties ?? {}
 
+  // VAR # → "No ID" unique_id property
   const varNumber =
-    p['Variation Number']?.number ??
-    p['Var No.']?.number          ??
-    p['Var No']?.number           ??
-    p['ID']?.unique_id?.number    ??
+    p['No ID']?.unique_id?.number    ??
+    p['Variation Number']?.number    ??
+    p['Var No.']?.number             ??
+    p['Var No']?.number              ??
+    p['ID']?.unique_id?.number       ??
     null
 
+  // Title → "Variation Description" title property
   const title =
-    titleVal(p, 'Variation Title') ??
-    titleVal(p, 'Variation Name')  ??
-    titleVal(p, 'Name')            ??
-    titleVal(p, 'Title')           ??
+    titleVal(p, 'Variation Description') ??
+    titleVal(p, 'Variation Title')       ??
+    titleVal(p, 'Variation Name')        ??
+    titleVal(p, 'Name')                  ??
     null
 
-  const description =
-    p['Description']?.rich_text?.[0]?.plain_text          ??
-    p['Variation Description']?.rich_text?.[0]?.plain_text ??
-    p['Notes']?.rich_text?.[0]?.plain_text                 ??
-    null
-
+  // Status → "Variation Status"
   const status =
-    statusVal(p, 'Status') ??
-    selectVal(p, 'Status') ??
+    statusVal(p, 'Variation Status') ??
+    selectVal(p, 'Variation Status') ??
+    statusVal(p, 'Status')           ??
+    selectVal(p, 'Status')           ??
+    null
+
+  // Type → "Variation Type"
+  const type =
+    selectVal(p, 'Variation Type') ??
+    selectVal(p, 'Type')           ??
+    null
+
+  // Date Issued → "Change Request Date"
+  const dateIssued =
+    p['Change Request Date']?.date?.start ??
+    p['Date Issued']?.date?.start         ??
+    p['Issue Date']?.date?.start          ??
     null
 
   // Project may be a direct relation or resolved via an Item relation
@@ -51,42 +64,20 @@ function transformVariation(page) {
     null
 
   const itemId =
-    p['Item']?.relation?.[0]?.id          ??
-    p['Related Item']?.relation?.[0]?.id  ??
-    p['Items']?.relation?.[0]?.id         ??
-    null
-
-  const value =
-    p['Value']?.number            ??
-    p['Variation Value']?.number  ??
-    p['Cost']?.number             ??
-    p['Amount']?.number           ??
-    null
-
-  const dateIssued =
-    p['Date Issued']?.date?.start  ??
-    p['Issue Date']?.date?.start   ??
-    p['Date']?.date?.start         ??
-    null
-
-  const dateApproved =
-    p['Date Approved']?.date?.start  ??
-    p['Approval Date']?.date?.start  ??
+    p['Item']?.relation?.[0]?.id         ??
+    p['Related Item']?.relation?.[0]?.id ??
+    p['Items']?.relation?.[0]?.id        ??
     null
 
   return {
     id: page.id,
     varNumber,
     title,
-    description,
     status,
     projectId,
     itemId,
-    value,
     dateIssued,
-    dateApproved,
-    type:       selectVal(p, 'Type') ?? selectVal(p, 'Variation Type') ?? null,
-    contractor: p['Contractor']?.select?.name ?? p['Contractor']?.rich_text?.[0]?.plain_text ?? null,
+    type,
   }
 }
 

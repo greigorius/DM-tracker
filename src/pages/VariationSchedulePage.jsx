@@ -42,11 +42,6 @@ function fmtDate(str) {
   return new Date(str).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-function fmtCurrency(val) {
-  if (val == null) return '—';
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
-}
-
 function StatusPill({ status }) {
   if (!status) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
   const color = VAR_STATUS_COLORS[status] ?? C.sec;
@@ -62,15 +57,13 @@ function StatusPill({ status }) {
 
 // ── Column config ─────────────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
-  { key: 'varNumber',    label: 'Var #',        defaultWidth: 80,  minWidth: 60,  align: 'left'   },
-  { key: 'title',        label: 'Title',        defaultWidth: 280, minWidth: 120, align: 'left'   },
-  { key: 'status',       label: 'Status',       defaultWidth: 130, minWidth: 70,  align: 'center' },
-  { key: 'type',         label: 'Type',         defaultWidth: 110, minWidth: 60,  align: 'center' },
-  { key: 'value',        label: 'Value',        defaultWidth: 110, minWidth: 70,  align: 'center' },
-  { key: 'dateIssued',   label: 'Date Issued',  defaultWidth: 100, minWidth: 70,  align: 'center' },
-  { key: 'dateApproved', label: 'Date Approved',defaultWidth: 110, minWidth: 70,  align: 'center' },
+  { key: 'varNumber',  label: 'Var #',               defaultWidth: 80,  minWidth: 60,  align: 'left'   },
+  { key: 'title',      label: 'Variation Description',defaultWidth: 300, minWidth: 120, align: 'left'   },
+  { key: 'status',     label: 'Status',               defaultWidth: 130, minWidth: 70,  align: 'center' },
+  { key: 'type',       label: 'Type',                 defaultWidth: 120, minWidth: 60,  align: 'center' },
+  { key: 'dateIssued', label: 'Change Request Date',  defaultWidth: 120, minWidth: 80,  align: 'center' },
 ];
-const COL_CONFIG_KEY = 'dmtracker:variations-col-config';
+const COL_CONFIG_KEY = 'dmtracker:variations-v2-col-config';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: C.sec, fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' };
@@ -83,7 +76,6 @@ function GlobalStatusBar({ variations }) {
     const s = v.status ?? 'Unknown';
     counts[s] = (counts[s] ?? 0) + 1;
   }
-  const totalValue = variations.reduce((sum, v) => sum + (v.value ?? 0), 0);
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, alignItems: 'center' }}>
       {Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([s, n]) => {
@@ -96,7 +88,6 @@ function GlobalStatusBar({ variations }) {
       })}
       <span style={{ marginLeft: 'auto', fontSize: 10, color: C.muted }}>
         {variations.length} variations
-        {totalValue > 0 && <span style={{ marginLeft: 10, color: C.sec, fontWeight: 700 }}>{fmtCurrency(totalValue)}</span>}
       </span>
     </div>
   );
@@ -120,26 +111,15 @@ function VarCell({ v, colKey }) {
     case 'varNumber':
       return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VAR-${v.varNumber}` : '—'}</span>;
     case 'title':
-      return (
-        <div>
-          <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</div>
-          {v.description && v.description !== v.title && (
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{v.description}</div>
-          )}
-        </div>
-      );
+      return <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</span>;
     case 'status':
       return <StatusPill status={v.status} />;
     case 'type':
       return v.type
         ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{v.type}</span>
         : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
-    case 'value':
-      return <span style={{ fontSize: 11, fontWeight: v.value != null ? 700 : 400, color: v.value != null ? C.text : C.muted }}>{fmtCurrency(v.value)}</span>;
     case 'dateIssued':
       return <span style={{ fontSize: 11, color: C.sec }}>{v.dateIssued ? fmtDate(v.dateIssued) : '—'}</span>;
-    case 'dateApproved':
-      return <span style={{ fontSize: 11, color: v.dateApproved ? '#34d399' : C.muted }}>{v.dateApproved ? fmtDate(v.dateApproved) : '—'}</span>;
     default:
       return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
   }
@@ -173,14 +153,12 @@ function VariationRow({ variation: v, odd, visibleCols }) {
 // ── CSV raw getter ────────────────────────────────────────────────────────────
 function varRaw(v, key) {
   switch (key) {
-    case 'varNumber':    return v.varNumber != null ? `VAR-${v.varNumber}` : '';
-    case 'title':        return v.title ?? '';
-    case 'status':       return v.status ?? '';
-    case 'type':         return v.type ?? '';
-    case 'value':        return v.value != null ? String(v.value) : '';
-    case 'dateIssued':   return v.dateIssued ?? '';
-    case 'dateApproved': return v.dateApproved ?? '';
-    default:             return '';
+    case 'varNumber':  return v.varNumber != null ? `VAR-${v.varNumber}` : '';
+    case 'title':      return v.title ?? '';
+    case 'status':     return v.status ?? '';
+    case 'type':       return v.type ?? '';
+    case 'dateIssued': return v.dateIssued ?? '';
+    default:           return '';
   }
 }
 
@@ -425,9 +403,8 @@ export default function VariationSchedulePage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, variations: groupVars }) => {
-            const projColor  = projectId ? (colorMap.get(projectId) ?? PROJECT_COLORS[0]) : PROJECT_COLORS[0];
-            const open       = isExpanded(key);
-            const groupValue = groupVars.reduce((sum, v) => sum + (v.value ?? 0), 0);
+            const projColor = projectId ? (colorMap.get(projectId) ?? PROJECT_COLORS[0]) : PROJECT_COLORS[0];
+            const open      = isExpanded(key);
 
             return (
               <div
@@ -443,9 +420,6 @@ export default function VariationSchedulePage() {
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{groupVars.length} variation{groupVars.length !== 1 ? 's' : ''}</span>
-                  {groupValue > 0 && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: C.sec, marginLeft: 4 }}>{fmtCurrency(groupValue)}</span>
-                  )}
                 </div>
 
                 {/* Variation table */}
