@@ -15,7 +15,8 @@ const NOTION_API = 'https://api.notion.com/v1'
 async function fetchPage(id) {
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() })
-    return r.ok ? r.json() : null
+    if (!r.ok) return null
+    return await r.json()
   } catch { return null }
 }
 
@@ -129,12 +130,14 @@ export const handler = async (event) => {
         projectId:    proj?.id    ?? null,
         projectName:  proj?.name  ?? null,
         description:  props['Item Description']?.title?.[0]?.plain_text ?? null,
-        assignedTo:   props['Assigned To']?.people?.[0]?.name           ?? null,
+        assignedTo:   props['Assigned To']?.select?.name                 ??
+                      props['Assigned To']?.people?.[0]?.name           ?? null,
         subTaskHours: props['Sub Task Hours']?.number                    ?? null,
         taskCategory: props['Task Category']?.select?.name              ?? null,
         changeTask:   props['Change Task']?.checkbox                     ?? false,
         taskDone:     props['Task Done']?.checkbox                       ?? false,
         startDate:    props['Start Date']?.date?.start                   ?? null,
+        endDate:      props['End Date']?.date?.start                     ?? null,
         createdAt:    p.created_time,
       }
     })

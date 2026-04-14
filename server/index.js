@@ -375,6 +375,219 @@ app.post('/api/quick-log/production', async (req, res) => {
   }
 });
 
+// ── GET /api/drawings-register/items?projectId=xxx ───────────────────────────
+// Returns items scoped to a project — filtered query, never times out.
+app.get('/api/drawings-register/items', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { projectId } = req.query;
+  if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+  try {
+    const filter = { property: 'Projects', relation: { contains: projectId } };
+    const pages  = await queryAll(DB.tasks, filter);
+    const items  = pages.map(p => ({
+      id:        p.id,
+      name:      p.properties['Item Name']?.title?.[0]?.plain_text ?? null,
+      status:    p.properties['Status']?.status?.name              ?? null,
+      projectId,
+    }));
+    res.json(items);
+  } catch (err) {
+    console.error('[drawings-register/items]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/drawings-register/chunk?itemIds=id1,id2,... ─────────────────────
+// Returns drawings filtered by a set of item IDs (OR filter). Called in parallel
+// chunks from the frontend so no single request exceeds the timeout budget.
+app.get('/api/drawings-register/chunk', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const itemIds = (req.query.itemIds ?? '').split(',').filter(Boolean);
+  if (!itemIds.length) return res.json([]);
+  try {
+    const filter = itemIds.length === 1
+      ? { property: 'Item', relation: { contains: itemIds[0] } }
+      : { or: itemIds.map(id => ({ property: 'Item', relation: { contains: id } })) };
+    const pages = await queryAll(DB.drawings, filter);
+    res.json(pages.map(transformDrawing));
+  } catch (err) {
+    console.error('[drawings-register/chunk]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/drawings-register ────────────────────────────────────────────────
+// Returns all drawings from MDS DB enriched with item name, item status, project.
+app.get('/api/drawings-register', async (req, res) => {
+  if (!notionRequired(res)) return;
+
+  try {
+    const pages = await queryAll(DB.drawings, null, {
+      sorts: [{ property: 'Drawing Number', direction: 'ascending' }],
+    });
+
+    // Collect unique item IDs
+    const itemIdSet = new Set();
+    for (const p of pages) {
+      for (const r of (p.properties?.['Item']?.relation ?? [])) itemIdSet.add(r.id);
+    }
+
+    // Fetch item pages for names/status/projectId
+    const itemIds = [...itemIdSet];
+    const itemMap = {};
+    const projPromises = {};
+    const BATCH = 25;
+    for (let i = 0; i < itemIds.length; i += BATCH) {
+      const chunk = itemIds.slice(i, i + BATCH);
+      const pages2 = await Promise.all(chunk.map(id =>
+        fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      ));
+      for (let j = 0; j < chunk.length; j++) {
+        const id = chunk[j]; const page = pages2[j];
+        if (!page) continue;
+        const p2 = page.properties ?? {};
+        const projectPageId = p2['Projects']?.relation?.[0]?.id ?? null;
+        itemMap[id] = {
+          name: p2['Item Name']?.title?.[0]?.plain_text ?? null,
+          status: p2['Status']?.status?.name ?? null,
+          projectPageId,
+        };
+        if (projectPageId && !projPromises[projectPageId]) {
+          projPromises[projectPageId] = fetchNotion(`${NOTION_API}/pages/${projectPageId}`, { headers: notionHeaders() })
+            .then(r => r.ok ? r.json() : null).catch(() => null);
+        }
+      }
+    }
+
+    const projMap = {};
+    await Promise.all(Object.entries(projPromises).map(async ([id, promise]) => {
+      const page = await promise;
+      if (!page) return;
+      projMap[id] = { id, name: page.properties?.['Project Name']?.title?.[0]?.plain_text ?? null };
+    }));
+
+    const drawings = pages.map(p => {
+      const base = transformDrawing(p);
+      const itemPageId = base.itemIds[0] ?? null;
+      const item = itemMap[itemPageId] ?? {};
+      const proj = item.projectPageId ? projMap[item.projectPageId] : null;
+      return { ...base, itemId: itemPageId, itemName: item.name ?? null, itemStatus: item.status ?? null, projectId: proj?.id ?? null, projectName: proj?.name ?? null };
+    });
+
+    res.json(drawings);
+  } catch (err) {
+    console.error('[drawings-register]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── Field map shared by update routes ─────────────────────────────────────────
+const DWG_FIELD_MAP = {
+  s4SubmitActual: { notion: 'S4 Submit Date (Actual)', type: 'date' },
+  s4StatusDate:   { notion: 'S4 Status Date (Actual)', type: 'date' },
+  s4Status:       { notion: 'S4 Status (LOR)',          type: 'select' },
+  s5SubmitActual: { notion: 'S5 Submit Date (Actual)', type: 'date' },
+  s5StatusDate:   { notion: 'S5 Status Date (Actual)', type: 'date' },
+  s5Status:       { notion: 'S5 Status (F&P)',          type: 'select' },
+};
+function buildDwgProps(fields) {
+  const props = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const m = DWG_FIELD_MAP[key]; if (!m) continue;
+    props[m.notion] = m.type === 'date'
+      ? (value ? { date: { start: value } } : { date: null })
+      : (value ? { select: { name: value } } : { select: null });
+  }
+  return props;
+}
+
+// ── POST /api/drawings-register/update ────────────────────────────────────────
+app.post('/api/drawings-register/update', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { id, fields } = req.body;
+  if (!id || !fields) return res.status(400).json({ error: 'id and fields are required' });
+
+  const properties = buildDwgProps(fields);
+  if (!Object.keys(properties).length) return res.status(400).json({ error: 'No valid fields' });
+
+  try {
+    const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
+      method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0, 200)}`); }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[drawings-register/update]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/drawings-register/bulk ─────────────────────────────────────────
+app.post('/api/drawings-register/bulk', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { updates } = req.body;
+  if (!Array.isArray(updates) || !updates.length) return res.status(400).json({ error: 'updates array required' });
+
+  const tasks = updates.map(({ id, fields }) => async () => {
+    if (!id || !fields) return { id, ok: false, error: 'missing id or fields' };
+    const properties = buildDwgProps(fields);
+    if (!Object.keys(properties).length) return { id, ok: false, error: 'no valid fields' };
+    const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
+      method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0, 100)}`); }
+    return { id, ok: true };
+  });
+
+  try {
+    const results = [];
+    for (let i = 0; i < tasks.length; i += 10) {
+      const settled = await Promise.allSettled(tasks.slice(i, i + 10).map(t => t()));
+      for (const s of settled) results.push(s.status === 'fulfilled' ? s.value : { ok: false, error: s.reason?.message });
+    }
+    const failed = results.filter(r => !r.ok);
+    res.status(failed.length === 0 ? 200 : 207).json({ ok: !failed.length, results, failed });
+  } catch (err) {
+    console.error('[drawings-register/bulk]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/tasks/update ────────────────────────────────────────────────────
+app.post('/api/tasks/update', async (req, res) => {
+  if (!notionRequired(res)) return
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = req.body
+  if (!id) return res.status(400).json({ error: 'id is required' })
+  const properties = {}
+  if (description  !== undefined && description !== null)
+    properties['Item Description'] = { title: [{ text: { content: String(description) } }] }
+  if (subTaskHours !== undefined)
+    properties['Sub Task Hours'] = subTaskHours !== null ? { number: Number(subTaskHours) } : { number: null }
+  if (taskCategory !== undefined)
+    properties['Task Category'] = taskCategory ? { select: { name: taskCategory } } : { select: null }
+  if (changeTask   !== undefined)
+    properties['Change Task'] = { checkbox: Boolean(changeTask) }
+  if (taskDone     !== undefined)
+    properties['Task Done'] = { checkbox: Boolean(taskDone) }
+  if (itemId       !== undefined)
+    properties['Item'] = itemId ? { relation: [{ id: itemId }] } : { relation: [] }
+  if (startDate    !== undefined)
+    properties['Start Date'] = startDate ? { date: { start: startDate } } : { date: null }
+  if (endDate      !== undefined)
+    properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
+  try {
+    const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
+      method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
+    })
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0, 200)}`) }
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[task-update]', err.message)
+    res.status(err.status ?? 500).json({ error: err.message })
+  }
+})
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });

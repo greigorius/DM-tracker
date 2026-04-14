@@ -121,10 +121,17 @@ function StatPanel({ label, value, sub, valueColor = C.text }) {
 // ── Phase table ───────────────────────────────────────────────────────────────
 const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
 
+const GROUP_BY_OPTIONS = [
+  { value: 'dmPhase',  label: 'DM Phase' },
+  { value: 'assignee', label: 'Assignee' },
+  { value: 'none',     label: 'None' },
+];
+
 function PhaseTable({ items, projectColor }) {
   const [filterPhase,    setFilterPhase]    = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [activeOnly,     setActiveOnly]     = useState(true);
+  const [groupBy,        setGroupBy]        = useState('dmPhase');
 
   const phases    = [...new Set(items.map(i => i.dmPhase).filter(Boolean))].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b));
   const assignees = [...new Set(items.map(i => i.assignee).filter(Boolean))].sort();
@@ -137,6 +144,52 @@ function PhaseTable({ items, projectColor }) {
 
   const selStyle = { background: '#0b1020', border: `1px solid #1e2d45`, color: '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer' };
   const btnStyle = (active) => ({ background: active ? '#1e3a5f' : '#0b1020', border: `1px solid ${active ? '#60a5fa' : '#1e2d45'}`, color: active ? '#60a5fa' : '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400 });
+
+  // Build groups based on groupBy selection
+  let groups = [];
+  if (groupBy === 'dmPhase') {
+    groups = PHASE_ORDER
+      .map(ph => ({ key: ph, label: ph, isPhase: true, items: visible.filter(i => i.dmPhase === ph) }))
+      .filter(g => g.items.length > 0);
+    const unphased = visible.filter(i => !PHASE_ORDER.includes(i.dmPhase));
+    if (unphased.length > 0) groups.push({ key: '__none__', label: 'No Phase', isPhase: false, items: unphased });
+  } else if (groupBy === 'assignee') {
+    const seen = [...new Set(visible.map(i => i.assignee).filter(Boolean))].sort();
+    groups = seen.map(a => ({ key: a, label: a, isPhase: false, items: visible.filter(i => i.assignee === a) }));
+    const unassigned = visible.filter(i => !i.assignee);
+    if (unassigned.length > 0) groups.push({ key: '__none__', label: 'Unassigned', isPhase: false, items: unassigned });
+  } else {
+    groups = [{ key: '__all__', label: null, isPhase: false, items: visible }];
+  }
+
+  const COL_HEADERS = ['', 'Item', 'Status', 'RFIs', 'Assignee'];
+
+  const renderTable = (rows) => (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: '#0b1020', borderBottom: `1px solid ${C.border}` }}>
+            {COL_HEADERS.map((h, i) => (
+              <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMut, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item, idx) => (
+            <tr key={item.id} style={{ background: idx % 2 === 0 ? C.bgCard : '#0b1020', borderBottom: `1px solid ${C.grid}` }}>
+              <td style={{ padding: '8px 12px', width: 18 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: projectColor }} /></td>
+              <td style={{ padding: '8px 12px', color: C.text, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</td>
+              <td style={{ padding: '8px 12px' }}><StatusBadge status={item.status} /></td>
+              <td style={{ padding: '8px 12px', color: (item.rfiCount ?? 0) > 0 ? '#f87171' : C.textMut, fontSize: 11 }}>
+                {(item.rfiCount ?? 0) > 0 ? item.rfiCount : '—'}
+              </td>
+              <td style={{ padding: '8px 12px' }}>{item.assignee && <AssigneeChip assignee={item.assignee} />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
@@ -153,35 +206,32 @@ function PhaseTable({ items, projectColor }) {
         <button style={btnStyle(activeOnly)} onClick={() => setActiveOnly(v => !v)}>
           {activeOnly ? 'Active only' : 'Show all'}
         </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 8 }}>
+          <span style={{ fontSize: 10, color: C.textMut }}>Group by</span>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+            {GROUP_BY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
         <span style={{ fontSize: 10, color: C.textMut, marginLeft: 'auto' }}>{visible.length} items</span>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead>
-            <tr style={{ background: '#0b1020', borderBottom: `1px solid ${C.border}` }}>
-              {['','Item','Status','DM Phase','RFIs','Assignee'].map((h, i) => (
-                <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMut, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: '16px 12px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>No items match filters</td></tr>
-            ) : visible.map((item, idx) => (
-              <tr key={item.id} style={{ background: idx % 2 === 0 ? C.bgCard : '#0b1020', borderBottom: `1px solid ${C.grid}` }}>
-                <td style={{ padding: '8px 12px', width: 18 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: projectColor }} /></td>
-                <td style={{ padding: '8px 12px', color: C.text, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</td>
-                <td style={{ padding: '8px 12px' }}><StatusBadge status={item.status} /></td>
-                <td style={{ padding: '8px 12px' }}><PhaseBadge phase={item.dmPhase} /></td>
-                <td style={{ padding: '8px 12px', color: (item.rfiCount ?? 0) > 0 ? '#f87171' : C.textMut, fontSize: 11 }}>
-                  {(item.rfiCount ?? 0) > 0 ? item.rfiCount : '—'}
-                </td>
-                <td style={{ padding: '8px 12px' }}>{item.assignee && <AssigneeChip assignee={item.assignee} />}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      {visible.length === 0 ? (
+        <div style={{ padding: '16px 12px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>No items match filters</div>
+      ) : (
+        <>
+          {groups.map(({ key, label, isPhase, items: groupItems }) => (
+            <div key={key}>
+              {label !== null && (
+                <div style={{ background: '#0b1020', padding: '7px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isPhase ? <PhaseBadge phase={label} /> : <span style={{ fontSize: 10, fontWeight: 700, color: C.textMut }}>{label}</span>}
+                  <span style={{ fontSize: 10, color: C.textMut }}>{groupItems.length} item{groupItems.length !== 1 ? 's' : ''}</span>
+                </div>
+              )}
+              {renderTable(groupItems)}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -205,7 +255,7 @@ export default function ProjectHome() {
       }
     };
     const cached = getCached('projects');
-    if (cached) { applyList(cached); setProjLoading(false); }
+    if (cached) { applyList(cached); setProjLoading(false); return; }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
@@ -217,11 +267,11 @@ export default function ProjectHome() {
       .finally(() => setProjLoading(false));
   }, [projectId]);
 
-  // Fetch project items (show cached immediately, refresh in background)
+  // Fetch project items (cache-first: skip network when cache is fresh)
   useEffect(() => {
     let cancelled = false;
     const cached = getCached(`items:${projectId}`);
-    if (cached) { setItems(cached.items || []); setItemLoading(false); }
+    if (cached) { setItems(cached.items || []); setItemLoading(false); return; }
     setItemLoading(true);
     fetch(`/api/projects/${projectId}/items`)
       .then(r => r.json())
@@ -274,22 +324,26 @@ export default function ProjectHome() {
         </div>
       </div>
 
-      <QuickLogBar defaultProjectId={projectId} />
-
       {/* A: Project summary */}
       <section style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Project</div>
         <ProjectSummaryCard project={project} projectItems={items} />
       </section>
 
-      {/* B: Three-week lookahead */}
-      <section style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Lookahead</div>
-        {itemLoading ? (
-          <div style={{ color: C.textMut, fontSize: 12 }}>Loading items…</div>
-        ) : (
-          <MiniTimeline items={items} projectColor={projectColor} />
-        )}
+      {/* B: Tasks + Lookahead side by side */}
+      <section style={{ marginBottom: 28, display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ flex: '0 0 30%', minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Tasks</div>
+          <QuickLogBar defaultProjectId={projectId} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Lookahead</div>
+          {itemLoading ? (
+            <div style={{ color: C.textMut, fontSize: 12 }}>Loading items…</div>
+          ) : (
+            <MiniTimeline items={items} projectColor={projectColor} />
+          )}
+        </div>
       </section>
 
       {/* C: Stats */}

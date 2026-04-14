@@ -38,10 +38,11 @@ export function errResponse(tag, err) {
 }
 
 // ── Field extractors ──────────────────────────────────────────────────────────
-export const titleVal  = (p, k) => p[k]?.title?.[0]?.plain_text   ?? null
-export const statusVal = (p, k) => p[k]?.status?.name             ?? null
-export const selectVal = (p, k) => p[k]?.select?.name             ?? null
-export const personVal = (p, k) => p[k]?.people?.[0]?.name        ?? null
+export const titleVal        = (p, k) => p[k]?.title?.[0]?.plain_text          ?? null
+export const statusVal       = (p, k) => p[k]?.status?.name                   ?? null
+export const selectVal       = (p, k) => p[k]?.select?.name                   ?? null
+export const multiSelectVal  = (p, k) => (p[k]?.multi_select ?? []).map(o => o.name)
+export const personVal       = (p, k) => p[k]?.people?.[0]?.name              ?? null
 export const checkVal  = (p, k) => p[k]?.checkbox                 ?? false
 export const dateVal   = (p, k) => p[k]?.date?.start              ?? null
 export const relCount  = (p, k) => (p[k]?.relation || []).length
@@ -179,22 +180,29 @@ export function transformDrawing(page) {
   return {
     id:            page.id,
     drawingNumber: props['Drawing Number']?.title?.[0]?.plain_text ?? '',
+    title1: t1,
+    title2: t2,
+    title3: t3,
     title:         [t1, t2, t3].filter(Boolean).join(' — '),
-    rev:           props['Rev']?.select?.name ?? props['Rev']?.rich_text?.[0]?.plain_text ?? null,
+    designStage:    props['Design Stage']?.select?.name    ?? null,
+    dwgNoAssigned:  props['Dwg No. Assigned']?.select?.name ?? null,
+    rev:            props['Rev']?.select?.name ?? props['Rev']?.rich_text?.[0]?.plain_text ?? null,
     s4Submit: {
       plan:   anyDate(props, 'S4 Submit Date (Plan)'),
       actual: d(props,       'S4 Submit Date (Actual)'),
       adj:    anyDate(props, 'S4 Submit Date (Adj)'),
     },
-    s4Status:     props['S4 Status']?.select?.name ?? null,
-    s4StatusDate: { actual: anyDate(props, 'S4 Status Date'), plan: null, adj: null },
+    // Try both naming conventions: 'S4 Status (LOR)' (server) and 'S4 Status' (simpler)
+    s4Status:     props['S4 Status (LOR)']?.select?.name ?? props['S4 Status']?.select?.name ?? null,
+    s4StatusDate: d(props, 'S4 Status Date (Actual)') ?? anyDate(props, 'S4 Status Date') ?? null,
     s5Submit: {
       plan:   anyDate(props, 'S5 Submit Date (Plan)'),
       actual: d(props,       'S5 Submit Date (Actual)'),
       adj:    anyDate(props, 'S5 Submit Date (Adj)'),
     },
-    s5Status:     props['S5 Status']?.select?.name ?? null,
-    s5StatusDate: { actual: anyDate(props, 'S5 Status Date'), plan: null, adj: null },
+    // Try both naming conventions: 'S5 Status (F&P)' (server) and 'S5 Status' (simpler)
+    s5Status:     props['S5 Status (F&P)']?.select?.name ?? props['S5 Status']?.select?.name ?? null,
+    s5StatusDate: d(props, 'S5 Status Date (Actual)') ?? anyDate(props, 'S5 Status Date') ?? null,
     c01Submit: {
       plan:   anyDate(props, 'C01 Submit Date (Plan)'),
       actual: d(props,       'C01 Submit Date (Actual)'),

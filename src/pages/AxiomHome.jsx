@@ -149,11 +149,18 @@ function StatPanel({ label, value, sub, valueColor = C.text }) {
 // ── D: DM Phase summary table ─────────────────────────────────────────────────
 const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
 
+const GROUP_BY_OPTIONS = [
+  { value: 'dmPhase',  label: 'DM Phase' },
+  { value: 'assignee', label: 'Assignee' },
+  { value: 'none',     label: 'None' },
+];
+
 function PhaseTable({ items }) {
   const [filterProject,  setFilterProject]  = useState('all');
   const [filterPhase,    setFilterPhase]    = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [activeOnly,     setActiveOnly]     = useState(true);
+  const [groupBy,        setGroupBy]        = useState('dmPhase');
 
   const projects  = [...new Set(items.map(i => i.projectName).filter(Boolean))].sort();
   const phases    = [...new Set(items.map(i => i.dmPhase).filter(Boolean))].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b));
@@ -169,13 +176,22 @@ function PhaseTable({ items }) {
   const selStyle = { background: '#0b1020', border: `1px solid #1e2d45`, color: '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer' };
   const btnStyle = (active) => ({ background: active ? '#1e3a5f' : '#0b1020', border: `1px solid ${active ? '#60a5fa' : '#1e2d45'}`, color: active ? '#60a5fa' : '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400 });
 
-  // Group visible items by phase, preserving PHASE_ORDER
-  const grouped = PHASE_ORDER
-    .map(ph => ({ ph, items: visible.filter(i => i.dmPhase === ph) }))
-    .filter(g => g.items.length > 0);
-
-  // Items with no recognised phase
-  const unphased = visible.filter(i => !PHASE_ORDER.includes(i.dmPhase));
+  // Build groups based on groupBy selection
+  let groups = [];
+  if (groupBy === 'dmPhase') {
+    groups = PHASE_ORDER
+      .map(ph => ({ key: ph, label: ph, isPhase: true, items: visible.filter(i => i.dmPhase === ph) }))
+      .filter(g => g.items.length > 0);
+    const unphased = visible.filter(i => !PHASE_ORDER.includes(i.dmPhase));
+    if (unphased.length > 0) groups.push({ key: '__none__', label: 'No Phase', isPhase: false, items: unphased });
+  } else if (groupBy === 'assignee') {
+    const seen = [...new Set(visible.map(i => i.assignee).filter(Boolean))].sort();
+    groups = seen.map(a => ({ key: a, label: a, isPhase: false, items: visible.filter(i => i.assignee === a) }));
+    const unassigned = visible.filter(i => !i.assignee);
+    if (unassigned.length > 0) groups.push({ key: '__none__', label: 'Unassigned', isPhase: false, items: unassigned });
+  } else {
+    groups = [{ key: '__all__', label: null, isPhase: false, items: visible }];
+  }
 
   const COL_HEADERS = ['', 'Item', 'Status', 'RFIs', 'Assignee'];
 
@@ -230,6 +246,12 @@ function PhaseTable({ items }) {
         <button style={btnStyle(activeOnly)} onClick={() => setActiveOnly(v => !v)}>
           {activeOnly ? 'Active only' : 'Show all'}
         </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 8 }}>
+          <span style={{ fontSize: 10, color: C.textMut }}>Group by</span>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+            {GROUP_BY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
         <span style={{ fontSize: 10, color: C.textMut, marginLeft: 'auto' }}>{visible.length} items</span>
       </div>
 
@@ -238,24 +260,17 @@ function PhaseTable({ items }) {
         <div style={{ padding: '16px 12px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>No items match filters</div>
       ) : (
         <>
-          {grouped.map(({ ph, items: groupItems }) => (
-            <div key={ph}>
-              <div style={{ background: '#0b1020', padding: '7px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <PhaseBadge phase={ph} />
-                <span style={{ fontSize: 10, color: C.textMut }}>{groupItems.length} item{groupItems.length !== 1 ? 's' : ''}</span>
-              </div>
+          {groups.map(({ key, label, isPhase, items: groupItems }) => (
+            <div key={key}>
+              {label !== null && (
+                <div style={{ background: '#0b1020', padding: '7px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {isPhase ? <PhaseBadge phase={label} /> : <span style={{ fontSize: 10, fontWeight: 700, color: C.textMut }}>{label}</span>}
+                  <span style={{ fontSize: 10, color: C.textMut }}>{groupItems.length} item{groupItems.length !== 1 ? 's' : ''}</span>
+                </div>
+              )}
               {renderTable(groupItems)}
             </div>
           ))}
-          {unphased.length > 0 && (
-            <div>
-              <div style={{ background: '#0b1020', padding: '7px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: C.textMut }}>No Phase</span>
-                <span style={{ fontSize: 10, color: C.textMut }}>{unphased.length} item{unphased.length !== 1 ? 's' : ''}</span>
-              </div>
-              {renderTable(unphased)}
-            </div>
-          )}
         </>
       )}
     </div>
@@ -280,14 +295,14 @@ export default function AxiomHome() {
     return () => clearInterval(id);
   }, []);
 
-  // Fetch projects (show cached immediately, refresh in background)
+  // Fetch projects (cache-first: skip network when cache is fresh)
   useEffect(() => {
     const applyList = list => {
       const colorMap = assignProjectColors(list);
       setProjects(list.map(p => ({ ...p, color: colorMap.get(p.id) ?? PROJECT_COLORS[0], itemCount: null })));
     };
     const cached = getCached('projects');
-    if (cached) { applyList(cached); setProjLoading(false); }
+    if (cached) { applyList(cached); setProjLoading(false); return; }
     fetch('/api/projects')
       .then(r => r.json())
       .then(data => {
@@ -325,7 +340,12 @@ export default function AxiomHome() {
         setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, itemCount: data.summary?.total ?? items.length } : p));
       };
       const cached = getCached(`items:${proj.id}`);
-      if (cached) applyData(cached);
+      if (cached) {
+        applyData(cached);
+        remaining--;
+        if (remaining === 0) setItemsLoading(false);
+        return;
+      }
       fetch(`/api/projects/${proj.id}/items`, { signal: ctrl.signal })
         .then(r => r.json())
         .then(data => {

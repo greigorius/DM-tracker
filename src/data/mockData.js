@@ -31,18 +31,9 @@ export const DM_PHASES = [
 
 export const PHASE_ORDER = ['DT1','P01','S4','DT2','P02','S5','DTC','C01','PROD'];
 
-// ── Status config ─────────────────────────────────────────────────────────────
-export const STATUS_COLORS = {
-  'Backlog':              { bg: '#37352f', text: '#c9c8c2' },
-  'In Progress':         { bg: '#3b2714', text: '#f0a030' },
-  'In Review':           { bg: '#2e2459', text: '#c5bcf0' },
-  'On Hold - RFIs':      { bg: '#3b1a1a', text: '#f09090' },
-  'Design Complete':     { bg: '#14532d', text: '#6ee7a0' },
-  'PC Approved':         { bg: '#14532d', text: '#6ee7a0' },
-  'In Manufacture':      { bg: '#14532d', text: '#6ee7a0' },
-  'Complete':            { bg: '#14532d', text: '#6ee7a0' },
-  'Omitted':             { bg: '#252525', text: '#909090' },
-};
+// ── Status config — re-exported from shared colours so all pages stay in sync ──
+// (Notion status palette adapted for dark UI — see src/data/colors.js)
+export { ITEM_STATUS_COLORS as STATUS_COLORS, ITEM_STATUS_DEFAULT } from './colors.js';
 
 // ── Mock timeline items ───────────────────────────────────────────────────────
 const T = (offsetDays) => {

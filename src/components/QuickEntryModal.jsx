@@ -14,11 +14,11 @@ const C = {
 };
 
 const TABS = [
-  { id: 'todo',           label: 'To Do',         color: '#6366f1', endpoint: '/api/quick-log/todo'       },
-  { id: 'rfi',            label: 'RFI',           color: '#dc2626', endpoint: '/api/quick-log/rfi'        },
-  { id: 'drawing-check',  label: 'Drawing Check', color: '#7c3aed', endpoint: '/api/quick-log/todo'       },
-  { id: 'comment-review', label: 'Comment Review',color: '#0e7490', endpoint: '/api/quick-log/todo'       },
-  { id: 'production',     label: 'Production',    color: '#059669', endpoint: '/api/quick-log/production' },
+  { id: 'todo',           label: 'To Do',         color: '#6366f1', endpoint: '/api/quick-log/todo'          },
+  { id: 'rfi',            label: 'RFI',           color: '#dc2626', endpoint: '/api/quick-log/rfi'           },
+  { id: 'drawing-check',  label: 'Drawing Check', color: '#7c3aed', endpoint: '/api/quick-log/drawing-check' },
+  { id: 'comment-review', label: 'Comment Review',color: '#0e7490', endpoint: '/api/quick-log/comment-review'},
+  { id: 'production',     label: 'Production',    color: '#059669', endpoint: '/api/quick-log/production'    },
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -120,9 +120,9 @@ export default function QuickEntryModal({ onClose }) {
       case 'rfi':
         return { ...base, description: description.trim() || 'RFI' };
       case 'drawing-check':
-        return { ...base, description: description.trim() || 'Check drawing' };
+        return { ...base, description: description.trim() || 'Check drawing', category: 'Drawing Check' };
       case 'comment-review':
-        return { ...base, description: description.trim() || 'Review comments' };
+        return { ...base, description: description.trim() || 'Review comments', category: 'Comment Review' };
       case 'production':
         return { ...base, description: notes.trim() || 'Schedule production', targetDate: targetDate || null, notes: notes.trim() || null };
       default:
