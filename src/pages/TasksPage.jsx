@@ -520,15 +520,17 @@ export default function TasksPage() {
 
   // Sort assigned tasks
   const sorted = [...filtered].sort((a, b) => {
-    let va, vb;
+    let cmp;
     if (sortBy === 'startDate') {
-      va = a.startDate ?? '';
-      vb = b.startDate ?? '';
+      const va = a.startDate ?? '';
+      const vb = b.startDate ?? '';
+      cmp = va.localeCompare(vb);
     } else {
-      va = a.tdlId ?? '';
-      vb = b.tdlId ?? '';
+      // Numeric sort on the trailing number in "TDL-573" etc.
+      const na = parseInt((a.tdlId ?? '').replace(/\D/g, ''), 10) || 0;
+      const nb = parseInt((b.tdlId ?? '').replace(/\D/g, ''), 10) || 0;
+      cmp = na - nb;
     }
-    const cmp = va.localeCompare(vb);
     return sortDir === 'desc' ? -cmp : cmp;
   });
 
