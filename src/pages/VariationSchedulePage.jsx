@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AppNav from '../components/AppNav.jsx';
-import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
+import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
+import {
+  initColConfig, persistColConfig, mergeVisibleCols, exportToCSV,
+  ColumnConfigPanel, SharedTableHead,
+} from '../components/TableConfig.jsx';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const C = {
@@ -18,14 +22,14 @@ const C = {
 };
 
 const VAR_STATUS_COLORS = {
-  'Approved':          '#34d399',
-  'Pending':           '#60a5fa',
-  'Under Review':      '#a78bfa',
-  'Rejected':          '#f87171',
-  'On Hold':           '#f97316',
-  'Draft':             '#f59e0b',
-  'Submitted':         '#38bdf8',
-  'Partially Approved':'#4ade80',
+  'Approved':           '#34d399',
+  'Pending':            '#60a5fa',
+  'Under Review':       '#a78bfa',
+  'Rejected':           '#f87171',
+  'On Hold':            '#f97316',
+  'Draft':              '#f59e0b',
+  'Submitted':          '#38bdf8',
+  'Partially Approved': '#4ade80',
 };
 
 function hexToRgba(hex, alpha) {
@@ -56,8 +60,21 @@ function StatusPill({ status }) {
   );
 }
 
-// ── Selects ───────────────────────────────────────────────────────────────────
+// ── Column config ─────────────────────────────────────────────────────────────
+const DEFAULT_COLUMNS = [
+  { key: 'varNumber',    label: 'Var #',        defaultWidth: 80,  minWidth: 60,  align: 'left'   },
+  { key: 'title',        label: 'Title',        defaultWidth: 280, minWidth: 120, align: 'left'   },
+  { key: 'status',       label: 'Status',       defaultWidth: 130, minWidth: 70,  align: 'center' },
+  { key: 'type',         label: 'Type',         defaultWidth: 110, minWidth: 60,  align: 'center' },
+  { key: 'value',        label: 'Value',        defaultWidth: 110, minWidth: 70,  align: 'center' },
+  { key: 'dateIssued',   label: 'Date Issued',  defaultWidth: 100, minWidth: 70,  align: 'center' },
+  { key: 'dateApproved', label: 'Date Approved',defaultWidth: 110, minWidth: 70,  align: 'center' },
+];
+const COL_CONFIG_KEY = 'dmtracker:variations-col-config';
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: C.sec, fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' };
+const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: `1px solid ${active ? '#60a5fa' : C.border}`, color: active ? '#60a5fa' : C.sec, fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400, fontFamily: 'inherit' });
 
 // ── Global status summary bar ─────────────────────────────────────────────────
 function GlobalStatusBar({ variations }) {
@@ -67,7 +84,6 @@ function GlobalStatusBar({ variations }) {
     counts[s] = (counts[s] ?? 0) + 1;
   }
   const totalValue = variations.reduce((sum, v) => sum + (v.value ?? 0), 0);
-
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, alignItems: 'center' }}>
       {Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([s, n]) => {
@@ -86,75 +102,6 @@ function GlobalStatusBar({ variations }) {
   );
 }
 
-const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: `1px solid ${active ? '#60a5fa' : C.border}`, color: active ? '#60a5fa' : C.sec, fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400, fontFamily: 'inherit' });
-
-// ── Column headers ────────────────────────────────────────────────────────────
-const COLS = ['Var #', 'Title', 'Status', 'Type', 'Value', 'Date Issued', 'Date Approved'];
-
-function TableHead() {
-  return (
-    <thead>
-      <tr style={{ background: '#0b1020', borderBottom: `1px solid ${C.border}` }}>
-        {COLS.map(h => (
-          <th key={h} style={{ padding: '7px 12px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-        ))}
-      </tr>
-    </thead>
-  );
-}
-
-// ── Variation Row ─────────────────────────────────────────────────────────────
-function VariationRow({ variation: v, odd }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <tr
-      style={{ background: hovered ? C.bgPanel : (odd ? '#0b1020' : C.bgCard), borderBottom: `1px solid ${C.grid}`, transition: 'background 0.1s' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Var # */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', width: 60 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>
-          {v.varNumber != null ? `VAR-${v.varNumber}` : '—'}
-        </span>
-      </td>
-      {/* Title */}
-      <td style={{ padding: '8px 12px', maxWidth: 320 }}>
-        <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</div>
-        {v.description && v.description !== v.title && (
-          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{v.description}</div>
-        )}
-      </td>
-      {/* Status */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-        <StatusPill status={v.status} />
-      </td>
-      {/* Type */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-        {v.type
-          ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{v.type}</span>
-          : <span style={{ color: C.muted, fontSize: 10 }}>—</span>}
-      </td>
-      {/* Value */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 11, fontWeight: v.value != null ? 700 : 400, color: v.value != null ? C.text : C.muted }}>
-          {fmtCurrency(v.value)}
-        </span>
-      </td>
-      {/* Date Issued */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 11, color: C.sec }}>{v.dateIssued ? fmtDate(v.dateIssued) : '—'}</span>
-      </td>
-      {/* Date Approved */}
-      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 11, color: v.dateApproved ? '#34d399' : C.muted }}>
-          {v.dateApproved ? fmtDate(v.dateApproved) : '—'}
-        </span>
-      </td>
-    </tr>
-  );
-}
-
 // ── Not configured notice ─────────────────────────────────────────────────────
 function NotConfiguredNotice() {
   return (
@@ -165,6 +112,76 @@ function NotConfiguredNotice() {
       </div>
     </div>
   );
+}
+
+// ── Variation cell renderer ───────────────────────────────────────────────────
+function VarCell({ v, colKey }) {
+  switch (colKey) {
+    case 'varNumber':
+      return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VAR-${v.varNumber}` : '—'}</span>;
+    case 'title':
+      return (
+        <div>
+          <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{v.title ?? '—'}</div>
+          {v.description && v.description !== v.title && (
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{v.description}</div>
+          )}
+        </div>
+      );
+    case 'status':
+      return <StatusPill status={v.status} />;
+    case 'type':
+      return v.type
+        ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{v.type}</span>
+        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+    case 'value':
+      return <span style={{ fontSize: 11, fontWeight: v.value != null ? 700 : 400, color: v.value != null ? C.text : C.muted }}>{fmtCurrency(v.value)}</span>;
+    case 'dateIssued':
+      return <span style={{ fontSize: 11, color: C.sec }}>{v.dateIssued ? fmtDate(v.dateIssued) : '—'}</span>;
+    case 'dateApproved':
+      return <span style={{ fontSize: 11, color: v.dateApproved ? '#34d399' : C.muted }}>{v.dateApproved ? fmtDate(v.dateApproved) : '—'}</span>;
+    default:
+      return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+  }
+}
+
+// ── Variation Row ─────────────────────────────────────────────────────────────
+function VariationRow({ variation: v, odd, visibleCols }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <tr
+      style={{ background: hovered ? C.bgPanel : (odd ? '#0b1020' : C.bgCard), borderBottom: `1px solid ${C.grid}`, transition: 'background 0.1s' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {visibleCols.map(col => (
+        <td key={col.key} style={{
+          padding: '8px 10px',
+          textAlign: col.align ?? 'center',
+          width: col.width,
+          maxWidth: col.width,
+          overflow: 'hidden',
+          whiteSpace: col.key === 'title' ? 'normal' : 'nowrap',
+        }}>
+          <VarCell v={v} colKey={col.key} />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+// ── CSV raw getter ────────────────────────────────────────────────────────────
+function varRaw(v, key) {
+  switch (key) {
+    case 'varNumber':    return v.varNumber != null ? `VAR-${v.varNumber}` : '';
+    case 'title':        return v.title ?? '';
+    case 'status':       return v.status ?? '';
+    case 'type':         return v.type ?? '';
+    case 'value':        return v.value != null ? String(v.value) : '';
+    case 'dateIssued':   return v.dateIssued ?? '';
+    case 'dateApproved': return v.dateApproved ?? '';
+    default:             return '';
+  }
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -178,16 +195,25 @@ export default function VariationSchedulePage() {
 
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus,  setFilterStatus]  = useState('all');
-  const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project'
+  const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project' | 'none'
   const [expanded,      setExpanded]      = useState({});
+  const [showColPanel,  setShowColPanel]  = useState(false);
+
+  const [colConfig, setColConfig] = useState(() => initColConfig(DEFAULT_COLUMNS, COL_CONFIG_KEY));
+  const colConfigRef = useRef(colConfig);
 
   const today = new Date();
 
+  // Persist col config
+  useEffect(() => { colConfigRef.current = colConfig; persistColConfig(colConfig, COL_CONFIG_KEY); }, [colConfig]);
+
+  // Auto-refresh timer
   useEffect(() => {
     const id = setInterval(() => setRefreshKey(k => k + 1), 5 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
+  // Projects
   useEffect(() => {
     const cached = getCached('projects');
     if (cached) setProjects(cached);
@@ -198,6 +224,7 @@ export default function VariationSchedulePage() {
     }
   }, []);
 
+  // Variations
   useEffect(() => {
     const cached = getCached('variations');
     if (cached) {
@@ -219,6 +246,22 @@ export default function VariationSchedulePage() {
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // Column resize
+  const startResize = useCallback((e, colKey) => {
+    const startX = e.clientX;
+    const startW = colConfigRef.current.find(c => c.key === colKey)?.width ?? 100;
+    const minW   = DEFAULT_COLUMNS.find(c => c.key === colKey)?.minWidth ?? 40;
+    const onMove = me => {
+      const newW = Math.max(minW, startW + (me.clientX - startX));
+      setColConfig(prev => prev.map(c => c.key === colKey ? { ...c, width: newW } : c));
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
+
+  const visibleCols = mergeVisibleCols(colConfig, DEFAULT_COLUMNS);
+
   // Build color map
   const allProjectIds = [...new Set([...projects.map(p => p.id), ...variations.map(v => v.projectId).filter(Boolean)])];
   const colorMap = assignProjectColors(allProjectIds.map(id => ({ id })));
@@ -233,17 +276,26 @@ export default function VariationSchedulePage() {
     return true;
   });
 
-  // Group by item or project
-  const grouped = [];
-  const seen = new Map();
-  for (const v of visible) {
-    const key = groupBy === 'item'
-      ? (v.itemName ?? 'No Item')
-      : (v.projectName ?? 'No Project');
-    if (!seen.has(key)) { seen.set(key, []); grouped.push({ key, projectId: v.projectId, variations: seen.get(key) }); }
-    seen.get(key).push(v);
-  }
-  grouped.sort((a, b) => a.key.localeCompare(b.key));
+  // Group
+  const grouped = (() => {
+    if (groupBy === 'none') return [{ key: '__none__', projectId: null, variations: visible }];
+    const map = new Map();
+    const list = [];
+    for (const v of visible) {
+      const key = groupBy === 'item'
+        ? (v.itemName ?? 'No Item')
+        : (v.projectName ?? 'No Project');
+      if (!map.has(key)) { map.set(key, []); list.push({ key, projectId: v.projectId, variations: map.get(key) }); }
+      map.get(key).push(v);
+    }
+    list.sort((a, b) => a.key.localeCompare(b.key));
+    return list;
+  })();
+
+  const allKeys = grouped.map(g => g.key);
+  const expandAll   = () => setExpanded(Object.fromEntries(allKeys.map(k => [k, true])));
+  const collapseAll = () => setExpanded(Object.fromEntries(allKeys.map(k => [k, false])));
+  const isExpanded  = key => expanded[key] !== false;
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
@@ -252,7 +304,7 @@ export default function VariationSchedulePage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>VARIATION SCHEDULE</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contract variations · grouped by {groupBy}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Contract variations</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 11, color: C.muted }}>
@@ -271,7 +323,7 @@ export default function VariationSchedulePage() {
       {/* Global status bar */}
       {!loading && configured && visible.length > 0 && <GlobalStatusBar variations={visible} />}
 
-      {/* Filter bar */}
+      {/* Filter + toolbar */}
       {configured && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
           <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={selStyle}>
@@ -282,16 +334,40 @@ export default function VariationSchedulePage() {
             <option value="all">All Statuses</option>
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+
           <span style={{ fontSize: 10, color: C.muted, marginLeft: 4 }}>Group by:</span>
-          {['item','project'].map(g => (
+          {['item','project','none'].map(g => (
             <button key={g} style={btnStyle(groupBy === g)} onClick={() => setGroupBy(g)}>
-              {g.charAt(0).toUpperCase() + g.slice(1)}
+              {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
             </button>
           ))}
+
+          {groupBy !== 'none' && <>
+            <button onClick={expandAll}   style={{ ...selStyle, marginLeft: 4 }}>Expand All</button>
+            <button onClick={collapseAll} style={selStyle}>Collapse All</button>
+          </>}
+
+          <button
+            onClick={() => exportToCSV(visibleCols, visible, varRaw, `variation-schedule-${new Date().toISOString().slice(0,10)}.csv`)}
+            style={{ ...selStyle, marginLeft: 4 }}
+          >Export CSV</button>
+
+          <button onClick={() => setShowColPanel(true)} style={selStyle}>Columns</button>
+
           <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
             {loading ? 'Loading…' : `${visible.length} variations`}
           </span>
         </div>
+      )}
+
+      {/* Column config panel */}
+      {showColPanel && (
+        <ColumnConfigPanel
+          colConfig={colConfig}
+          defaults={DEFAULT_COLUMNS}
+          onClose={() => setShowColPanel(false)}
+          onChange={cfg => { setColConfig(cfg); persistColConfig(cfg, COL_CONFIG_KEY); }}
+        />
       )}
 
       {/* Content */}
@@ -299,11 +375,24 @@ export default function VariationSchedulePage() {
         <div style={{ color: C.muted, fontSize: 12 }}>Loading variations…</div>
       ) : !configured ? null : visible.length === 0 ? (
         <div style={{ color: C.muted, fontSize: 12 }}>No variations match filters</div>
+      ) : groupBy === 'none' ? (
+        <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
+              <tbody>
+                {visible.map((v, idx) => (
+                  <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {grouped.map(({ key, projectId, variations: groupVars }) => {
             const projColor  = projectId ? (colorMap.get(projectId) ?? PROJECT_COLORS[0]) : PROJECT_COLORS[0];
-            const isExpanded = expanded[key] !== false; // open by default
+            const open       = isExpanded(key);
             const groupValue = groupVars.reduce((sum, v) => sum + (v.value ?? 0), 0);
 
             return (
@@ -313,10 +402,10 @@ export default function VariationSchedulePage() {
               >
                 {/* Group header */}
                 <div
-                  onClick={() => setExpanded(prev => ({ ...prev, [key]: prev[key] !== false ? false : true }))}
-                  style={{ padding: '10px 16px', background: C.bgPanel, borderBottom: isExpanded ? `1px solid ${C.border}` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setExpanded(prev => ({ ...prev, [key]: !open }))}
+                  style={{ padding: '10px 16px', background: C.bgPanel, borderBottom: open ? `1px solid ${C.border}` : 'none', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
                 >
-                  <span style={{ fontSize: 11, color: C.muted, width: 12, flexShrink: 0 }}>{isExpanded ? '▾' : '▸'}</span>
+                  <span style={{ fontSize: 11, color: C.muted, width: 12, flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
                   <span style={{ fontSize: 10, color: C.muted }}>{groupVars.length} variation{groupVars.length !== 1 ? 's' : ''}</span>
@@ -326,13 +415,13 @@ export default function VariationSchedulePage() {
                 </div>
 
                 {/* Variation table */}
-                {isExpanded && (
+                {open && (
                   <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <TableHead />
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                      <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
                       <tbody>
                         {groupVars.map((v, idx) => (
-                          <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} />
+                          <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
                         ))}
                       </tbody>
                     </table>
