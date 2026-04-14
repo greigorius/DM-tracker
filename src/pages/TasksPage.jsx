@@ -451,7 +451,7 @@ export default function TasksPage() {
   // Load tasks
   useEffect(() => {
     const cached = getCached('tasks');
-    if (cached && refreshKey === 0) { setTasks(cached); setLoading(false); return; }
+    if (cached) { setTasks(cached); setLoading(false); return; }
     setLoading(true);
     fetch('/api/tasks?showDone=true')
       .then(r => r.json())
