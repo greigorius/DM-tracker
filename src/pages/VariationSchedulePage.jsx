@@ -73,8 +73,8 @@ const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: 
 function GlobalStatusBar({ variations }) {
   const counts = {};
   for (const v of variations) {
-    const s = v.status ?? 'Unknown';
-    counts[s] = (counts[s] ?? 0) + 1;
+    const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : ['Unknown']);
+    for (const s of vals) counts[s] = (counts[s] ?? 0) + 1;
   }
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, alignItems: 'center' }}>
@@ -109,7 +109,7 @@ function NotConfiguredNotice() {
 function VarCell({ v, colKey }) {
   switch (colKey) {
     case 'varNumber':
-      return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VAR-${v.varNumber}` : '—'}</span>;
+      return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VC-${v.varNumber}` : '—'}</span>;
     case 'title': {
       // Collect all item names (multi-item support)
       const itemNames = v.itemNames?.length ? v.itemNames : (v.itemName ? [v.itemName] : []);
@@ -128,8 +128,15 @@ function VarCell({ v, colKey }) {
         </div>
       );
     }
-    case 'status':
-      return <StatusPill status={v.status} />;
+    case 'status': {
+      const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : []);
+      if (!vals.length) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+      return (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {vals.map((s, i) => <StatusPill key={i} status={s} />)}
+        </div>
+      );
+    }
     case 'type':
       return v.type
         ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{v.type}</span>
@@ -169,7 +176,7 @@ function VariationRow({ variation: v, odd, visibleCols }) {
 // ── CSV raw getter ────────────────────────────────────────────────────────────
 function varRaw(v, key) {
   switch (key) {
-    case 'varNumber':  return v.varNumber != null ? `VAR-${v.varNumber}` : '';
+    case 'varNumber':  return v.varNumber != null ? `VC-${v.varNumber}` : '';
     case 'title':      return v.title ?? '';
     case 'status':     return v.status ?? '';
     case 'type':       return v.type ?? '';
@@ -263,13 +270,16 @@ export default function VariationSchedulePage() {
   const allProjectIds = [...new Set([...projects.map(p => p.id), ...variations.map(v => v.projectId).filter(Boolean)])];
   const colorMap = assignProjectColors(allProjectIds.map(id => ({ id })));
 
-  // Filter options
-  const statusOptions = [...new Set(variations.map(v => v.status).filter(Boolean))].sort();
+  // Filter options — flatten statusValues arrays across all variations
+  const statusOptions = [...new Set(variations.flatMap(v => v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : [])))].sort();
 
   // Apply filters
   const visible = variations.filter(v => {
     if (filterProject !== 'all' && v.projectId !== filterProject) return false;
-    if (filterStatus  !== 'all' && v.status    !== filterStatus)  return false;
+    if (filterStatus  !== 'all') {
+      const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : []);
+      if (!vals.includes(filterStatus)) return false;
+    }
     return true;
   });
 
@@ -304,10 +314,17 @@ export default function VariationSchedulePage() {
           map.get(name).push(v);
         }
       } else {
+        if (groupBy === 'status') {
+          const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : ['No Status']);
+          for (const s of vals) {
+            if (!map.has(s)) { map.set(s, []); list.push({ key: s, projectId: v.projectId, variations: map.get(s) }); }
+            map.get(s).push(v);
+          }
+          continue;
+        }
         const key =
-          groupBy === 'type'   ? (v.type        ?? 'No Type')    :
-          groupBy === 'status' ? (v.status      ?? 'No Status')  :
-                                 (v.projectName ?? 'No Project');
+          groupBy === 'type' ? (v.type        ?? 'No Type') :
+                               (v.projectName ?? 'No Project');
         if (!map.has(key)) { map.set(key, []); list.push({ key, projectId: v.projectId, variations: map.get(key) }); }
         map.get(key).push(v);
       }

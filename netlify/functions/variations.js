@@ -13,7 +13,7 @@
 import {
   corsHeaders, tokenGuard, errResponse,
   fetchNotion, notionHeaders, queryAll,
-  titleVal, statusVal, selectVal,
+  titleVal, statusVal, selectVal, multiSelectVal,
 } from './_helpers.js'
 
 const DB_VARIATIONS = process.env.NOTION_DB_VARIATIONS
@@ -40,13 +40,21 @@ function transformVariation(page) {
     titleVal(p, 'Name')                  ??
     null
 
-  // Status → "Variation Status"
-  const status =
-    statusVal(p, 'Variation Status') ??
-    selectVal(p, 'Variation Status') ??
-    statusVal(p, 'Status')           ??
-    selectVal(p, 'Status')           ??
-    null
+  // Status → "Variation Status" — supports multi_select, status, or select Notion types
+  const statusValues = (() => {
+    const multi =
+      multiSelectVal(p, 'Variation Status').length ? multiSelectVal(p, 'Variation Status') :
+      multiSelectVal(p, 'Status').length           ? multiSelectVal(p, 'Status')           :
+      []
+    if (multi.length) return multi
+    const single =
+      statusVal(p, 'Variation Status') ??
+      selectVal(p, 'Variation Status') ??
+      statusVal(p, 'Status')           ??
+      selectVal(p, 'Status')           ??
+      null
+    return single ? [single] : []
+  })()
 
   // Type → "Variation Type"
   const type =
@@ -81,7 +89,7 @@ function transformVariation(page) {
     id: page.id,
     varNumber,
     title,
-    status,
+    statusValues,
     projectId,
     relatedTaskIds,
     legacyItemId,
@@ -199,14 +207,15 @@ export const handler = async (event) => {
       }
 
       return {
-        id:          v.id,
-        varNumber:   v.varNumber,
-        title:       v.title,
-        status:      v.status,
-        type:        v.type,
-        dateIssued:  v.dateIssued,
-        projectId:   resolvedProjectId,
-        projectName: resolvedProjectId ? (projMap[resolvedProjectId]?.name ?? null) : null,
+        id:           v.id,
+        varNumber:    v.varNumber,
+        title:        v.title,
+        statusValues: v.statusValues,          // array from multi_select (or single-value wrapped)
+        status:       v.statusValues[0] ?? null, // first value kept for filter back-compat
+        type:         v.type,
+        dateIssued:   v.dateIssued,
+        projectId:    resolvedProjectId,
+        projectName:  resolvedProjectId ? (projMap[resolvedProjectId]?.name ?? null) : null,
         // Multi-item support
         itemIds,
         itemNames,

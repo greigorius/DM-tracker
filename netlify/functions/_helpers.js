@@ -38,10 +38,11 @@ export function errResponse(tag, err) {
 }
 
 // ── Field extractors ──────────────────────────────────────────────────────────
-export const titleVal  = (p, k) => p[k]?.title?.[0]?.plain_text   ?? null
-export const statusVal = (p, k) => p[k]?.status?.name             ?? null
-export const selectVal = (p, k) => p[k]?.select?.name             ?? null
-export const personVal = (p, k) => p[k]?.people?.[0]?.name        ?? null
+export const titleVal        = (p, k) => p[k]?.title?.[0]?.plain_text          ?? null
+export const statusVal       = (p, k) => p[k]?.status?.name                   ?? null
+export const selectVal       = (p, k) => p[k]?.select?.name                   ?? null
+export const multiSelectVal  = (p, k) => (p[k]?.multi_select ?? []).map(o => o.name)
+export const personVal       = (p, k) => p[k]?.people?.[0]?.name              ?? null
 export const checkVal  = (p, k) => p[k]?.checkbox                 ?? false
 export const dateVal   = (p, k) => p[k]?.date?.start              ?? null
 export const relCount  = (p, k) => (p[k]?.relation || []).length
