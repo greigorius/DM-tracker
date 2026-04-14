@@ -167,19 +167,22 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
   // Derive assignee options from all tasks
   const assigneeOptions = [...new Set(allTasks.map(t => t.assignedTo).filter(Boolean))].sort();
 
+  const canSave = !!projectId && !!itemId && !!assignedTo;
+
   const handleSave = async () => {
+    if (!canSave) return;
     setSaving(true);
     setSaveResult(null);
     try {
       const body = { id: task.id };
-      if (itemId)    body.itemId      = itemId;
-      if (category)  body.taskCategory = category;
-      if (assignedTo) body.assignedTo = assignedTo;
-      if (hours !== '') body.subTaskHours = Number(hours);
-      body.changeTask = changeTask;
-      body.taskDone   = taskDone;
-      if (startDate) body.startDate = startDate;
-      if (endDate)   body.endDate   = endDate;
+      body.itemId      = itemId;
+      body.assignedTo  = assignedTo;
+      if (category)     body.taskCategory  = category;
+      if (hours !== '')  body.subTaskHours  = Number(hours);
+      body.changeTask  = changeTask;
+      body.taskDone    = taskDone;
+      if (startDate)    body.startDate     = startDate;
+      if (endDate)      body.endDate       = endDate;
 
       const r = await fetch('/api/tasks/update', {
         method:  'POST',
@@ -341,19 +344,26 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Feedback */}
+        {/* Feedback / hint */}
+        {!canSave && !saving && (
+          <span style={{ fontSize: 10, color: C.muted, fontStyle: 'italic' }}>
+            {!projectId ? 'Select a project' : !itemId ? 'Select an item' : 'Select an assignee'}
+          </span>
+        )}
         {saveResult === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Saved to Notion</span>}
-        {saveResult === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Save failed</span>}
+        {saveResult === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Save failed — check console</span>}
 
         {/* Save button */}
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={!canSave || saving}
+          title={!canSave ? 'Fill Project, Item and Assignee first' : 'Save and move to Assigned'}
           style={{
             padding: '6px 18px', borderRadius: 5, border: 'none',
-            background: saving ? '#1e2d45' : '#1d4ed8',
-            color: saving ? C.muted : '#fff',
-            fontSize: 12, fontWeight: 700, cursor: saving ? 'wait' : 'pointer',
+            background: canSave && !saving ? '#1d4ed8' : '#1e2d45',
+            color: canSave && !saving ? '#fff' : C.muted,
+            fontSize: 12, fontWeight: 700,
+            cursor: canSave && !saving ? 'pointer' : 'not-allowed',
             fontFamily: 'inherit', opacity: saving ? 0.7 : 1,
           }}>
           {saving ? 'Saving…' : 'Save & Assign'}
