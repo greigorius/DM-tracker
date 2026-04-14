@@ -184,8 +184,9 @@ export function transformDrawing(page) {
     title2: t2,
     title3: t3,
     title:         [t1, t2, t3].filter(Boolean).join(' — '),
-    designStage:   props['Design Stage']?.select?.name ?? null,
-    rev:           props['Rev']?.select?.name ?? props['Rev']?.rich_text?.[0]?.plain_text ?? null,
+    designStage:    props['Design Stage']?.select?.name    ?? null,
+    dwgNoAssigned:  props['Dwg No. Assigned']?.select?.name ?? null,
+    rev:            props['Rev']?.select?.name ?? props['Rev']?.rich_text?.[0]?.plain_text ?? null,
     s4Submit: {
       plan:   anyDate(props, 'S4 Submit Date (Plan)'),
       actual: d(props,       'S4 Submit Date (Actual)'),
