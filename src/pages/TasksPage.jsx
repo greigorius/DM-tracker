@@ -26,11 +26,18 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+function fmtDate(str) {
+  if (!str) return null;
+  return new Date(str).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
 // ── Column definitions ────────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { key: 'tdlId',       label: 'TDL ID',      defaultWidth: 90,  minWidth: 60,  align: 'left'   },
   { key: 'description', label: 'Description', defaultWidth: 300, minWidth: 120, align: 'left'   },
   { key: 'assignedTo',  label: 'Assigned To', defaultWidth: 130, minWidth: 80,  align: 'center' },
+  { key: 'startDate',   label: 'Start Date',  defaultWidth: 90,  minWidth: 70,  align: 'center' },
+  { key: 'endDate',     label: 'End Date',    defaultWidth: 90,  minWidth: 70,  align: 'center' },
   { key: 'hours',       label: 'Hours',       defaultWidth: 70,  minWidth: 50,  align: 'center' },
   { key: 'category',    label: 'Category',    defaultWidth: 130, minWidth: 60,  align: 'center' },
   { key: 'change',      label: 'Change',      defaultWidth: 70,  minWidth: 50,  align: 'center' },
@@ -43,6 +50,8 @@ function taskRaw(task, key) {
     case 'tdlId':       return task.tdlId ?? '';
     case 'description': return task.description ?? '';
     case 'assignedTo':  return task.assignedTo ?? '';
+    case 'startDate':   return task.startDate ?? '';
+    case 'endDate':     return task.endDate ?? '';
     case 'hours':       return task.subTaskHours ?? '';
     case 'category':    return task.taskCategory ?? '';
     case 'change':      return task.changeTask ? 'Yes' : '';
@@ -51,8 +60,9 @@ function taskRaw(task, key) {
   }
 }
 
-// ── Task row (read-only) ──────────────────────────────────────────────────────
-function TaskRow({ task, odd, visibleCols }) {
+// ── Task row ──────────────────────────────────────────────────────────────────
+function TaskRow({ task, odd, visibleCols, onToggleDone }) {
+  const [busy, setBusy] = useState(false);
   const done = task.taskDone;
   return (
     <tr style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
@@ -61,7 +71,7 @@ function TaskRow({ task, odd, visibleCols }) {
         let content;
         switch (col.key) {
           case 'tdlId':
-            content = <span style={{ fontSize: 10, color: done ? C.muted : C.muted,
+            content = <span style={{ fontSize: 10, color: C.muted,
               textDecoration: done ? 'line-through' : 'none' }}>{task.tdlId ?? '—'}</span>;
             break;
           case 'description':
@@ -70,6 +80,14 @@ function TaskRow({ task, odd, visibleCols }) {
             break;
           case 'assignedTo':
             content = <span style={{ fontSize: 11, color: C.sec }}>{task.assignedTo ?? '—'}</span>;
+            break;
+          case 'startDate':
+            content = <span style={{ fontSize: 11, color: task.startDate ? C.sec : C.muted }}>
+              {task.startDate ? fmtDate(task.startDate) : '—'}</span>;
+            break;
+          case 'endDate':
+            content = <span style={{ fontSize: 11, color: task.endDate ? C.sec : C.muted }}>
+              {task.endDate ? fmtDate(task.endDate) : '—'}</span>;
             break;
           case 'hours':
             content = <span style={{ fontSize: 11, color: done ? C.muted : C.text }}>
@@ -88,12 +106,20 @@ function TaskRow({ task, odd, visibleCols }) {
             break;
           case 'done':
             content = (
-              <div style={{ width: 14, height: 14, borderRadius: 3,
-                border: `2px solid ${done ? '#34d399' : C.border}`,
-                background: done ? '#34d399' : 'transparent',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                {done && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1, fontWeight: 900 }}>✓</span>}
-              </div>
+              <button
+                onClick={() => { if (!busy) { setBusy(true); onToggleDone(task).finally(() => setBusy(false)); } }}
+                disabled={busy}
+                title={done ? 'Mark not done' : 'Mark done'}
+                style={{ background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer', padding: 2 }}
+              >
+                <div style={{ width: 14, height: 14, borderRadius: 3,
+                  border: `2px solid ${done ? '#34d399' : C.border}`,
+                  background: done ? '#34d399' : 'transparent',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: busy ? 0.5 : 1 }}>
+                  {done && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                </div>
+              </button>
             );
             break;
           default:
@@ -107,6 +133,146 @@ function TaskRow({ task, odd, visibleCols }) {
         );
       })}
     </tr>
+  );
+}
+
+// ── Quick entry form ──────────────────────────────────────────────────────────
+function QuickEntryForm({ projects, tasks }) {
+  const [projectId,   setProjectId]   = useState('');
+  const [itemId,      setItemId]      = useState('');
+  const [description, setDescription] = useState('');
+  const [category,    setCategory]    = useState('');
+  const [hours,       setHours]       = useState('');
+  const [startDate,   setStartDate]   = useState('');
+  const [endDate,     setEndDate]     = useState('');
+  const [submitting,  setSubmitting]  = useState(false);
+  const [result,      setResult]      = useState(null); // 'ok' | 'error'
+
+  // Derive items for selected project from existing tasks data
+  const projectItems = projectId
+    ? [...new Map(
+        tasks
+          .filter(t => t.projectId === projectId && t.itemId && t.itemName)
+          .map(t => [t.itemId, { id: t.itemId, name: t.itemName }])
+      ).values()].sort((a,b) => a.name.localeCompare(b.name))
+    : [];
+
+  const categories = [...new Set(tasks.map(t => t.taskCategory).filter(Boolean))].sort();
+
+  const reset = () => {
+    setDescription(''); setCategory(''); setHours(''); setStartDate(''); setEndDate('');
+    setItemId(''); setResult(null);
+  };
+
+  const submit = async () => {
+    if (!description.trim()) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const body = {
+        description: description.trim(),
+        ...(itemId    && { itemId }),
+        ...(category  && { category }),
+        ...(hours     && { subTaskHours: Number(hours) }),
+        ...(startDate && { date: startDate }),
+        ...(endDate   && { endDate }),
+      };
+      const r = await fetch('/api/quick-log/todo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setResult('ok');
+      setTimeout(reset, 1500);
+    } catch {
+      setResult('error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inp = { background: C.input, border: `1px solid ${C.border}`, color: C.text,
+    fontSize: 11, borderRadius: 4, padding: '5px 8px', width: '100%',
+    fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' };
+  const lbl = { fontSize: 10, color: C.muted, marginBottom: 3, display: 'block', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' };
+
+  return (
+    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10,
+      padding: '20px 24px', maxWidth: 700 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>New Task</div>
+
+      {/* Description */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={lbl}>Description *</label>
+        <input value={description} onChange={e => setDescription(e.target.value)}
+          placeholder="Task description…"
+          style={{ ...inp, fontSize: 13 }}
+          onKeyDown={e => e.key === 'Enter' && submit()} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        {/* Project */}
+        <div>
+          <label style={lbl}>Project</label>
+          <select value={projectId} onChange={e => { setProjectId(e.target.value); setItemId(''); }} style={inp}>
+            <option value="">— Select project —</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        {/* Item */}
+        <div>
+          <label style={lbl}>Item</label>
+          <select value={itemId} onChange={e => setItemId(e.target.value)} style={inp} disabled={!projectId}>
+            <option value="">— Select item —</option>
+            {projectItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </div>
+        {/* Category */}
+        <div>
+          <label style={lbl}>Category</label>
+          <select value={category} onChange={e => setCategory(e.target.value)} style={inp}>
+            <option value="">— None —</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {/* Hours */}
+        <div>
+          <label style={lbl}>Hours</label>
+          <input type="number" min="0" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
+            placeholder="0.0" style={inp} />
+        </div>
+        {/* Start Date */}
+        <div>
+          <label style={lbl}>Start Date</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inp} />
+        </div>
+        {/* End Date */}
+        <div>
+          <label style={lbl}>End Date</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inp} />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button
+          onClick={submit} disabled={submitting || !description.trim()}
+          style={{ padding: '7px 20px', borderRadius: 5, border: 'none',
+            background: description.trim() ? '#1d4ed8' : '#1e2d45',
+            color: description.trim() ? '#fff' : C.muted,
+            fontSize: 12, fontWeight: 700, cursor: description.trim() ? 'pointer' : 'default',
+            fontFamily: 'inherit', opacity: submitting ? 0.6 : 1 }}>
+          {submitting ? 'Adding…' : 'Add Task'}
+        </button>
+        <button onClick={reset}
+          style={{ padding: '7px 14px', borderRadius: 5, border: `1px solid ${C.border}`,
+            background: 'transparent', color: C.sec, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+          Clear
+        </button>
+        {result === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Added to Notion</span>}
+        {result === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Failed — check console</span>}
+      </div>
+    </div>
   );
 }
 
@@ -143,6 +309,9 @@ export default function TasksPage() {
   const [filterCategory,    setFilterCategory]    = useState('all');
   const [showDone,          setShowDone]          = useState(false);
   const [groupBy,           setGroupBy]           = useState('item');
+  const [sortBy,            setSortBy]            = useState('tdlId');   // 'tdlId' | 'startDate'
+  const [sortDir,           setSortDir]           = useState('asc');     // 'asc' | 'desc'
+  const [activeTab,         setActiveTab]         = useState('list');    // 'list' | 'entry'
 
   const colConfigRef = useRef(colConfig);
   useEffect(() => { colConfigRef.current = colConfig; }, [colConfig]);
@@ -197,6 +366,24 @@ export default function TasksPage() {
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // Toggle Done in Notion + update local state optimistically
+  const handleToggleDone = useCallback(async (task) => {
+    const newDone = !task.taskDone;
+    // Optimistic update
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, taskDone: newDone } : t));
+    setCached('tasks', null); // invalidate cache so next load is fresh
+    try {
+      await fetch('/api/tasks/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: task.id, taskDone: newDone }),
+      });
+    } catch {
+      // Revert on failure
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, taskDone: task.taskDone } : t));
+    }
+  }, []);
+
   // Color map
   const allProjectIds = [...new Set([...projects.map(p => p.id), ...tasks.map(t => t.projectId).filter(Boolean)])];
   const colorMap      = assignProjectColors(allProjectIds.map(id => ({ id })));
@@ -221,8 +408,19 @@ export default function TasksPage() {
     return true;
   });
 
-  // Sort tasks by tdlId
-  const sorted = [...filtered].sort((a, b) => (a.tdlId ?? '').localeCompare(b.tdlId ?? ''));
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    let va, vb;
+    if (sortBy === 'startDate') {
+      va = a.startDate ?? '';
+      vb = b.startDate ?? '';
+    } else {
+      va = a.tdlId ?? '';
+      vb = b.tdlId ?? '';
+    }
+    const cmp = va.localeCompare(vb);
+    return sortDir === 'desc' ? -cmp : cmp;
+  });
 
   // Group
   const grouped = (() => {
@@ -234,7 +432,7 @@ export default function TasksPage() {
       const key = groupBy === 'project'
         ? (projects.find(p => p.id === task.projectId)?.name ?? 'No Project')
         : (task.itemName ?? 'No Item');
-      const pid = groupBy === 'project' ? task.projectId : task.projectId;
+      const pid = task.projectId;
       if (!map.has(key)) map.set(key, { key, projectId: pid, tasks: [] });
       map.get(key).tasks.push(task);
     }
@@ -246,9 +444,16 @@ export default function TasksPage() {
   const expandAll   = () => { const s = {}; for (const g of grouped) s[g.key] = true; setExpanded(s); };
   const collapseAll = () => setExpanded({});
 
-  // CSV rows: flatten all grouped tasks
   const allRows      = grouped.flatMap(g => g.tasks);
   const handleExport = () => exportToCSV(visibleCols, allRows, taskRaw, `tasks-${new Date().toISOString().slice(0,10)}.csv`);
+
+  const tabBtnStyle = active => ({
+    padding: '6px 18px', borderRadius: '6px 6px 0 0', border: `1px solid ${active ? '#2d4a6e' : C.border}`,
+    borderBottom: active ? `1px solid ${C.bgCard}` : `1px solid ${C.border}`,
+    background: active ? C.bgCard : C.bgPanel,
+    color: active ? '#93c5fd' : C.muted, fontSize: 11, fontWeight: active ? 700 : 400,
+    cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1,
+  });
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
@@ -273,106 +478,139 @@ export default function TasksPage() {
 
       <AppNav />
 
-      {/* Filter / toolbar */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
-        <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={selStyle}>
-          <option value="all">All Projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select value={filterItem} onChange={e => setFilterItem(e.target.value)} style={selStyle}>
-          <option value="all">All Items</option>
-          {itemOptions.map(i => <option key={i} value={i}>{i}</option>)}
-        </select>
-        <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={selStyle}>
-          <option value="all">All Assignees</option>
-          {assigneeOptions.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={selStyle}>
-          <option value="all">All Categories</option>
-          {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <button style={btnStyle(showDone)} onClick={() => setShowDone(v => !v)}>
-          {showDone ? 'Showing done (7d)' : 'Hide done'}
-        </button>
-
-        {/* Group by */}
-        <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-          style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
-          <option value="item">Group: Item</option>
-          <option value="project">Group: Project</option>
-          <option value="none">No Grouping</option>
-        </select>
-
-        <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
-        <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
-        <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
-        <button onClick={handleExport} style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV</button>
-
-        <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
-          {loading ? 'Loading…' : `${filtered.length} task${filtered.length !== 1 ? 's' : ''}`}
-        </span>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: `1px solid ${C.border}`, marginTop: 8 }}>
+        <button style={tabBtnStyle(activeTab === 'list')}  onClick={() => setActiveTab('list')}>Task List</button>
+        <button style={tabBtnStyle(activeTab === 'entry')} onClick={() => setActiveTab('entry')}>Quick Entry</button>
       </div>
 
-      {/* Content */}
-      {loading && tasks.length === 0 ? (
-        <div style={{ color: C.muted, fontSize: 12 }}>Loading tasks…</div>
-      ) : filtered.length === 0 && !loading ? (
-        <div style={{ color: C.muted, fontSize: 12 }}>No tasks match filters</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {grouped.map(({ key, projectId, tasks: groupTasks }) => {
-            const projColor  = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded = groupBy === 'none' ? true : !!expanded[key];
-            const noGrouping = groupBy === 'none';
-
-            const table = groupTasks.length === 0 ? null : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
-                  width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
-                  <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
-                  <tbody>
-                    {groupTasks.map((task, idx) => (
-                      <TaskRow key={task.id} task={task} odd={idx % 2 !== 0} visibleCols={visibleCols} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-
-            if (noGrouping) {
-              return (
-                <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-                  {table}
-                </div>
-              );
-            }
-
-            return (
-              <div key={key} style={{
-                background: C.bgCard, border: `1px solid ${C.border}`,
-                borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
-                boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
-              }}>
-                <div
-                  onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
-                  style={{ padding: '9px 16px', background: C.bgPanel,
-                    borderBottom: isExpanded ? `1px solid ${C.border}` : 'none',
-                    display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
-                >
-                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>
-                    {isExpanded ? '▾' : '▸'}
-                  </span>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>
-                    {groupTasks.length} task{groupTasks.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                {isExpanded && table}
-              </div>
-            );
-          })}
+      {/* ── QUICK ENTRY TAB ── */}
+      {activeTab === 'entry' && (
+        <div style={{ padding: '20px 0' }}>
+          <QuickEntryForm projects={projects} tasks={tasks} />
         </div>
+      )}
+
+      {/* ── TASK LIST TAB ── */}
+      {activeTab === 'list' && (
+        <>
+          {/* Filter / toolbar */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', paddingTop: 16 }}>
+            <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={selStyle}>
+              <option value="all">All Projects</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select value={filterItem} onChange={e => setFilterItem(e.target.value)} style={selStyle}>
+              <option value="all">All Items</option>
+              {itemOptions.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+            <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={selStyle}>
+              <option value="all">All Assignees</option>
+              {assigneeOptions.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={selStyle}>
+              <option value="all">All Categories</option>
+              {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button style={btnStyle(showDone)} onClick={() => setShowDone(v => !v)}>
+              {showDone ? 'Showing done (7d)' : 'Hide done'}
+            </button>
+
+            {/* Group by */}
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
+              style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+              <option value="item">Group: Item</option>
+              <option value="project">Group: Project</option>
+              <option value="none">No Grouping</option>
+            </select>
+
+            {/* Sort */}
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+              <option value="tdlId">Sort: TDL ID</option>
+              <option value="startDate">Sort: Date</option>
+            </select>
+            <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd', minWidth: 32 }}
+              title={sortDir === 'asc' ? 'Ascending' : 'Descending'}>
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
+
+            <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
+            <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
+            <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
+
+            {/* Right side */}
+            <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
+              {loading ? 'Loading…' : `${filtered.length} task${filtered.length !== 1 ? 's' : ''}`}
+            </span>
+            <button onClick={handleExport} title="Export current view to CSV"
+              style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV (current view)</button>
+          </div>
+
+          {/* Content */}
+          {loading && tasks.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>Loading tasks…</div>
+          ) : filtered.length === 0 && !loading ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>No tasks match filters</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {grouped.map(({ key, projectId, tasks: groupTasks }) => {
+                const projColor  = colorMap.get(projectId) ?? PROJECT_COLORS[0];
+                const isExpanded = groupBy === 'none' ? true : !!expanded[key];
+                const noGrouping = groupBy === 'none';
+
+                const table = groupTasks.length === 0 ? null : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
+                      width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
+                      <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
+                      <tbody>
+                        {groupTasks.map((task, idx) => (
+                          <TaskRow key={task.id} task={task} odd={idx % 2 !== 0}
+                            visibleCols={visibleCols} onToggleDone={handleToggleDone} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+
+                if (noGrouping) {
+                  return (
+                    <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                      {table}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={key} style={{
+                    background: C.bgCard, border: `1px solid ${C.border}`,
+                    borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
+                    boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
+                  }}>
+                    <div
+                      onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
+                      style={{ padding: '9px 16px', background: C.bgPanel,
+                        borderBottom: isExpanded ? `1px solid ${C.border}` : 'none',
+                        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>
+                        {isExpanded ? '▾' : '▸'}
+                      </span>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{key}</span>
+                      <span style={{ fontSize: 10, color: C.muted }}>
+                        {groupTasks.length} task{groupTasks.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {isExpanded && table}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {showColPanel && (

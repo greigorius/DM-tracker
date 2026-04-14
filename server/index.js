@@ -554,6 +554,40 @@ app.post('/api/drawings-register/bulk', async (req, res) => {
   }
 });
 
+// ── POST /api/tasks/update ────────────────────────────────────────────────────
+app.post('/api/tasks/update', async (req, res) => {
+  if (!notionRequired(res)) return
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = req.body
+  if (!id) return res.status(400).json({ error: 'id is required' })
+  const properties = {}
+  if (description  !== undefined && description !== null)
+    properties['Item Description'] = { title: [{ text: { content: String(description) } }] }
+  if (subTaskHours !== undefined)
+    properties['Sub Task Hours'] = subTaskHours !== null ? { number: Number(subTaskHours) } : { number: null }
+  if (taskCategory !== undefined)
+    properties['Task Category'] = taskCategory ? { select: { name: taskCategory } } : { select: null }
+  if (changeTask   !== undefined)
+    properties['Change Task'] = { checkbox: Boolean(changeTask) }
+  if (taskDone     !== undefined)
+    properties['Task Done'] = { checkbox: Boolean(taskDone) }
+  if (itemId       !== undefined)
+    properties['Item'] = itemId ? { relation: [{ id: itemId }] } : { relation: [] }
+  if (startDate    !== undefined)
+    properties['Start Date'] = startDate ? { date: { start: startDate } } : { date: null }
+  if (endDate      !== undefined)
+    properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
+  try {
+    const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
+      method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
+    })
+    if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t.slice(0, 200)}`) }
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[task-update]', err.message)
+    res.status(err.status ?? 500).json({ error: err.message })
+  }
+})
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });

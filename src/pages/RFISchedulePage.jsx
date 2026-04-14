@@ -290,28 +290,28 @@ export default function RFISchedulePage() {
           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
-        <span style={{ fontSize: 10, color: C.muted, marginLeft: 4 }}>Group by:</span>
-        {['item','project','none'].map(g => (
-          <button key={g} style={btnStyle(groupBy === g)} onClick={() => setGroupBy(g)}>
-            {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
-          </button>
-        ))}
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
+          style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          <option value="item">Group: Item</option>
+          <option value="project">Group: Project</option>
+          <option value="none">No Grouping</option>
+        </select>
 
         {groupBy !== 'none' && <>
-          <button onClick={expandAll}   style={{ ...selStyle, marginLeft: 4 }}>Expand All</button>
-          <button onClick={collapseAll} style={selStyle}>Collapse All</button>
+          <button onClick={expandAll}   style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
+          <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
         </>}
 
-        <button
-          onClick={() => exportToCSV(visibleCols, visible, rfiRaw, `rfi-schedule-${new Date().toISOString().slice(0,10)}.csv`)}
-          style={{ ...selStyle, marginLeft: 4 }}
-        >Export CSV</button>
-
-        <button onClick={() => setShowColPanel(true)} style={{ ...selStyle }}>Columns</button>
+        <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
 
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {loading ? 'Loading…' : `${visible.length} RFIs`}
         </span>
+        <button
+          onClick={() => exportToCSV(visibleCols, visible, rfiRaw, `rfi-schedule-${new Date().toISOString().slice(0,10)}.csv`)}
+          title="Export current view to CSV"
+          style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}
+        >↓ Export CSV (current view)</button>
       </div>
 
       {/* Column config panel */}

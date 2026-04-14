@@ -356,10 +356,11 @@ export default function ItemSchedulePage() {
     const map = new Map();
     for (const item of visible) {
       const key =
-        groupBy === 'phase'  ? (item.dmPhase    ?? 'No Phase')   :
-        groupBy === 'status' ? (item.status      ?? 'No Status')  :
-                               (item.projectName ?? 'No Project');
-      const pid = groupBy === 'project' ? item.projectId : null;
+        groupBy === 'phase'   ? (item.dmPhase    ?? 'No Phase')   :
+        groupBy === 'status'  ? (item.status      ?? 'No Status')  :
+        groupBy === 'item'    ? (item.name        ?? item.id)      :
+                                (item.projectName ?? 'No Project');
+      const pid = groupBy === 'project' ? item.projectId : item.projectId;
       if (!map.has(key)) map.set(key, { key, projectId: pid, items: [] });
       map.get(key).items.push(item);
     }
@@ -440,17 +441,19 @@ export default function ItemSchedulePage() {
           <option value="project">Group: Project</option>
           <option value="phase">Group: Phase</option>
           <option value="status">Group: Status</option>
+          <option value="item">Group: Item</option>
           <option value="none">No Grouping</option>
         </select>
 
         <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
         <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
         <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
-        <button onClick={handleExport} style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV</button>
 
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {loading ? 'Loading…' : `${visible.length} item${visible.length !== 1 ? 's' : ''}`}
         </span>
+        <button onClick={handleExport} title="Export current view to CSV"
+          style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV (current view)</button>
       </div>
 
       {/* Content */}

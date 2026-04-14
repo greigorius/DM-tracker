@@ -136,6 +136,7 @@ export const handler = async (event) => {
         changeTask:   props['Change Task']?.checkbox                     ?? false,
         taskDone:     props['Task Done']?.checkbox                       ?? false,
         startDate:    props['Start Date']?.date?.start                   ?? null,
+        endDate:      props['End Date']?.date?.start                     ?? null,
         createdAt:    p.created_time,
       }
     })

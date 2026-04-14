@@ -285,6 +285,140 @@ function DrawingRow({ drawing, odd, visibleCols }) {
   );
 }
 
+// ── Item group card (groupBy=item): dwg-type sub-tabs + summary badges ────────
+const DWG_TYPE_ORDER = ['Drawing', 'Sketch', 'Model', 'Unassigned'];
+const DWG_TYPE_COLORS = {
+  Drawing:    '#60a5fa',
+  Sketch:     '#a78bfa',
+  Model:      '#34d399',
+  Unassigned: '#7b90b0',
+};
+
+function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibleCols, onResizeStart }) {
+  const [open,        setOpen]        = useState(false);
+  const [typeFilters, setTypeFilters] = useState(() => new Set(DWG_TYPE_ORDER));
+
+  const allTypes = [...new Set(dwgs.map(d => d.dwgNoAssigned ?? 'Unassigned'))];
+  const sortedTypes = DWG_TYPE_ORDER.filter(t => allTypes.includes(t));
+
+  const toggleType = t => {
+    setTypeFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(t) && next.size > 1) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  };
+
+  const filteredDwgs = dwgs.filter(d => typeFilters.has(d.dwgNoAssigned ?? 'Unassigned'));
+
+  // Summary: unique Rev, S4 Status, S5 Status, C01 Sign Off presence
+  const uniqueRevs = [...new Set(dwgs.map(d => d.rev).filter(Boolean))].sort();
+  const uniqueS4   = [...new Set(dwgs.map(d => d.s4Status).filter(Boolean))].sort();
+  const uniqueS5   = [...new Set(dwgs.map(d => d.s5Status).filter(Boolean))].sort();
+  const hasC01     = dwgs.some(d => d.c01SignOff?.actual);
+
+  const tableEl = filteredDwgs.length === 0 ? null : (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed',
+        width: visibleCols.reduce((s, c) => s + c.width, 0) }}>
+        <TableHead visibleCols={visibleCols} onResizeStart={onResizeStart} />
+        <tbody>
+          {filteredDwgs.map((dwg, idx) => (
+            <DrawingRow key={dwg.id} drawing={dwg} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`,
+      borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
+      boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}` }}>
+
+      {/* Header */}
+      <div onClick={() => setOpen(o => !o)}
+        style={{ padding: '9px 16px', background: C.bgPanel,
+          borderBottom: open ? `1px solid ${C.border}` : 'none',
+          display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: C.muted, lineHeight: 1, width: 12, flexShrink: 0 }}>
+          {open ? '▾' : '▸'}
+        </span>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: projColor, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{itemKey}</span>
+        <span style={{ fontSize: 10, color: C.muted }}>
+          {dwgs.length} dwg{dwgs.length !== 1 ? 's' : ''}
+        </span>
+        {itemStatus && <ItemStatusBadge value={itemStatus} />}
+
+        {/* Summary badges */}
+        {uniqueRevs.length > 0 && (
+          <div style={{ display: 'flex', gap: 3, marginLeft: 4 }}>
+            {uniqueRevs.map(r => (
+              <span key={r} style={{ fontSize: 9, fontWeight: 700, color: C.sec,
+                background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                r{r}
+              </span>
+            ))}
+          </div>
+        )}
+        {uniqueS4.length > 0 && (
+          <div style={{ display: 'flex', gap: 3 }}>
+            {uniqueS4.map(s => {
+              const st = statusStyle(s);
+              return <span key={s} style={{ fontSize: 9, fontWeight: 700, color: st.text,
+                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                S4:{s.split(/[\s–]/)[0]}
+              </span>;
+            })}
+          </div>
+        )}
+        {uniqueS5.length > 0 && (
+          <div style={{ display: 'flex', gap: 3 }}>
+            {uniqueS5.map(s => {
+              const st = statusStyle(s);
+              return <span key={s} style={{ fontSize: 9, fontWeight: 700, color: st.text,
+                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                S5:{s.split(/[\s–]/)[0]}
+              </span>;
+            })}
+          </div>
+        )}
+        {hasC01 && (
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#34d399',
+            background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)',
+            borderRadius: 3, padding: '1px 6px' }}>C01 ✓</span>
+        )}
+      </div>
+
+      {/* Dwg-type filter tabs (inside expanded card) */}
+      {open && sortedTypes.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, padding: '7px 16px',
+          background: '#090e1a', borderBottom: `1px solid ${C.grid}` }}>
+          {sortedTypes.map(t => {
+            const count   = dwgs.filter(d => (d.dwgNoAssigned ?? 'Unassigned') === t).length;
+            const active  = typeFilters.has(t);
+            const color   = DWG_TYPE_COLORS[t] ?? C.sec;
+            return (
+              <button key={t} onClick={e => { e.stopPropagation(); toggleType(t); }}
+                style={{ fontSize: 10, fontWeight: 700,
+                  background: active ? hexToRgba(color, 0.12) : 'transparent',
+                  border: `1px solid ${active ? hexToRgba(color, 0.4) : C.border}`,
+                  color: active ? color : C.muted,
+                  borderRadius: 4, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {t} <span style={{ opacity: 0.7, fontSize: 9 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {open && tableEl}
+    </div>
+  );
+}
+
 // ── Table header with resize handles ─────────────────────────────────────────
 function TableHead({ visibleCols, onResizeStart }) {
   return (
@@ -456,7 +590,7 @@ export default function DrawingsPage() {
 
     Promise.allSettled(
       projectIds.map(projId => {
-        const cacheKey = `dr-items:${projId}`;
+        const cacheKey = `dr-items:v2:${projId}`;
         const cached   = getCached(cacheKey);
         if (cached && refreshKey === 0) return Promise.resolve(cached);
         return fetch(`/api/drawings-register/items?projectId=${projId}`)
@@ -479,7 +613,7 @@ export default function DrawingsPage() {
   useEffect(() => {
     if (!regItems.length) return;
 
-    const cacheKey   = `dr-drawings:${filterProject}`;
+    const cacheKey   = `dr-drawings:v2:${filterProject}`;
     const cachedDwgs = getCached(cacheKey);
     if (cachedDwgs && refreshKey === 0) {
       setDrawings(cachedDwgs);
@@ -603,15 +737,24 @@ export default function DrawingsPage() {
       return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'dwgType') {
+      const ORDER = ['Drawing', 'Sketch', 'Model', 'Unassigned'];
       const map = new Map();
       for (const { dwgs } of itemDrawings) {
         for (const d of dwgs) {
-          const k = d.dwgNoAssigned ?? 'Other';
+          const k = d.dwgNoAssigned ?? 'Unassigned';
           if (!map.has(k)) map.set(k, { key: k, projectId: null, drawings: [] });
           map.get(k).drawings.push(d);
         }
       }
-      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key)).map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
+      return [...map.values()]
+        .sort((a, b) => {
+          const ia = ORDER.indexOf(a.key), ib = ORDER.indexOf(b.key);
+          if (ia !== -1 && ib !== -1) return ia - ib;
+          if (ia !== -1) return -1;
+          if (ib !== -1) return  1;
+          return a.key.localeCompare(b.key);
+        })
+        .map(g => ({ ...g, drawings: sortDwgs(g.drawings) }));
     }
     if (groupBy === 'none') {
       const allDwgs = sortDwgs(itemDrawings.flatMap(({ dwgs }) => dwgs));
@@ -658,7 +801,7 @@ export default function DrawingsPage() {
             </span>
           )}
           <button
-            onClick={() => { setCached('drawings-register', null); setRefreshKey(k => k + 1); }}
+            onClick={() => setRefreshKey(k => k + 1)}
             title="Refresh"
             style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}
           >↻</button>
@@ -730,12 +873,7 @@ export default function DrawingsPage() {
           Assigned only
         </label>
 
-        {/* Export */}
-        <button onClick={() => exportToCSV(visibleCols, grouped)}
-          style={{ ...selStyle, cursor: 'pointer', borderColor: '#166534', color: '#4ade80' }}>
-          ↓ Export CSV
-        </button>
-
+        {/* right-side: count + export */}
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {itemsLoading
             ? 'Loading items…'
@@ -743,6 +881,11 @@ export default function DrawingsPage() {
               ? `Loading drawings… ${chunksDone}/${chunksTotal}`
               : `${visible.length} drawing${visible.length !== 1 ? 's' : ''}`}
         </span>
+        <button onClick={() => exportToCSV(visibleCols, grouped)}
+          title="Export current view to CSV"
+          style={{ ...selStyle, cursor: 'pointer', borderColor: '#166534', color: '#4ade80' }}>
+          ↓ Export CSV (current view)
+        </button>
       </div>
 
       {/* Content */}
@@ -757,10 +900,27 @@ export default function DrawingsPage() {
         <div style={{ color: C.muted, fontSize: 12 }}>No drawings match filters</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {grouped.map(({ key, projectId, itemStatus, drawings: groupDwgs }) => {
+          {grouped.map(({ key, projectId, itemId, itemStatus, drawings: groupDwgs }) => {
             const projColor    = colorMap.get(projectId) ?? PROJECT_COLORS[0];
-            const isExpanded   = groupBy === 'none' ? true : !!expanded[key];
             const groupLoading = chunksDone < chunksTotal;
+
+            // Item grouping: use the specialised ItemGroupCard with type sub-tabs + summary
+            if (groupBy === 'item') {
+              return (
+                <ItemGroupCard
+                  key={key}
+                  itemKey={key}
+                  projectId={projectId}
+                  itemStatus={itemStatus}
+                  dwgs={groupDwgs}
+                  projColor={projColor}
+                  visibleCols={visibleCols}
+                  onResizeStart={startResize}
+                />
+              );
+            }
+
+            const isExpanded   = groupBy === 'none' ? true : !!expanded[key];
             const noGrouping   = groupBy === 'none';
 
             const table = (

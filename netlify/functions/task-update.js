@@ -24,7 +24,7 @@ export const handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) }
   }
 
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId } = body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = body
   if (!id) return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'id is required' }) }
 
   const properties = {}
@@ -46,6 +46,12 @@ export const handler = async (event) => {
 
   if (itemId !== undefined)
     properties['Item'] = itemId ? { relation: [{ id: itemId }] } : { relation: [] }
+
+  if (startDate !== undefined)
+    properties['Start Date'] = startDate ? { date: { start: startDate } } : { date: null }
+
+  if (endDate !== undefined)
+    properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
 
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {

@@ -195,9 +195,11 @@ export default function VariationSchedulePage() {
 
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus,  setFilterStatus]  = useState('all');
-  const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project' | 'none'
+  const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project' | 'type' | 'status' | 'none'
   const [expanded,      setExpanded]      = useState({});
   const [showColPanel,  setShowColPanel]  = useState(false);
+  const [sortBy,        setSortBy]        = useState('varNumber'); // 'varNumber' | 'dateIssued'
+  const [sortDir,       setSortDir]       = useState('asc');       // 'asc' | 'desc'
 
   const [colConfig, setColConfig] = useState(() => initColConfig(DEFAULT_COLUMNS, COL_CONFIG_KEY));
   const colConfigRef = useRef(colConfig);
@@ -276,15 +278,33 @@ export default function VariationSchedulePage() {
     return true;
   });
 
+  // Sort
+  const sortedVisible = [...visible].sort((a, b) => {
+    let va, vb;
+    if (sortBy === 'dateIssued') {
+      va = a.dateIssued ?? '';
+      vb = b.dateIssued ?? '';
+    } else {
+      va = a.varNumber ?? 0;
+      vb = b.varNumber ?? 0;
+      const cmp = va - vb;
+      return sortDir === 'desc' ? -cmp : cmp;
+    }
+    const cmp = String(va).localeCompare(String(vb));
+    return sortDir === 'desc' ? -cmp : cmp;
+  });
+
   // Group
   const grouped = (() => {
-    if (groupBy === 'none') return [{ key: '__none__', projectId: null, variations: visible }];
+    if (groupBy === 'none') return [{ key: '__none__', projectId: null, variations: sortedVisible }];
     const map = new Map();
     const list = [];
-    for (const v of visible) {
-      const key = groupBy === 'item'
-        ? (v.itemName ?? 'No Item')
-        : (v.projectName ?? 'No Project');
+    for (const v of sortedVisible) {
+      const key =
+        groupBy === 'item'    ? (v.itemName    ?? 'No Item')    :
+        groupBy === 'type'    ? (v.type        ?? 'No Type')    :
+        groupBy === 'status'  ? (v.status      ?? 'No Status')  :
+                                (v.projectName ?? 'No Project');
       if (!map.has(key)) { map.set(key, []); list.push({ key, projectId: v.projectId, variations: map.get(key) }); }
       map.get(key).push(v);
     }
@@ -335,28 +355,42 @@ export default function VariationSchedulePage() {
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
 
-          <span style={{ fontSize: 10, color: C.muted, marginLeft: 4 }}>Group by:</span>
-          {['item','project','none'].map(g => (
-            <button key={g} style={btnStyle(groupBy === g)} onClick={() => setGroupBy(g)}>
-              {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
-            </button>
-          ))}
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
+            style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+            <option value="item">Group: Item</option>
+            <option value="project">Group: Project</option>
+            <option value="type">Group: Type</option>
+            <option value="status">Group: Status</option>
+            <option value="none">No Grouping</option>
+          </select>
+
+          {/* Sort */}
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+            <option value="varNumber">Sort: Var #</option>
+            <option value="dateIssued">Sort: Date Issued</option>
+          </select>
+          <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd', minWidth: 32 }}
+            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}>
+            {sortDir === 'asc' ? '↑' : '↓'}
+          </button>
 
           {groupBy !== 'none' && <>
-            <button onClick={expandAll}   style={{ ...selStyle, marginLeft: 4 }}>Expand All</button>
-            <button onClick={collapseAll} style={selStyle}>Collapse All</button>
+            <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
+            <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
           </>}
 
-          <button
-            onClick={() => exportToCSV(visibleCols, visible, varRaw, `variation-schedule-${new Date().toISOString().slice(0,10)}.csv`)}
-            style={{ ...selStyle, marginLeft: 4 }}
-          >Export CSV</button>
-
-          <button onClick={() => setShowColPanel(true)} style={selStyle}>Columns</button>
+          <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
 
           <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
             {loading ? 'Loading…' : `${visible.length} variations`}
           </span>
+          <button
+            onClick={() => exportToCSV(visibleCols, sortedVisible, varRaw, `variation-schedule-${new Date().toISOString().slice(0,10)}.csv`)}
+            title="Export current view to CSV"
+            style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}
+          >↓ Export CSV (current view)</button>
         </div>
       )}
 
