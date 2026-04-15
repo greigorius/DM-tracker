@@ -165,6 +165,14 @@ export const handler = async (event) => {
     const allTaskIds    = [...new Set(variations.flatMap(v => v.relatedTaskIds))]
     const allLegacyIds  = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))]
 
+    console.log(`[variations] elapsed after queryAll: ${Date.now()-startedAt}ms | vars=${variations.length} taskIds=${allTaskIds.length} legacyIds=${allLegacyIds.length}`)
+    // Sample: log first variation's raw related-task property to confirm API shape
+    if (variations.length > 0) {
+      const samplePage = pages[0]
+      const rtp = samplePage.properties?.['Related Tasks']
+      console.log(`[variations] sample Related Tasks prop:`, JSON.stringify(rtp)?.slice(0, 300))
+    }
+
     // ── Step 2: Fetch task pages → collect their Item relation IDs ───────────
     // Rate-limited: 5 concurrent, 300 ms between batches, bail if near deadline
     const taskPageMap = await fetchPagesBatched(allTaskIds, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
@@ -180,9 +188,12 @@ export const handler = async (event) => {
       taskItemMap[taskId] = itemRels
     }
 
+    const allResolvedItemIds = Object.values(taskItemMap).flat()
+    console.log(`[variations] task pages fetched=${Object.keys(taskPageMap).length} | itemIds from tasks=${allResolvedItemIds.length}`)
+
     // ── Step 3: Collect all item IDs (from tasks + legacy) ───────────────────
     const allItemIds = [...new Set([
-      ...Object.values(taskItemMap).flat(),
+      ...allResolvedItemIds,
       ...allLegacyIds,
     ])]
 
@@ -202,6 +213,8 @@ export const handler = async (event) => {
       itemInfoMap[itemId] = { projectId: projId, name }
       if (projId) projIdSet.add(projId)
     }
+
+    console.log(`[variations] item pages fetched=${Object.keys(itemPageMap).length} | items resolved=${Object.keys(itemInfoMap).length} | projIds=${projIdSet.size}`)
 
     // ── Step 4: Resolve project names ─────────────────────────────────────────
     const projMap = {}
