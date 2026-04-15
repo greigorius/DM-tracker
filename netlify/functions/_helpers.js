@@ -59,6 +59,12 @@ export function anyDate(props, field) {
       ?? null
 }
 
+// ── PCSA filter helper ────────────────────────────────────────────────────────
+// Excludes items whose name contains "PCSA" — applied to all Items DB queries.
+const NO_PCSA = { property: 'Item Name', title: { does_not_contain: 'PCSA' } }
+export const withNoPcsa = (filter) =>
+  !filter ? NO_PCSA : { and: [filter, NO_PCSA] }
+
 // ── Paginated query helper ────────────────────────────────────────────────────
 export async function queryAll(databaseId, filter, extraBody = {}) {
   const pages  = []

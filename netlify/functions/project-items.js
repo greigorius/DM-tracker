@@ -5,7 +5,7 @@
  */
 import {
   corsHeaders, tokenGuard, errResponse,
-  queryAll, transformItem,
+  queryAll, transformItem, withNoPcsa,
 } from './_helpers.js'
 
 const DB_TASKS = process.env.NOTION_DB_TASKS
@@ -27,7 +27,7 @@ export const handler = async (event) => {
       filter = { and: [filter, { property: 'DM Phase', select: { equals: phase } }] }
     }
 
-    const pages = await queryAll(DB_TASKS, filter)
+    const pages = await queryAll(DB_TASKS, withNoPcsa(filter))
     let items = pages.map(p => transformItem(p))
 
     if (status && status !== 'all') {

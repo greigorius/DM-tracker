@@ -2,7 +2,7 @@
  * GET /api/stats
  * Query params: ?projectId= (optional)
  */
-import { corsHeaders, tokenGuard, errResponse, queryAll } from './_helpers.js'
+import { corsHeaders, tokenGuard, errResponse, queryAll, withNoPcsa } from './_helpers.js'
 
 const DB_TASKS = process.env.NOTION_DB_TASKS
 
@@ -17,7 +17,7 @@ export const handler = async (event) => {
       ? { property: 'Projects', relation: { contains: projectId } }
       : undefined
 
-    const pages = await queryAll(DB_TASKS, filter)
+    const pages = await queryAll(DB_TASKS, withNoPcsa(filter))
     const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted'])
     const items = pages.map(p => ({
       status:  p.properties['Status']?.status?.name   ?? null,

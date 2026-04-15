@@ -3,7 +3,7 @@
  * Returns items for a specific project — scoped query so it never times out.
  * Mirrors the pattern used by /api/projects/:id/items and the timeline page.
  */
-import { corsHeaders, tokenGuard, errResponse, queryAll } from './_helpers.js'
+import { corsHeaders, tokenGuard, errResponse, queryAll, withNoPcsa } from './_helpers.js'
 
 const DB_TASKS = process.env.NOTION_DB_TASKS
 
@@ -18,7 +18,7 @@ export const handler = async (event) => {
 
   try {
     const filter = { property: 'Projects', relation: { contains: projectId } }
-    const pages  = await queryAll(DB_TASKS, filter)
+    const pages  = await queryAll(DB_TASKS, withNoPcsa(filter))
 
     const items = pages.map(p => {
       const props = p.properties ?? {}

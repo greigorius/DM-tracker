@@ -21,16 +21,22 @@ const C = {
   input:   '#0b1020',
 };
 
-// Fallback static map — overridden at runtime by statusColorMap from API
+// Fallback static map — used when statusColorMap from API is not yet available.
+// Keys match the actual Notion multi_select option names.
 const VAR_STATUS_COLORS_FALLBACK = {
-  'Approved':           '#34d399',
-  'Pending':            '#60a5fa',
-  'Under Review':       '#a78bfa',
-  'Rejected':           '#f87171',
-  'On Hold':            '#f97316',
-  'Draft':              '#f59e0b',
-  'Submitted':          '#38bdf8',
-  'Partially Approved': '#4ade80',
+  // Known statuses for this workspace (matched to Notion option colours)
+  'Awaiting Design Info': '#eab308',  // yellow
+  'Awaiting Instruction': '#f472b6',  // pink
+  'Instruction Received': '#34d399',  // green
+  // Generic catch-alls
+  'Approved':             '#34d399',
+  'Pending':              '#60a5fa',
+  'Under Review':         '#a78bfa',
+  'Rejected':             '#f87171',
+  'On Hold':              '#f97316',
+  'Draft':                '#f59e0b',
+  'Submitted':            '#38bdf8',
+  'Partially Approved':   '#4ade80',
 };
 
 // Maps Notion select colour names → CSS hex (dark-mode adapted)

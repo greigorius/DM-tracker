@@ -13,7 +13,7 @@
  */
 import {
   corsHeaders, tokenGuard, errResponse,
-  fetchNotion, notionHeaders, queryAll, transformDrawing,
+  fetchNotion, notionHeaders, queryAll, transformDrawing, withNoPcsa,
 } from './_helpers.js'
 
 const DB_DRAWINGS = process.env.NOTION_DB_DRAWINGS
@@ -38,7 +38,7 @@ export const handler = async (event) => {
 
     // ── 2. Fetch ALL items from TASKS DB in one paginated query ──────────────
     //    This is far faster than fetching each item page individually.
-    const allItemPages = await queryAll(DB_TASKS, null)
+    const allItemPages = await queryAll(DB_TASKS, withNoPcsa(null))
 
     // Index items by page ID
     const itemMap  = {}

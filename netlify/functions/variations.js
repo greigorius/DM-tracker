@@ -13,7 +13,7 @@
 import {
   corsHeaders, tokenGuard, errResponse,
   fetchNotion, notionHeaders, queryAll,
-  titleVal, statusVal, selectVal, multiSelectVal,
+  titleVal, statusVal, selectVal, multiSelectVal, withNoPcsa,
 } from './_helpers.js'
 
 const DB_VARIATIONS = process.env.NOTION_DB_VARIATIONS
@@ -205,11 +205,11 @@ export const handler = async (event) => {
           break
         }
         const chunk  = allTaskIds.slice(i, i + CHUNK)
-        const filter = chunk.length === 1
+        const taskFilter = chunk.length === 1
           ? { property: 'To Do List', relation: { contains: chunk[0] } }
           : { or: chunk.map(tid => ({ property: 'To Do List', relation: { contains: tid } })) }
 
-        const itemPages = await queryAll(DB_TASKS, filter)
+        const itemPages = await queryAll(DB_TASKS, withNoPcsa(taskFilter))
 
         for (const page of itemPages) {
           const itemId = page.id

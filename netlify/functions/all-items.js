@@ -5,7 +5,7 @@
  */
 import {
   corsHeaders, tokenGuard, errResponse,
-  fetchNotion, notionHeaders, queryAll, transformItem,
+  fetchNotion, notionHeaders, queryAll, transformItem, withNoPcsa,
 } from './_helpers.js'
 
 const DB_TASKS    = process.env.NOTION_DB_TASKS
@@ -24,7 +24,7 @@ export const handler = async (event) => {
     if (project && project !== 'all') {
       filter = { property: 'Projects', relation: { contains: project } }
     }
-    const pages = await queryAll(DB_TASKS, filter)
+    const pages = await queryAll(DB_TASKS, withNoPcsa(filter))
 
     // Build item→project mapping from raw pages before transformation
     const itemProjectIds = {}
