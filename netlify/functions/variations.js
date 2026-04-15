@@ -83,11 +83,12 @@ function transformVariation(page) {
     p['Related Project']?.relation?.[0]?.id  ??
     null
 
-  // Related Task IDs — used to resolve items via the task → item chain
+  // Related Task IDs — used to resolve items via the task → item chain.
+  // NOTE: intentionally not trying generic 'Tasks' — it can match a large
+  // relation property and cause hundreds of individual page fetches → timeout.
   const relatedTaskIds = (
     p['Related Task']?.relation  ??
     p['Related Tasks']?.relation ??
-    p['Tasks']?.relation         ??
     []
   ).map(r => r.id)
 
