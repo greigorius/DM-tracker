@@ -121,6 +121,26 @@ async function fetchPage(id) {
   } catch { return null }
 }
 
+/**
+ * Fetch multiple pages with controlled concurrency and inter-batch delay to
+ * avoid saturating Notion's ~3 req/sec rate limit.
+ * Returns an object: { [id]: page | null }
+ */
+async function fetchPagesBatched(ids, { concurrency = 5, gapMs = 300, deadlineMs = null, startedAt = null } = {}) {
+  const map = {}
+  for (let i = 0; i < ids.length; i += concurrency) {
+    // Hard deadline guard — bail early if running out of time
+    if (deadlineMs !== null && startedAt !== null && (Date.now() - startedAt) > deadlineMs) break
+    if (i > 0) await new Promise(r => setTimeout(r, gapMs))
+    const chunk = ids.slice(i, i + concurrency)
+    const pages = await Promise.all(chunk.map(fetchPage))
+    for (let j = 0; j < chunk.length; j++) {
+      map[chunk[j]] = pages[j] ?? null
+    }
+  }
+  return map
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders, body: '' }
   const guard = tokenGuard(); if (guard) return guard
@@ -134,6 +154,10 @@ export const handler = async (event) => {
   }
 
   try {
+    const startedAt  = Date.now()
+    // Leave ~6 s headroom before Netlify's 26 s function timeout
+    const deadlineMs = 20_000
+
     const pages      = await queryAll(DB_VARIATIONS, null)
     const variations = pages.map(transformVariation)
 
@@ -142,21 +166,18 @@ export const handler = async (event) => {
     const allLegacyIds  = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))]
 
     // ── Step 2: Fetch task pages → collect their Item relation IDs ───────────
-    // taskItemMap: taskId → [itemId]
+    // Rate-limited: 5 concurrent, 300 ms between batches, bail if near deadline
+    const taskPageMap = await fetchPagesBatched(allTaskIds, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
+
     const taskItemMap = {}
-    for (let i = 0; i < allTaskIds.length; i += 25) {
-      const chunk = allTaskIds.slice(i, i + 25)
-      const taskPages = await Promise.all(chunk.map(fetchPage))
-      for (let j = 0; j < chunk.length; j++) {
-        const page = taskPages[j]
-        if (!page) continue
-        const itemRels = (
-          page.properties?.['Item']?.relation  ??
-          page.properties?.['Items']?.relation ??
-          []
-        ).map(r => r.id)
-        taskItemMap[chunk[j]] = itemRels
-      }
+    for (const [taskId, page] of Object.entries(taskPageMap)) {
+      if (!page) continue
+      const itemRels = (
+        page.properties?.['Item']?.relation  ??
+        page.properties?.['Items']?.relation ??
+        []
+      ).map(r => r.id)
+      taskItemMap[taskId] = itemRels
     }
 
     // ── Step 3: Collect all item IDs (from tasks + legacy) ───────────────────
@@ -169,21 +190,17 @@ export const handler = async (event) => {
     const itemInfoMap = {}
     const projIdSet   = new Set(variations.map(v => v.projectId).filter(Boolean))
 
-    for (let i = 0; i < allItemIds.length; i += 25) {
-      const chunk     = allItemIds.slice(i, i + 25)
-      const itemPages = await Promise.all(chunk.map(fetchPage))
-      for (let j = 0; j < chunk.length; j++) {
-        const page = itemPages[j]
-        if (!page) continue
-        const p      = page.properties ?? {}
-        const projId = p['Projects']?.relation?.[0]?.id ?? null
-        const name   =
-          p['Item Name']?.title?.[0]?.plain_text ??
-          p['Name']?.title?.[0]?.plain_text      ??
-          null
-        itemInfoMap[chunk[j]] = { projectId: projId, name }
-        if (projId) projIdSet.add(projId)
-      }
+    const itemPageMap = await fetchPagesBatched(allItemIds, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
+    for (const [itemId, page] of Object.entries(itemPageMap)) {
+      if (!page) continue
+      const p      = page.properties ?? {}
+      const projId = p['Projects']?.relation?.[0]?.id ?? null
+      const name   =
+        p['Item Name']?.title?.[0]?.plain_text ??
+        p['Name']?.title?.[0]?.plain_text      ??
+        null
+      itemInfoMap[itemId] = { projectId: projId, name }
+      if (projId) projIdSet.add(projId)
     }
 
     // ── Step 4: Resolve project names ─────────────────────────────────────────

@@ -262,14 +262,20 @@ export default function VariationSchedulePage() {
     }
     setLoading(true);
     fetch('/api/variations')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw Object.assign(new Error('fetch-failed'), { status: r.status });
+        return r.json();
+      })
       .then(d => {
         setCached(CACHE_KEY, d);
         setVariations(d.items ?? []);
         setConfigured(d.configured ?? false);
         setLastRefreshed(new Date());
       })
-      .catch(() => {})
+      .catch(() => {
+        // Network error / timeout (502) or rate-limited (429):
+        // don't flip configured to false — leave existing state untouched.
+      })
       .finally(() => setLoading(false));
   }, [refreshKey]);
 

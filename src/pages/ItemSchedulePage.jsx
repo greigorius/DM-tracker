@@ -371,7 +371,8 @@ export default function ItemSchedulePage() {
   useEffect(() => {
     const cached = getCached('variations-v3');
     if (cached) { setVariations(cached.items ?? []); return; }
-    fetch('/api/variations').then(r => r.json())
+    fetch('/api/variations')
+      .then(r => { if (!r.ok) throw new Error('fetch-failed'); return r.json(); })
       .then(d => { setCached('variations-v3', d); setVariations(d.items ?? []); })
       .catch(() => {});
   }, []);
