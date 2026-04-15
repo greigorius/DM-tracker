@@ -75,6 +75,7 @@ function ItemStatusBadge({ value }) {
 // ── Column definitions ────────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { key: 'drawingNumber',    label: 'Dwg No',          defaultWidth: 130, minWidth: 80  },
+  { key: 'item',             label: 'Item',             defaultWidth: 160, minWidth: 80  },
   { key: 'title',            label: 'Title',            defaultWidth: 240, minWidth: 120 },
   { key: 'designStage',      label: 'Stage',            defaultWidth: 80,  minWidth: 50  },
   { key: 'rev',              label: 'Rev',              defaultWidth: 60,  minWidth: 40  },
@@ -195,6 +196,11 @@ function CellContent({ colKey, drawing }) {
         </div>
       );
 
+    case 'item':
+      return drawing._itemName
+        ? <span style={{ fontSize: 10, color: C.sec, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{drawing._itemName}</span>
+        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+
     case 'title':
       return (
         <div>
@@ -269,7 +275,7 @@ function DrawingRow({ drawing, odd, visibleCols }) {
   return (
     <tr style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
       {visibleCols.map(col => {
-        const isLeft = col.key === 'drawingNumber' || col.key === 'title';
+        const isLeft = col.key === 'drawingNumber' || col.key === 'item' || col.key === 'title';
         return (
           <td key={col.key} style={{
             padding: '6px 10px',
@@ -425,7 +431,7 @@ function TableHead({ visibleCols, onResizeStart }) {
     <thead>
       <tr>
         {visibleCols.map(col => {
-          const isLeft = col.key === 'drawingNumber' || col.key === 'title';
+          const isLeft = col.key === 'drawingNumber' || col.key === 'item' || col.key === 'title';
           const def    = DEFAULT_COLUMNS.find(c => c.key === col.key);
           return (
             <th key={col.key} style={{
@@ -466,6 +472,7 @@ function exportToCSV(visibleCols, grouped) {
   function raw(dwg, key) {
     switch (key) {
       case 'drawingNumber':    return dwg.drawingNumber ?? '';
+      case 'item':             return dwg._itemName ?? '';
       case 'title':            return [dwg.title1, dwg.title2, dwg.title3].filter(Boolean).join(' — ');
       case 'designStage':      return dwg.designStage ?? '';
       case 'rev':              return dwg.rev ?? '';
@@ -697,7 +704,9 @@ export default function DrawingsPage() {
 
   const itemDrawings = eligibleItems.map(item => ({
     item,
-    dwgs: (drawingsByItemId.get(item.id) ?? []).filter(matchesDwgFilter),
+    dwgs: (drawingsByItemId.get(item.id) ?? [])
+      .map(d => ({ ...d, _itemName: item.name }))
+      .filter(matchesDwgFilter),
   })).filter(({ dwgs }) => !hasDrawingFilter || dwgs.length > 0);
 
   const sortDwgs = dwgs => [...dwgs].sort((a, b) => (a.drawingNumber ?? '').localeCompare(b.drawingNumber ?? ''));

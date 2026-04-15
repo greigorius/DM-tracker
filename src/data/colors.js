@@ -17,38 +17,40 @@ export function assignProjectColors(projects) {
  * Item progress status colours — matches Notion's status select property palette
  * adapted for the app's dark (#0a0f1a) background.
  *
- * Each entry: { bg: solid-hex, text: solid-hex }
- *   bg  = Notion status colour at ~12 % opacity blended onto #0a0f1a
- *   text = Notion's canonical colour for that hue (what you see in Notion UI)
+ * Each entry: { bg: hex, text: hex }
+ *   bg  = background (Notion hue at ~15–18% opacity on #0a0f1a)
+ *   text = Notion's canonical foreground colour for that hue
  */
 export const ITEM_STATUS_COLORS = {
-  // ── Gray (not started / omitted) ──
-  'Not Started':     { bg: '#181c22', text: '#979A9B' },
-  'Backlog':         { bg: '#181c22', text: '#979A9B' },
-  'Omitted':         { bg: '#131619', text: '#6B7280' },
+  // ── Gray (not started / backlog / omitted) ──
+  'Not Started':        { bg: '#1e2128', text: '#9b9ea4' },
+  'Backlog':            { bg: '#1e2128', text: '#9b9ea4' },
+  'Omitted':            { bg: '#181b1f', text: '#6b7280' },
 
-  // ── Blue (in progress) ──
-  'In Progress':     { bg: '#0e1e30', text: '#3989CC' },
+  // ── Blue (in progress / pre-production) ──
+  'In Progress':        { bg: '#0f2340', text: '#5ba5e8' },
+  'Pre-Production':     { bg: '#0f2340', text: '#5ba5e8' },
 
   // ── Purple (in review) ──
-  'In Review':       { bg: '#1b192c', text: '#9979CF' },
+  'In Review':          { bg: '#221b3a', text: '#a582d8' },
 
   // ── Yellow (review / pending client) ──
-  'Review':          { bg: '#221d0c', text: '#C79B34' },
+  'Review':             { bg: '#2b2208', text: '#d4a229' },
+  'Pending':            { bg: '#2b2208', text: '#d4a229' },
 
   // ── Orange (on hold) ──
-  'On Hold':         { bg: '#231508', text: '#C77B31' },
-  'On Hold - RFIs':  { bg: '#231508', text: '#C77B31' },
+  'On Hold':            { bg: '#2e1a08', text: '#e07c30' },
+  'On Hold - RFIs':     { bg: '#2e1a08', text: '#e07c30' },
 
   // ── Red (blocked) ──
-  'Blocked':         { bg: '#280f0f', text: '#CE5353' },
+  'Blocked':            { bg: '#321010', text: '#e05555' },
 
-  // ── Green (approved / complete) ──
-  'PC Approved':     { bg: '#0c2018', text: '#4D9375' },
-  'Design Complete': { bg: '#0c2018', text: '#4D9375' },
-  'In Manufacture':  { bg: '#0c2018', text: '#4D9375' },
-  'Complete':        { bg: '#0c2018', text: '#4D9375' },
+  // ── Green (approved / complete / manufacture) ──
+  'PC Approved':        { bg: '#0b2418', text: '#4daa7a' },
+  'Design Complete':    { bg: '#0b2418', text: '#4daa7a' },
+  'In Manufacture':     { bg: '#0b2418', text: '#4daa7a' },
+  'Complete':           { bg: '#0b2418', text: '#4daa7a' },
 };
 
 /** Fallback for unknown statuses */
-export const ITEM_STATUS_DEFAULT = { bg: '#141a22', text: '#94a3b8' };
+export const ITEM_STATUS_DEFAULT = { bg: '#181c24', text: '#94a3b8' };

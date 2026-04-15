@@ -32,6 +32,20 @@ const VAR_STATUS_COLORS = {
   'Partially Approved': '#4ade80',
 };
 
+// Maps Notion select colour names → CSS hex (dark-mode adapted)
+const NOTION_COLOR_MAP = {
+  default: '#94a3b8',
+  gray:    '#94a3b8',
+  brown:   '#b08060',
+  orange:  '#f97316',
+  yellow:  '#eab308',
+  green:   '#34d399',
+  blue:    '#60a5fa',
+  purple:  '#a78bfa',
+  pink:    '#f472b6',
+  red:     '#f87171',
+};
+
 function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${alpha})`;
@@ -137,10 +151,18 @@ function VarCell({ v, colKey }) {
         </div>
       );
     }
-    case 'type':
-      return v.type
-        ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{v.type}</span>
-        : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+    case 'type': {
+      if (!v.type) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
+      const tc = NOTION_COLOR_MAP[v.typeColor] ?? C.sec;
+      return (
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          background: hexToRgba(tc, 0.12), color: tc,
+          border: `1px solid ${hexToRgba(tc, 0.3)}`,
+          borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap',
+        }}>{v.type}</span>
+      );
+    }
     case 'dateIssued':
       return <span style={{ fontSize: 11, color: C.sec }}>{v.dateIssued ? fmtDate(v.dateIssued) : '—'}</span>;
     default:
@@ -196,6 +218,7 @@ export default function VariationSchedulePage() {
 
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus,  setFilterStatus]  = useState('all');
+  const [filterType,    setFilterType]    = useState('all');
   const [groupBy,       setGroupBy]       = useState('item');   // 'item' | 'project' | 'type' | 'status' | 'none'
   const [expanded,      setExpanded]      = useState({});
   const [showColPanel,  setShowColPanel]  = useState(false);
@@ -272,6 +295,7 @@ export default function VariationSchedulePage() {
 
   // Filter options — flatten statusValues arrays across all variations
   const statusOptions = [...new Set(variations.flatMap(v => v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : [])))].sort();
+  const typeOptions   = [...new Set(variations.map(v => v.type).filter(Boolean))].sort();
 
   // Apply filters
   const visible = variations.filter(v => {
@@ -280,6 +304,7 @@ export default function VariationSchedulePage() {
       const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : []);
       if (!vals.includes(filterStatus)) return false;
     }
+    if (filterType    !== 'all' && v.type !== filterType) return false;
     return true;
   });
 
@@ -374,6 +399,10 @@ export default function VariationSchedulePage() {
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selStyle}>
             <option value="all">All Statuses</option>
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selStyle}>
+            <option value="all">All Types</option>
+            {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
 
           <select value={groupBy} onChange={e => setGroupBy(e.target.value)}

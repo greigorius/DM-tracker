@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
@@ -14,6 +14,17 @@ const C = {
 };
 
 const COL_LS_KEY = 'dmtracker:item-schedule-col-config';
+
+const VAR_STATUS_COLORS = {
+  'Approved':           '#34d399',
+  'Pending':            '#60a5fa',
+  'Under Review':       '#a78bfa',
+  'Rejected':           '#f87171',
+  'On Hold':            '#f97316',
+  'Draft':              '#f59e0b',
+  'Submitted':          '#38bdf8',
+  'Partially Approved': '#4ade80',
+};
 
 const PHASE_SHORT = {
   'Ph1 - Design Intent':      'Ph1',
@@ -63,10 +74,11 @@ const DEFAULT_COLUMNS = [
   { key: 'tdl',    label: 'TDL',     defaultWidth: 60,  minWidth: 40,  align: 'center' },
   { key: 'drw',    label: 'DRW',     defaultWidth: 60,  minWidth: 40,  align: 'center' },
   { key: 'rfi',    label: 'RFI',     defaultWidth: 60,  minWidth: 40,  align: 'center' },
+  { key: 'var',    label: 'VAR',     defaultWidth: 60,  minWidth: 40,  align: 'center' },
 ];
 
 // ── CSV raw value getter ──────────────────────────────────────────────────────
-function itemRaw(item, key) {
+function itemRaw(item, key, varCountMap = {}) {
   const d = item.dates ?? {};
   switch (key) {
     case 'name':   return item.name ?? '';
@@ -80,6 +92,7 @@ function itemRaw(item, key) {
     case 'tdl':    return item.tdlCount ?? '';
     case 'drw':    return item.drawingCount ?? '';
     case 'rfi':    return item.rfiCount ?? '';
+    case 'var':    return varCountMap[item.id] ?? 0;
     default:       return '';
   }
 }
@@ -147,7 +160,7 @@ function GroupStatusBar({ items }) {
   );
 }
 
-function ItemDetailPanel({ item, detail }) {
+function ItemDetailPanel({ item, detail, varCountMap }) {
   const loading = detail?.loading ?? true;
   const Section = ({ title, children }) => (
     <div style={{ flex: 1, minWidth: 120 }}>
@@ -202,10 +215,26 @@ function ItemDetailPanel({ item, detail }) {
               </div>
             )}
           </Section>
-          <Section title="Variations">
-            <div style={{ fontSize: 10, color: C.muted }}>
-              See <a href="/trackers/variations" style={{ color: '#60a5fa', textDecoration: 'none' }}>Variation Schedule</a>
-            </div>
+          <Section title={`Variations (${varCountMap?.[item.id] ?? 0})`}>
+            {(detail?.variations ?? []).length === 0 ? (
+              <div style={{ fontSize: 10, color: C.muted }}>
+                {(varCountMap?.[item.id] ?? 0) > 0 ? `${varCountMap[item.id]} linked` : 'None'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {detail.variations.slice(0, 6).map(v => {
+                  const vc = VAR_STATUS_COLORS[v.status] ?? C.sec;
+                  return (
+                    <div key={v.id} style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#a78bfa', fontWeight: 700, flexShrink: 0 }}>VAR-{v.varNumber ?? '?'}</span>
+                      <span style={{ color: C.sec, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{v.title}</span>
+                      {v.status && <span style={{ fontSize: 9, color: vc, background: hexToRgba(vc, 0.12), borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>{v.status}</span>}
+                    </div>
+                  );
+                })}
+                {detail.variations.length > 6 && <div style={{ fontSize: 10, color: C.muted }}>+{detail.variations.length - 6} more</div>}
+              </div>
+            )}
           </Section>
         </div>
       )}
@@ -214,7 +243,7 @@ function ItemDetailPanel({ item, detail }) {
 }
 
 // ── Item row ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, isExpanded, onToggle, odd, visibleCols }) {
+function ItemRow({ item, isExpanded, onToggle, odd, visibleCols, varCountMap }) {
   const d = item.dates ?? {};
 
   const CountChip = ({ n, color }) => (
@@ -258,7 +287,8 @@ function ItemRow({ item, isExpanded, onToggle, odd, visibleCols }) {
           case 'subC01': content = <DateUrgencySpan dateStr={d.subC01?.adj} />;   break;
           case 'tdl':    content = <CountChip n={item.tdlCount}     color="#60a5fa" />; break;
           case 'drw':    content = <CountChip n={item.drawingCount} color="#a78bfa" />; break;
-          case 'rfi':    content = <CountChip n={item.rfiCount}     color="#f59e0b" />; break;
+          case 'rfi':    content = <CountChip n={item.rfiCount}               color="#f59e0b" />; break;
+          case 'var':    content = <CountChip n={varCountMap?.[item.id] ?? 0} color="#a78bfa" />; break;
           default:       content = <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
         }
         return (
@@ -275,6 +305,7 @@ function ItemRow({ item, isExpanded, onToggle, odd, visibleCols }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ItemSchedulePage() {
   const [items,         setItems]         = useState([]);
+  const [variations,    setVariations]    = useState([]);
   const [projects,      setProjects]      = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshKey,    setRefreshKey]    = useState(0);
@@ -336,6 +367,25 @@ export default function ItemSchedulePage() {
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // Load variations (background, uses shared cache with VariationSchedulePage)
+  useEffect(() => {
+    const cached = getCached('variations-v3');
+    if (cached) { setVariations(cached.items ?? []); return; }
+    fetch('/api/variations').then(r => r.json())
+      .then(d => { setCached('variations-v3', d); setVariations(d.items ?? []); })
+      .catch(() => {});
+  }, []);
+
+  // Variation count per item ID
+  const varCountMap = useMemo(() => {
+    const map = {};
+    for (const v of variations) {
+      const ids = v.itemIds?.length ? v.itemIds : (v.itemId ? [v.itemId] : []);
+      for (const iid of ids) map[iid] = (map[iid] ?? 0) + 1;
+    }
+    return map;
+  }, [variations]);
+
   const allProjectIds = [...new Set([...projects.map(p => p.id), ...items.map(i => i.projectId).filter(Boolean)])];
   const colorMap      = assignProjectColors(allProjectIds.map(id => ({ id })));
 
@@ -371,17 +421,22 @@ export default function ItemSchedulePage() {
     const id = item.id;
     setExpandedItems(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
     if (itemDetails[id]) return;
-    setItemDetails(prev => ({ ...prev, [id]: { loading: true, drawings: [], rfis: [] } }));
+    setItemDetails(prev => ({ ...prev, [id]: { loading: true, drawings: [], rfis: [], variations: [] } }));
     try {
       const [drawRes, rfiRes] = await Promise.all([
         fetch(`/api/item-drawings?ids=${id}`).then(r => r.json()).catch(() => ({})),
         item.rfiCount > 0 ? fetch(`/api/rfis?ids=${id}`).then(r => r.json()).catch(() => []) : Promise.resolve([]),
       ]);
-      setItemDetails(prev => ({ ...prev, [id]: { loading: false, drawings: drawRes[id] ?? [], rfis: Array.isArray(rfiRes) ? rfiRes : [] } }));
+      // Variations are already loaded client-side — filter by item ID
+      const itemVars = variations.filter(v => {
+        const ids = v.itemIds?.length ? v.itemIds : (v.itemId ? [v.itemId] : []);
+        return ids.includes(id);
+      });
+      setItemDetails(prev => ({ ...prev, [id]: { loading: false, drawings: drawRes[id] ?? [], rfis: Array.isArray(rfiRes) ? rfiRes : [], variations: itemVars } }));
     } catch {
-      setItemDetails(prev => ({ ...prev, [id]: { loading: false, drawings: [], rfis: [] } }));
+      setItemDetails(prev => ({ ...prev, [id]: { loading: false, drawings: [], rfis: [], variations: [] } }));
     }
-  }, [itemDetails]);
+  }, [itemDetails, variations]);
 
   const visibleCols = mergeVisibleCols(colConfig, DEFAULT_COLUMNS);
   // +1 for always-present expand toggle column
@@ -391,7 +446,7 @@ export default function ItemSchedulePage() {
   const collapseAll = () => setExpanded({});
 
   const allRows      = visible;
-  const handleExport = () => exportToCSV(visibleCols, allRows, itemRaw, `item-schedule-${new Date().toISOString().slice(0,10)}.csv`);
+  const handleExport = () => exportToCSV(visibleCols, allRows, (item, key) => itemRaw(item, key, varCountMap), `item-schedule-${new Date().toISOString().slice(0,10)}.csv`);
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
@@ -505,11 +560,12 @@ export default function ItemSchedulePage() {
                             onToggle={() => toggleItem(item)}
                             odd={idx % 2 !== 0}
                             visibleCols={visibleCols}
+                            varCountMap={varCountMap}
                           />
                           {itemExpanded && (
                             <tr key={`${item.id}-detail`}>
                               <td colSpan={totalCols} style={{ padding: 0 }}>
-                                <ItemDetailPanel item={item} detail={itemDetails[item.id]} />
+                                <ItemDetailPanel item={item} detail={itemDetails[item.id]} varCountMap={varCountMap} />
                               </td>
                             </tr>
                           )}

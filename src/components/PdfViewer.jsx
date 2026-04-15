@@ -184,6 +184,7 @@ function PdfViewer({
       onMouseDown={handleContainerMouseDown}
       style={{ overflow: 'auto', cursor: onPageClick ? 'crosshair' : 'grab' }}
     >
+      <div className="pdf-center-wrapper">
       {loading && <div className="pdf-loading">Loading page...</div>}
       <div
         className="pdf-page-wrapper"
@@ -222,6 +223,7 @@ function PdfViewer({
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

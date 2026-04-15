@@ -62,6 +62,12 @@ function transformVariation(page) {
     selectVal(p, 'Type')           ??
     null
 
+  // Type colour (Notion select colour field) — e.g. 'blue', 'green', 'orange', etc.
+  const typeColor =
+    p['Variation Type']?.select?.color ??
+    p['Type']?.select?.color           ??
+    null
+
   // Date Issued → "Change Request Date"
   const dateIssued =
     p['Change Request Date']?.date?.start ??
@@ -71,18 +77,26 @@ function transformVariation(page) {
 
   // Direct project relation (fallback if no Related Task)
   const projectId =
-    p['Projects']?.relation?.[0]?.id ??
-    p['Project']?.relation?.[0]?.id  ??
+    p['Projects']?.relation?.[0]?.id         ??
+    p['Project']?.relation?.[0]?.id          ??
+    p['Related Projects']?.relation?.[0]?.id ??
+    p['Related Project']?.relation?.[0]?.id  ??
     null
 
   // Related Task IDs — used to resolve items via the task → item chain
-  const relatedTaskIds = (p['Related Task']?.relation ?? []).map(r => r.id)
+  const relatedTaskIds = (
+    p['Related Task']?.relation  ??
+    p['Related Tasks']?.relation ??
+    p['Tasks']?.relation         ??
+    []
+  ).map(r => r.id)
 
   // Legacy direct item relation (used as fallback)
   const legacyItemId =
-    p['Item']?.relation?.[0]?.id         ??
-    p['Related Item']?.relation?.[0]?.id ??
-    p['Items']?.relation?.[0]?.id        ??
+    p['Item']?.relation?.[0]?.id          ??
+    p['Related Item']?.relation?.[0]?.id  ??
+    p['Related Items']?.relation?.[0]?.id ??
+    p['Items']?.relation?.[0]?.id         ??
     null
 
   return {
@@ -95,6 +109,7 @@ function transformVariation(page) {
     legacyItemId,
     dateIssued,
     type,
+    typeColor,
   }
 }
 
@@ -134,7 +149,11 @@ export const handler = async (event) => {
       for (let j = 0; j < chunk.length; j++) {
         const page = taskPages[j]
         if (!page) continue
-        const itemRels = (page.properties?.['Item']?.relation ?? []).map(r => r.id)
+        const itemRels = (
+          page.properties?.['Item']?.relation  ??
+          page.properties?.['Items']?.relation ??
+          []
+        ).map(r => r.id)
         taskItemMap[chunk[j]] = itemRels
       }
     }
@@ -157,7 +176,10 @@ export const handler = async (event) => {
         if (!page) continue
         const p      = page.properties ?? {}
         const projId = p['Projects']?.relation?.[0]?.id ?? null
-        const name   = p['Item Name']?.title?.[0]?.plain_text ?? null
+        const name   =
+          p['Item Name']?.title?.[0]?.plain_text ??
+          p['Name']?.title?.[0]?.plain_text      ??
+          null
         itemInfoMap[chunk[j]] = { projectId: projId, name }
         if (projId) projIdSet.add(projId)
       }
@@ -210,9 +232,10 @@ export const handler = async (event) => {
         id:           v.id,
         varNumber:    v.varNumber,
         title:        v.title,
-        statusValues: v.statusValues,          // array from multi_select (or single-value wrapped)
+        statusValues: v.statusValues,            // array from multi_select (or single-value wrapped)
         status:       v.statusValues[0] ?? null, // first value kept for filter back-compat
         type:         v.type,
+        typeColor:    v.typeColor,
         dateIssued:   v.dateIssued,
         projectId:    resolvedProjectId,
         projectName:  resolvedProjectId ? (projMap[resolvedProjectId]?.name ?? null) : null,
