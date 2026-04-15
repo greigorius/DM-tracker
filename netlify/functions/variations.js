@@ -162,6 +162,20 @@ export const handler = async (event) => {
     const pages      = await queryAll(DB_VARIATIONS, null)
     const variations = pages.map(transformVariation)
 
+    // Build statusColorMap from multi_select option colours on each page
+    // Maps status name → Notion colour name (e.g. 'Awaiting Design Info' → 'yellow')
+    const statusColorMap = {}
+    for (const page of pages) {
+      const opts = page.properties?.['Variation Status']?.multi_select
+                ?? page.properties?.['Status']?.multi_select
+                ?? []
+      for (const o of opts) {
+        if (o.name && o.color && !statusColorMap[o.name]) {
+          statusColorMap[o.name] = o.color
+        }
+      }
+    }
+
     // ── Step 1: Collect all Related Task IDs & legacy item IDs ───────────────
     const allTaskIds   = [...new Set(variations.flatMap(v => v.relatedTaskIds))]
     const allLegacyIds = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))]
@@ -307,7 +321,7 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers:    corsHeaders,
-      body:       JSON.stringify({ items: enriched, configured: true }),
+      body:       JSON.stringify({ items: enriched, configured: true, statusColorMap }),
     }
   } catch (err) {
     return errResponse('variations', err)

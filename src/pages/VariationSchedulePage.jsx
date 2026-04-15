@@ -21,7 +21,8 @@ const C = {
   input:   '#0b1020',
 };
 
-const VAR_STATUS_COLORS = {
+// Fallback static map — overridden at runtime by statusColorMap from API
+const VAR_STATUS_COLORS_FALLBACK = {
   'Approved':           '#34d399',
   'Pending':            '#60a5fa',
   'Under Review':       '#a78bfa',
@@ -56,9 +57,17 @@ function fmtDate(str) {
   return new Date(str).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-function StatusPill({ status }) {
+function statusColor(status, notionColorMap) {
+  // 1. Try Notion colour from API (e.g. 'yellow' → hex)
+  const notionColor = notionColorMap?.[status];
+  if (notionColor && NOTION_COLOR_MAP[notionColor]) return NOTION_COLOR_MAP[notionColor];
+  // 2. Fall back to static map
+  return VAR_STATUS_COLORS_FALLBACK[status] ?? C.sec;
+}
+
+function StatusPill({ status, notionColorMap }) {
   if (!status) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
-  const color = VAR_STATUS_COLORS[status] ?? C.sec;
+  const color = statusColor(status, notionColorMap);
   return (
     <span style={{
       fontSize: 10, fontWeight: 700,
@@ -84,7 +93,7 @@ const selStyle = { background: C.input, border: `1px solid ${C.border}`, color: 
 const btnStyle = active => ({ background: active ? '#1e3a5f' : C.input, border: `1px solid ${active ? '#60a5fa' : C.border}`, color: active ? '#60a5fa' : C.sec, fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400, fontFamily: 'inherit' });
 
 // ── Global status summary bar ─────────────────────────────────────────────────
-function GlobalStatusBar({ variations }) {
+function GlobalStatusBar({ variations, statusColorMap }) {
   const counts = {};
   for (const v of variations) {
     const vals = v.statusValues?.length ? v.statusValues : (v.status ? [v.status] : ['Unknown']);
@@ -93,7 +102,7 @@ function GlobalStatusBar({ variations }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, alignItems: 'center' }}>
       {Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([s, n]) => {
-        const color = VAR_STATUS_COLORS[s] ?? C.sec;
+        const color = statusColor(s, statusColorMap);
         return (
           <span key={s} style={{ fontSize: 10, fontWeight: 700, background: hexToRgba(color, 0.1), color, border: `1px solid ${hexToRgba(color, 0.25)}`, borderRadius: 4, padding: '3px 8px' }}>
             {s} <span style={{ opacity: 0.7 }}>· {n}</span>
@@ -120,7 +129,7 @@ function NotConfiguredNotice() {
 }
 
 // ── Variation cell renderer ───────────────────────────────────────────────────
-function VarCell({ v, colKey }) {
+function VarCell({ v, colKey, statusColorMap }) {
   switch (colKey) {
     case 'varNumber':
       return <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>{v.varNumber != null ? `VC-${v.varNumber}` : '—'}</span>;
@@ -147,7 +156,7 @@ function VarCell({ v, colKey }) {
       if (!vals.length) return <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
       return (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {vals.map((s, i) => <StatusPill key={i} status={s} />)}
+          {vals.map((s, i) => <StatusPill key={i} status={s} notionColorMap={statusColorMap} />)}
         </div>
       );
     }
@@ -171,7 +180,7 @@ function VarCell({ v, colKey }) {
 }
 
 // ── Variation Row ─────────────────────────────────────────────────────────────
-function VariationRow({ variation: v, odd, visibleCols }) {
+function VariationRow({ variation: v, odd, visibleCols, statusColorMap }) {
   const [hovered, setHovered] = useState(false);
   return (
     <tr
@@ -188,7 +197,7 @@ function VariationRow({ variation: v, odd, visibleCols }) {
           overflow: 'hidden',
           whiteSpace: col.key === 'title' ? 'normal' : 'nowrap',
         }}>
-          <VarCell v={v} colKey={col.key} />
+          <VarCell v={v} colKey={col.key} statusColorMap={statusColorMap} />
         </td>
       ))}
     </tr>
@@ -209,10 +218,11 @@ function varRaw(v, key) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function VariationSchedulePage() {
-  const [variations,    setVariations]    = useState([]);
-  const [projects,      setProjects]      = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [configured,    setConfigured]    = useState(true);
+  const [variations,     setVariations]     = useState([]);
+  const [projects,       setProjects]       = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [configured,     setConfigured]     = useState(true);
+  const [statusColorMap, setStatusColorMap] = useState({});
   const [refreshKey,    setRefreshKey]    = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
@@ -257,6 +267,7 @@ export default function VariationSchedulePage() {
     if (cached && refreshKey === 0) {
       setVariations(cached.items ?? []);
       setConfigured(cached.configured ?? true);
+      if (cached.statusColorMap) setStatusColorMap(cached.statusColorMap);
       setLoading(false);
       return;
     }
@@ -270,6 +281,7 @@ export default function VariationSchedulePage() {
         setCached(CACHE_KEY, d);
         setVariations(d.items ?? []);
         setConfigured(d.configured ?? false);
+        if (d.statusColorMap) setStatusColorMap(d.statusColorMap);
         setLastRefreshed(new Date());
       })
       .catch(() => {
@@ -393,7 +405,7 @@ export default function VariationSchedulePage() {
       {!loading && !configured && <NotConfiguredNotice />}
 
       {/* Global status bar */}
-      {!loading && configured && visible.length > 0 && <GlobalStatusBar variations={visible} />}
+      {!loading && configured && visible.length > 0 && <GlobalStatusBar variations={visible} statusColorMap={statusColorMap} />}
 
       {/* Filter + toolbar */}
       {configured && (
@@ -471,8 +483,8 @@ export default function VariationSchedulePage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
               <tbody>
-                {visible.map((v, idx) => (
-                  <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+                {sortedVisible.map((v, idx) => (
+                  <VariationRow key={v.id} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} statusColorMap={statusColorMap} />
                 ))}
               </tbody>
             </table>
@@ -507,7 +519,7 @@ export default function VariationSchedulePage() {
                       <SharedTableHead visibleCols={visibleCols} onResizeStart={startResize} />
                       <tbody>
                         {groupVars.map((v, idx) => (
-                          <VariationRow key={`${key}:${v.id}`} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} />
+                          <VariationRow key={`${key}:${v.id}`} variation={v} odd={idx % 2 !== 0} visibleCols={visibleCols} statusColorMap={statusColorMap} />
                         ))}
                       </tbody>
                     </table>
