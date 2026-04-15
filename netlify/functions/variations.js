@@ -18,6 +18,7 @@ import {
 
 const DB_VARIATIONS = process.env.NOTION_DB_VARIATIONS
 const DB_PROJECTS   = process.env.NOTION_DB_PROJECTS
+const DB_TASKS      = process.env.NOTION_DB_TASKS      // Items DB (bb783a35) — has "To Do List" relation
 const NOTION_API    = 'https://api.notion.com/v1'
 
 function transformVariation(page) {
@@ -162,59 +163,77 @@ export const handler = async (event) => {
     const variations = pages.map(transformVariation)
 
     // ── Step 1: Collect all Related Task IDs & legacy item IDs ───────────────
-    const allTaskIds    = [...new Set(variations.flatMap(v => v.relatedTaskIds))]
-    const allLegacyIds  = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))]
+    const allTaskIds   = [...new Set(variations.flatMap(v => v.relatedTaskIds))]
+    const allLegacyIds = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))]
 
-    console.log(`[variations] elapsed after queryAll: ${Date.now()-startedAt}ms | vars=${variations.length} taskIds=${allTaskIds.length} legacyIds=${allLegacyIds.length}`)
-    // Sample: log first variation's raw related-task property to confirm API shape
-    if (variations.length > 0) {
-      const samplePage = pages[0]
-      const rtp = samplePage.properties?.['Related Tasks']
-      console.log(`[variations] sample Related Tasks prop:`, JSON.stringify(rtp)?.slice(0, 300))
+    // Reverse map: taskId → [variationId, ...] — used to link items back to variations
+    const taskToVariationIds = {}
+    for (const v of variations) {
+      for (const tid of v.relatedTaskIds) {
+        if (!taskToVariationIds[tid]) taskToVariationIds[tid] = []
+        taskToVariationIds[tid].push(v.id)
+      }
     }
 
-    // ── Step 2: Fetch task pages → collect their Item relation IDs ───────────
-    // Rate-limited: 5 concurrent, 300 ms between batches, bail if near deadline
-    const taskPageMap = await fetchPagesBatched(allTaskIds, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
+    // ── Step 2 + 3 combined: Query Items DB filtered by task IDs ─────────────
+    // Instead of 382 individual page GETs, use OR filters (max 100 per query)
+    // against the Items DB (NOTION_DB_TASKS) — ~4 queries instead of ~382.
+    // Items DB has a "To Do List" relation property containing task IDs.
+    const variationToItemIds = {}   // variationId → Set<itemId>
+    const itemInfoMap        = {}   // itemId → { name, projectId }
+    const projIdSet          = new Set(variations.map(v => v.projectId).filter(Boolean))
 
-    const taskItemMap = {}
-    for (const [taskId, page] of Object.entries(taskPageMap)) {
-      if (!page) continue
-      const itemRels = (
-        page.properties?.['Item']?.relation  ??
-        page.properties?.['Items']?.relation ??
-        []
-      ).map(r => r.id)
-      taskItemMap[taskId] = itemRels
+    if (DB_TASKS && allTaskIds.length > 0) {
+      const CHUNK = 100
+      for (let i = 0; i < allTaskIds.length; i += CHUNK) {
+        if ((Date.now() - startedAt) > deadlineMs) {
+          console.log(`[variations] deadline hit during items query at chunk ${i}`)
+          break
+        }
+        const chunk  = allTaskIds.slice(i, i + CHUNK)
+        const filter = chunk.length === 1
+          ? { property: 'To Do List', relation: { contains: chunk[0] } }
+          : { or: chunk.map(tid => ({ property: 'To Do List', relation: { contains: tid } })) }
+
+        const itemPages = await queryAll(DB_TASKS, filter)
+
+        for (const page of itemPages) {
+          const itemId = page.id
+          const p      = page.properties ?? {}
+          const name   = p['Item Name']?.title?.[0]?.plain_text ?? null
+          const projId = p['Projects']?.relation?.[0]?.id       ?? null
+          itemInfoMap[itemId] = { name, projectId: projId }
+          if (projId) projIdSet.add(projId)
+
+          // Map item → variations via task IDs present on the returned item page
+          const tdlIds = (p['To Do List']?.relation ?? []).map(r => r.id)
+          for (const tid of tdlIds) {
+            for (const vid of (taskToVariationIds[tid] ?? [])) {
+              if (!variationToItemIds[vid]) variationToItemIds[vid] = new Set()
+              variationToItemIds[vid].add(itemId)
+            }
+          }
+        }
+
+        if (i + CHUNK < allTaskIds.length) await new Promise(r => setTimeout(r, 300))
+      }
     }
 
-    const allResolvedItemIds = Object.values(taskItemMap).flat()
-    console.log(`[variations] task pages fetched=${Object.keys(taskPageMap).length} | itemIds from tasks=${allResolvedItemIds.length}`)
-
-    // ── Step 3: Collect all item IDs (from tasks + legacy) ───────────────────
-    const allItemIds = [...new Set([
-      ...allResolvedItemIds,
-      ...allLegacyIds,
-    ])]
-
-    // itemInfoMap: itemId → { name, projectId }
-    const itemInfoMap = {}
-    const projIdSet   = new Set(variations.map(v => v.projectId).filter(Boolean))
-
-    const itemPageMap = await fetchPagesBatched(allItemIds, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
-    for (const [itemId, page] of Object.entries(itemPageMap)) {
-      if (!page) continue
-      const p      = page.properties ?? {}
-      const projId = p['Projects']?.relation?.[0]?.id ?? null
-      const name   =
-        p['Item Name']?.title?.[0]?.plain_text ??
-        p['Name']?.title?.[0]?.plain_text      ??
-        null
-      itemInfoMap[itemId] = { projectId: projId, name }
-      if (projId) projIdSet.add(projId)
+    // Also fetch any legacy direct-item IDs not yet resolved
+    const unresolvedLegacy = allLegacyIds.filter(id => !itemInfoMap[id])
+    if (unresolvedLegacy.length > 0) {
+      const legacyMap = await fetchPagesBatched(unresolvedLegacy, { concurrency: 5, gapMs: 300, deadlineMs, startedAt })
+      for (const [itemId, page] of Object.entries(legacyMap)) {
+        if (!page) continue
+        const p      = page.properties ?? {}
+        const projId = p['Projects']?.relation?.[0]?.id                    ?? null
+        const name   = p['Item Name']?.title?.[0]?.plain_text ?? p['Name']?.title?.[0]?.plain_text ?? null
+        itemInfoMap[itemId] = { projectId: projId, name }
+        if (projId) projIdSet.add(projId)
+      }
     }
 
-    console.log(`[variations] item pages fetched=${Object.keys(itemPageMap).length} | items resolved=${Object.keys(itemInfoMap).length} | projIds=${projIdSet.size}`)
+    console.log(`[variations] items resolved=${Object.keys(itemInfoMap).length} | projIds=${projIdSet.size} | elapsed=${Date.now()-startedAt}ms`)
 
     // ── Step 4: Resolve project names ─────────────────────────────────────────
     const projMap = {}
@@ -239,9 +258,9 @@ export const handler = async (event) => {
 
     // ── Step 5: Enrich variations ─────────────────────────────────────────────
     const enriched = variations.map(v => {
-      // Build list of items via Related Task chain
-      const taskItemIds   = v.relatedTaskIds.flatMap(tid => taskItemMap[tid] ?? [])
-      const uniqueItemIds = [...new Set(taskItemIds.length ? taskItemIds : (v.legacyItemId ? [v.legacyItemId] : []))]
+      // Build list of items: prefer task-chain resolution, fall back to legacy direct relation
+      const fromTasks     = [...(variationToItemIds[v.id] ?? new Set())]
+      const uniqueItemIds = fromTasks.length > 0 ? fromTasks : (v.legacyItemId ? [v.legacyItemId] : [])
 
       const items = uniqueItemIds
         .map(iid => itemInfoMap[iid])
