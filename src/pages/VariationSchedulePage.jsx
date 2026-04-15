@@ -268,7 +268,7 @@ export default function VariationSchedulePage() {
 
   // Variations
   useEffect(() => {
-    const CACHE_KEY = 'variations-v3';
+    const CACHE_KEY = 'variations-v4';
     const cached = getCached(CACHE_KEY);
     if (cached && refreshKey === 0) {
       setVariations(cached.items ?? []);
@@ -401,7 +401,7 @@ export default function VariationSchedulePage() {
             {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
           {lastRefreshed && <span style={{ fontSize: 10, color: C.muted }}>updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={() => { setCached('variations-v3', null); setRefreshKey(k => k + 1); }} title="Refresh" style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}>↻</button>
+          <button onClick={() => { setCached('variations-v4', null); setRefreshKey(k => k + 1); }} title="Refresh" style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}>↻</button>
         </div>
       </div>
 

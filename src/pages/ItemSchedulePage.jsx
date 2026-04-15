@@ -369,11 +369,11 @@ export default function ItemSchedulePage() {
 
   // Load variations (background, uses shared cache with VariationSchedulePage)
   useEffect(() => {
-    const cached = getCached('variations-v3');
+    const cached = getCached('variations-v4');
     if (cached) { setVariations(cached.items ?? []); return; }
     fetch('/api/variations')
       .then(r => { if (!r.ok) throw new Error('fetch-failed'); return r.json(); })
-      .then(d => { setCached('variations-v3', d); setVariations(d.items ?? []); })
+      .then(d => { setCached('variations-v4', d); setVariations(d.items ?? []); })
       .catch(() => {});
   }, []);
 
