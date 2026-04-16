@@ -12,6 +12,7 @@ import DrawingsPage from './pages/DrawingsPage.jsx';
 import DTDrawingChecksPage from './pages/DTDrawingChecksPage.jsx';
 import ClientCommentReviewPage from './pages/ClientCommentReviewPage.jsx';
 import TeamPage from './pages/TeamPage.jsx';
+import ItemDateMatrixPage from './pages/ItemDateMatrixPage.jsx';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/client/:clientId" element={<ClientHome />} />
         <Route path="/project/:projectId" element={<ProjectHome />} />
         <Route path="/timeline" element={<TimelinePage />} />
+        <Route path="/timeline/item-date-matrix" element={<ItemDateMatrixPage />} />
         <Route path="/timeline/:projectId" element={<TimelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/tasks/production" element={<ProductionPage />} />

@@ -214,6 +214,9 @@ export function transformDrawing(page) {
       actual: d(props,       'C01 Submit Date (Actual)'),
       adj:    anyDate(props, 'C01 Submit Date (Adj)'),
     },
+    c01SignOff: {
+      actual: d(props, 'C01 Sign Off (Actual)'),
+    },
     itemIds: props['Item']?.relation?.map(r => r.id) ?? [],
   }
 }

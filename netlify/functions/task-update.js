@@ -24,7 +24,7 @@ export const handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON' }) }
   }
 
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate, noClientApproval } = body
   if (!id) return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'id is required' }) }
 
   const properties = {}
@@ -52,6 +52,9 @@ export const handler = async (event) => {
 
   if (endDate !== undefined)
     properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
+
+  if (noClientApproval !== undefined)
+    properties['No Client Approval'] = { checkbox: Boolean(noClientApproval) }
 
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {

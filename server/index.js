@@ -557,7 +557,7 @@ app.post('/api/drawings-register/bulk', async (req, res) => {
 // ── POST /api/tasks/update ────────────────────────────────────────────────────
 app.post('/api/tasks/update', async (req, res) => {
   if (!notionRequired(res)) return
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = req.body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate, noClientApproval } = req.body
   if (!id) return res.status(400).json({ error: 'id is required' })
   const properties = {}
   if (description  !== undefined && description !== null)
@@ -576,6 +576,8 @@ app.post('/api/tasks/update', async (req, res) => {
     properties['Start Date'] = startDate ? { date: { start: startDate } } : { date: null }
   if (endDate      !== undefined)
     properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
+  if (noClientApproval !== undefined)
+    properties['No Client Approval'] = { checkbox: Boolean(noClientApproval) }
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
       method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
@@ -587,6 +589,100 @@ app.post('/api/tasks/update', async (req, res) => {
     res.status(err.status ?? 500).json({ error: err.message })
   }
 })
+
+// ── GET /api/schedule-items?projectId=<id> ────────────────────────────────────
+// Returns projects + items for the Item Date Matrix.
+// Only dtStart1Plan and actual dates from Notion — all other dates calculated
+// client-side. Drawings DB queried for s4/s5 status dates + C01 sign-off.
+app.get('/api/schedule-items', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { projectId } = req.query;
+
+  function dtVal(props, key) { return props[key]?.date?.start ?? null; }
+
+  function transformScheduleItem(page, pid) {
+    const p    = page.properties ?? {};
+    const name = p['Item Name']?.title?.[0]?.plain_text ?? '';
+    return {
+      id:               page.id,
+      name,
+      status:           p['Status']?.status?.name              ?? null,
+      projectId:        pid,
+      noClientApproval: p['No Client Approval']?.checkbox      ?? false,
+      dmPhase:          p['DM Phase']?.select?.name            ?? null,
+      contractCategory: p['Contract Category']?.formula?.string
+                     ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
+
+      // Only the 1st DT Start plan date — everything else calculated client-side
+      dtStart1Plan:  dtVal(p, '1st DT Start (Plan)'),
+
+      // Actual dates only (inputs to calcRow)
+      dtStart1Act:   dtVal(p, '1st DT Start (Actual)'),
+      del1ActDate:   dtVal(p, '1st DT Delivery (Actual)'),
+      sub1ActDate:   dtVal(p, '1st Submission Date (Actual)'),
+      dtStart2Act:   dtVal(p, '2nd DT Start (Actual)'),
+      del2ActDate:   dtVal(p, '2nd DT Delivery (Actual)'),
+      sub2ActDate:   dtVal(p, '2nd Submission Date (Actual)'),
+      stCActDate:    dtVal(p, 'Constr. DT Start (Actual)'),
+      delCActDate:   dtVal(p, 'Constr. DT Delivery (Actual)'),
+      subCActDate:   dtVal(p, 'Constr. Submission Date (Actual)'),
+    };
+  }
+
+  try {
+    const [projectPages, taskPages] = await Promise.all([
+      queryAll(DB.projects,
+        { property: 'Status', status: { does_not_equal: 'Done' } },
+        { sorts: [{ property: 'Start Date', direction: 'descending' }] },
+      ),
+      queryAll(DB.tasks,
+        projectId
+          ? { and: [
+              { property: 'Projects', relation: { contains: projectId } },
+              { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
+            ]}
+          : { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
+        { sorts: [{ property: 'Item Name', direction: 'ascending' }] },
+      ),
+    ]);
+
+    const projects = projectPages.map(p => ({
+      id:                   p.id,
+      name:                 p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
+      approvalDays:         p.properties['Approval Days']?.number          ?? null,
+      revisionDays:         p.properties['Revision Days']?.number          ?? null,
+      productionPrepPeriod: p.properties['Production Prep Period']?.number ?? null,
+      qaDefault:            p.properties['QA Default Days']?.number        ?? null,
+    }));
+
+    const items = taskPages.map(page => {
+      const pid = projectId ?? page.properties['Projects']?.relation?.[0]?.id ?? null;
+      return transformScheduleItem(page, pid);
+    });
+
+    // Fetch drawing data for s4/s5 dates, statuses, and C01 sign-off
+    const taskIds    = items.map(i => i.id);
+    const drawingMap = await fetchDrawingMap(taskIds);
+
+    for (const item of items) {
+      const drawings = drawingMap.get(item.id) ?? [];
+      const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean);
+      const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean);
+      const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean);
+      item.s4Date           = s4Dates.length  ? [...s4Dates].sort()[0]  : null;
+      item.s5Date           = s5Dates.length  ? [...s5Dates].sort()[0]  : null;
+      item.c01SignOffActDate = c01Dates.length ? [...c01Dates].sort()[0] : null;
+      item.s4Statuses       = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))];
+      item.s5Statuses       = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))];
+    }
+
+    res.json({ projects, items });
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again' });
+    console.error('[schedule-items]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
