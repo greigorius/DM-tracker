@@ -1,80 +1,58 @@
 /**
  * GET /api/schedule-items?projectId=<id>
  *
- * Returns all schedule items (Tasks DB) with every date field required for the
- * Item Date Matrix — actual dates come directly from Notion rather than being
- * entered manually in the UI.
+ * Returns projects + schedule items for the Item Date Matrix.
+ * Only dtStart1Plan and actual dates are fetched from Notion —
+ * all plan/adj dates are calculated client-side via calcRow.
+ * Drawing DB queried for s4/s5 status dates and C01 sign-off.
  *
  * Response: { projects: [...], items: [...] }
- *   projects — all active projects (for the filter dropdown)
- *   items    — tasks with flat date keys matching the schedule column definitions
  */
 import {
   corsHeaders, tokenGuard, errResponse,
   fetchNotion, notionHeaders, queryAll, withNoPcsa,
+  fetchDrawingMap, d,
 } from './_helpers.js'
 
-const NOTION_API = 'https://api.notion.com/v1'
-
-function d(props, key) {
-  return props[key]?.date?.start ?? null
-}
-
-function transformScheduleItem(page, projectId) {
-  const p = page.properties ?? {}
-
-  const sub1P        = d(p, '1st Submission Date (Plan)')
-  const sub1ActDate  = d(p, '1st Submission Date (Actual)')
-  const sub2P        = d(p, '2nd Submission Date (Plan)')
-  const sub2ActDate  = d(p, '2nd Submission Date (Actual)')
-  const subCP        = d(p, 'Constr. Submission Date (Plan)')
-  const subCActDate  = d(p, 'Constr. Submission Date (Actual)')
-
+function transformScheduleItem(page, pid) {
+  const p    = page.properties ?? {}
+  const name = p['Item Name']?.title?.[0]?.plain_text ?? ''
   return {
     id:               page.id,
-    name:             p['Item Name']?.title?.[0]?.plain_text ?? '',
+    name,
     status:           p['Status']?.status?.name              ?? null,
-    projectId,
+    projectId:        pid,
     noClientApproval: p['No Client Approval']?.checkbox      ?? false,
-    s4Status:         p['S4 Status']?.select?.name           ?? null,
-    s5Status:         p['S5 Status']?.select?.name           ?? null,
+    dmPhase:          p['DM Phase']?.select?.name            ?? null,
+    contractCategory: p['Contract Category']?.formula?.string
+                   ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
 
-    // 1st Issue — Design Intent
+    // Only the 1st DT Start plan date — everything else calculated client-side
     dtStart1Plan:  d(p, '1st DT Start (Plan)'),
+
+    // Actual dates from Notion (inputs to calcRow)
     dtStart1Act:   d(p, '1st DT Start (Actual)'),
-    del1P:         d(p, '1st DT Delivery (Plan)'),
-    del1A:         d(p, '1st DT Delivery (Adj)'),
     del1ActDate:   d(p, '1st DT Delivery (Actual)'),
-    sub1P,
-    sub1A:         d(p, '1st Submission Date (Adj)'),
-    sub1ActDate,
-
-    // 2nd Issue — For Approval
-    st2P:          d(p, '2nd DT Start (Plan)'),
-    st2A:          d(p, '2nd DT Start (Adj)'),
+    sub1ActDate:   d(p, '1st Submission Date (Actual)'),
     dtStart2Act:   d(p, '2nd DT Start (Actual)'),
-    del2P:         d(p, '2nd DT Delivery (Plan)'),
-    del2A:         d(p, '2nd DT Delivery (Adj)'),
     del2ActDate:   d(p, '2nd DT Delivery (Actual)'),
-    sub2P,
-    sub2A:         d(p, '2nd Submission Date (Adj)'),
-    sub2ActDate,
-
-    // Construction Issue — C01
-    stCP:          d(p, 'Constr. DT Start (Plan)'),
-    stCA:          d(p, 'Constr. DT Start (Adj)'),
+    sub2ActDate:   d(p, '2nd Submission Date (Actual)'),
     stCActDate:    d(p, 'Constr. DT Start (Actual)'),
-    delCP:         d(p, 'Constr. DT Delivery (Plan)'),
-    delCA:         d(p, 'Constr. DT Delivery (Adj)'),
     delCActDate:   d(p, 'Constr. DT Delivery (Actual)'),
-    subCP,
-    subCA:         d(p, 'Constr. Submission Date (Adj)'),
-    subCActDate,
+    subCActDate:   d(p, 'Constr. Submission Date (Actual)'),
+  }
+}
 
-    // Production & Install
-    prodDateP:     d(p, 'Production Date (Plan)'),
-    prodDateAdj:   d(p, 'Production Date (Adj)'),
-    instDate:      d(p, 'Install Date'),
+function transformProject(page) {
+  const p = page.properties ?? {}
+  return {
+    id:                   page.id,
+    name:                 p['Project Name']?.title?.[0]?.plain_text ?? page.id,
+    // These may not exist in the DB; frontend will use localStorage + defaults if null
+    approvalDays:         p['Approval Days']?.number          ?? null,
+    revisionDays:         p['Revision Days']?.number          ?? null,
+    productionPrepPeriod: p['Production Prep Period']?.number ?? null,
+    qaDefault:            p['QA Default Days']?.number        ?? null,
   }
 }
 
@@ -85,18 +63,15 @@ export const handler = async (event) => {
   const projectId = event.queryStringParameters?.projectId ?? null
 
   try {
-    // ── Fetch projects (for dropdown) ─────────────────────────────────────────
+    // ── Projects ───────────────────────────────────────────────────────────────
     const projectPages = await queryAll(
       process.env.NOTION_DB_PROJECTS,
       { property: 'Status', status: { does_not_equal: 'Done' } },
       { sorts: [{ property: 'Start Date', direction: 'descending' }] },
     )
-    const projects = projectPages.map(p => ({
-      id:   p.id,
-      name: p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
-    }))
+    const projects = projectPages.map(transformProject)
 
-    // ── Fetch tasks ───────────────────────────────────────────────────────────
+    // ── Tasks ──────────────────────────────────────────────────────────────────
     const baseFilter = projectId
       ? { property: 'Projects', relation: { contains: projectId } }
       : null
@@ -108,12 +83,29 @@ export const handler = async (event) => {
     )
 
     const items = taskPages.map(page => {
-      // Determine which project this task belongs to for the response
       const pid = projectId
         ?? page.properties['Projects']?.relation?.[0]?.id
         ?? null
       return transformScheduleItem(page, pid)
     })
+
+    // ── Drawings: s4/s5 dates + statuses + C01 sign-off ───────────────────────
+    const taskIds    = items.map(i => i.id)
+    const drawingMap = await fetchDrawingMap(taskIds)
+
+    for (const item of items) {
+      const drawings = drawingMap.get(item.id) ?? []
+
+      const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean)
+      const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean)
+      const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean)
+
+      item.s4Date            = s4Dates.length  ? [...s4Dates].sort()[0]  : null
+      item.s5Date            = s5Dates.length  ? [...s5Dates].sort()[0]  : null
+      item.c01SignOffActDate  = c01Dates.length ? [...c01Dates].sort()[0] : null
+      item.s4Statuses        = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))]
+      item.s5Statuses        = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))]
+    }
 
     return {
       statusCode: 200,

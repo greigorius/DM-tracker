@@ -589,53 +589,41 @@ app.post('/api/tasks/update', async (req, res) => {
 })
 
 // ── GET /api/schedule-items?projectId=<id> ────────────────────────────────────
-// Returns all projects + schedule items with every Notion date field for the
-// Item Date Matrix. Optional projectId filter; excludes PCSA items.
+// Returns projects + items for the Item Date Matrix.
+// Only dtStart1Plan and actual dates from Notion — all other dates calculated
+// client-side. Drawings DB queried for s4/s5 status dates + C01 sign-off.
 app.get('/api/schedule-items', async (req, res) => {
   if (!notionRequired(res)) return;
   const { projectId } = req.query;
 
-  function d(props, key) { return props[key]?.date?.start ?? null; }
+  function dtVal(props, key) { return props[key]?.date?.start ?? null; }
 
   function transformScheduleItem(page, pid) {
-    const p = page.properties ?? {};
+    const p    = page.properties ?? {};
+    const name = p['Item Name']?.title?.[0]?.plain_text ?? '';
     return {
       id:               page.id,
-      name:             p['Item Name']?.title?.[0]?.plain_text ?? '',
+      name,
       status:           p['Status']?.status?.name              ?? null,
       projectId:        pid,
       noClientApproval: p['No Client Approval']?.checkbox      ?? false,
-      s4Status:         p['S4 Status']?.select?.name           ?? null,
-      s5Status:         p['S5 Status']?.select?.name           ?? null,
-      dtStart1Plan:  d(p, '1st DT Start (Plan)'),
-      dtStart1Act:   d(p, '1st DT Start (Actual)'),
-      del1P:         d(p, '1st DT Delivery (Plan)'),
-      del1A:         d(p, '1st DT Delivery (Adj)'),
-      del1ActDate:   d(p, '1st DT Delivery (Actual)'),
-      sub1P:         d(p, '1st Submission Date (Plan)'),
-      sub1A:         d(p, '1st Submission Date (Adj)'),
-      sub1ActDate:   d(p, '1st Submission Date (Actual)'),
-      st2P:          d(p, '2nd DT Start (Plan)'),
-      st2A:          d(p, '2nd DT Start (Adj)'),
-      dtStart2Act:   d(p, '2nd DT Start (Actual)'),
-      del2P:         d(p, '2nd DT Delivery (Plan)'),
-      del2A:         d(p, '2nd DT Delivery (Adj)'),
-      del2ActDate:   d(p, '2nd DT Delivery (Actual)'),
-      sub2P:         d(p, '2nd Submission Date (Plan)'),
-      sub2A:         d(p, '2nd Submission Date (Adj)'),
-      sub2ActDate:   d(p, '2nd Submission Date (Actual)'),
-      stCP:          d(p, 'Constr. DT Start (Plan)'),
-      stCA:          d(p, 'Constr. DT Start (Adj)'),
-      stCActDate:    d(p, 'Constr. DT Start (Actual)'),
-      delCP:         d(p, 'Constr. DT Delivery (Plan)'),
-      delCA:         d(p, 'Constr. DT Delivery (Adj)'),
-      delCActDate:   d(p, 'Constr. DT Delivery (Actual)'),
-      subCP:         d(p, 'Constr. Submission Date (Plan)'),
-      subCA:         d(p, 'Constr. Submission Date (Adj)'),
-      subCActDate:   d(p, 'Constr. Submission Date (Actual)'),
-      prodDateP:     d(p, 'Production Date (Plan)'),
-      prodDateAdj:   d(p, 'Production Date (Adj)'),
-      instDate:      d(p, 'Install Date'),
+      dmPhase:          p['DM Phase']?.select?.name            ?? null,
+      contractCategory: p['Contract Category']?.formula?.string
+                     ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
+
+      // Only the 1st DT Start plan date — everything else calculated client-side
+      dtStart1Plan:  dtVal(p, '1st DT Start (Plan)'),
+
+      // Actual dates only (inputs to calcRow)
+      dtStart1Act:   dtVal(p, '1st DT Start (Actual)'),
+      del1ActDate:   dtVal(p, '1st DT Delivery (Actual)'),
+      sub1ActDate:   dtVal(p, '1st Submission Date (Actual)'),
+      dtStart2Act:   dtVal(p, '2nd DT Start (Actual)'),
+      del2ActDate:   dtVal(p, '2nd DT Delivery (Actual)'),
+      sub2ActDate:   dtVal(p, '2nd Submission Date (Actual)'),
+      stCActDate:    dtVal(p, 'Constr. DT Start (Actual)'),
+      delCActDate:   dtVal(p, 'Constr. DT Delivery (Actual)'),
+      subCActDate:   dtVal(p, 'Constr. Submission Date (Actual)'),
     };
   }
 
@@ -657,16 +645,34 @@ app.get('/api/schedule-items', async (req, res) => {
     ]);
 
     const projects = projectPages.map(p => ({
-      id:   p.id,
-      name: p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
+      id:                   p.id,
+      name:                 p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
+      approvalDays:         p.properties['Approval Days']?.number          ?? null,
+      revisionDays:         p.properties['Revision Days']?.number          ?? null,
+      productionPrepPeriod: p.properties['Production Prep Period']?.number ?? null,
+      qaDefault:            p.properties['QA Default Days']?.number        ?? null,
     }));
 
     const items = taskPages.map(page => {
-      const pid = projectId
-        ?? page.properties['Projects']?.relation?.[0]?.id
-        ?? null;
+      const pid = projectId ?? page.properties['Projects']?.relation?.[0]?.id ?? null;
       return transformScheduleItem(page, pid);
     });
+
+    // Fetch drawing data for s4/s5 dates, statuses, and C01 sign-off
+    const taskIds    = items.map(i => i.id);
+    const drawingMap = await fetchDrawingMap(taskIds);
+
+    for (const item of items) {
+      const drawings = drawingMap.get(item.id) ?? [];
+      const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean);
+      const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean);
+      const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean);
+      item.s4Date           = s4Dates.length  ? [...s4Dates].sort()[0]  : null;
+      item.s5Date           = s5Dates.length  ? [...s5Dates].sort()[0]  : null;
+      item.c01SignOffActDate = c01Dates.length ? [...c01Dates].sort()[0] : null;
+      item.s4Statuses       = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))];
+      item.s5Statuses       = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))];
+    }
 
     res.json({ projects, items });
   } catch (err) {

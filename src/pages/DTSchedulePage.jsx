@@ -1,82 +1,129 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import AppNav from '../components/AppNav.jsx';
-import { fmtShort, wdBetween, addWD, toISO, enrichItem } from '../lib/scheduleCalc.js';
+import { calcRow, toISO, fmtShort } from '../lib/scheduleCalc.js';
+import { ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 
-// ── Colours (DMTracker palette) ───────────────────────────────────────────────
+// ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
-  bg:      '#0a0f1a',
-  surface: '#0d1830',
-  border:  '#1e2d45',
-  text:    '#e2e8f0',
-  muted:   '#7b90b0',
-  sec:     '#94a3b8',
-  active:  '#60a5fa',
-  plan:    '#d4d4d4',
-  adj:     '#a78bfa',
-  actual:  '#4ade80',
+  bg: '#0a0f1a', surface: '#0d1830', border: '#1e2d45', text: '#e2e8f0',
+  muted: '#7b90b0', sec: '#94a3b8', active: '#60a5fa',
+  plan: '#d4d4d4', adj: '#a78bfa', actual: '#4ade80',
 };
 
-// ── Milestone columns (the key DT schedule milestones per issue) ───────────────
+const selStyle = {
+  background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
+  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+};
+
+const LS_OVERRIDES = 'dmtracker:schedule-overrides';
+const DEFAULT_PROJ_CFG = { approvalDays: 10, revisionDays: 15, productionPrepPeriod: 5, qaDefault: 3 };
+
+// ── Milestone columns (condensed key DT schedule milestones) ──────────────────
+// Keys match calcRow output (Date objects isoified) + direct Notion fields
 const MILESTONES = [
   // 1st Issue
   { key: 'dtStart1Plan',   label: '1st DT\nStart (P)',     src: 'plan',   group: '1st',  groupColor: '#60a5fa' },
   { key: 'dtStart1Act',    label: '1st DT\nStart (A)',     src: 'actual', group: '1st',  groupColor: '#60a5fa' },
   { key: 'sub1P',          label: '1st Sub\n(Plan)',       src: 'plan',   group: '1st',  groupColor: '#60a5fa' },
   { key: 'sub1A',          label: '1st Sub\n(Adj)',        src: 'adj',    group: '1st',  groupColor: '#60a5fa' },
-  { key: 'sub1ActDate',    label: '1st Sub\n(Actual)',     src: 'actual', group: '1st',  groupColor: '#60a5fa' },
+  { key: 'sub1Act',        label: '1st Sub\n(Actual)',     src: 'actual', group: '1st',  groupColor: '#60a5fa' },
   { key: 'dtSlip1',        label: '1st\nSlip',            src: 'slip',   group: '1st',  groupColor: '#60a5fa' },
   // S4 Approval
   { key: 's4ApprovalPlan', label: 'S4 Appr\n(Plan)',      src: 'plan',   group: 'S4',   groupColor: '#38bdf8' },
+  { key: 's4Date',         label: 'S4 Appr\n(Actual)',    src: 'actual', group: 'S4',   groupColor: '#38bdf8' },
   // 2nd Issue
   { key: 'sub2P',          label: '2nd Sub\n(Plan)',       src: 'plan',   group: '2nd',  groupColor: '#a78bfa' },
   { key: 'sub2A',          label: '2nd Sub\n(Adj)',        src: 'adj',    group: '2nd',  groupColor: '#a78bfa' },
-  { key: 'sub2ActDate',    label: '2nd Sub\n(Actual)',     src: 'actual', group: '2nd',  groupColor: '#a78bfa' },
+  { key: 'sub2Act',        label: '2nd Sub\n(Actual)',     src: 'actual', group: '2nd',  groupColor: '#a78bfa' },
   { key: 'dtSlip2',        label: '2nd\nSlip',            src: 'slip',   group: '2nd',  groupColor: '#a78bfa' },
   // S5 Approval
   { key: 's5ApprovalPlan', label: 'S5 Appr\n(Plan)',      src: 'plan',   group: 'S5',   groupColor: '#38bdf8' },
+  { key: 's5Date',         label: 'S5 Appr\n(Actual)',    src: 'actual', group: 'S5',   groupColor: '#38bdf8' },
   // Construction
-  { key: 'subCP',          label: 'C01 Sub\n(Plan)',       src: 'plan',   group: 'C01',  groupColor: '#fb923c' },
-  { key: 'subCA',          label: 'C01 Sub\n(Adj)',        src: 'adj',    group: 'C01',  groupColor: '#fb923c' },
-  { key: 'subCActDate',    label: 'C01 Sub\n(Actual)',     src: 'actual', group: 'C01',  groupColor: '#fb923c' },
-  { key: 'dtSlipC',        label: 'C01\nSlip',            src: 'slip',   group: 'C01',  groupColor: '#fb923c' },
-  { key: 'c01SignOffPlan', label: 'C01 Sign\nOff (Plan)',  src: 'plan',   group: 'C01',  groupColor: '#fb923c' },
+  { key: 'subCP',           label: 'C01 Sub\n(Plan)',      src: 'plan',   group: 'C01',  groupColor: '#fb923c' },
+  { key: 'subCA',           label: 'C01 Sub\n(Adj)',       src: 'adj',    group: 'C01',  groupColor: '#fb923c' },
+  { key: 'subCActSnap',     label: 'C01 Sub\n(Actual)',    src: 'actual', group: 'C01',  groupColor: '#fb923c' },
+  { key: 'dtSlipC',         label: 'C01\nSlip',           src: 'slip',   group: 'C01',  groupColor: '#fb923c' },
+  { key: 'c01SignOffPlan',  label: 'C01 Sign\nOff (Plan)', src: 'plan',   group: 'C01',  groupColor: '#fb923c' },
+  { key: 'c01SignOffAdj',   label: 'C01 Sign\nOff (Adj)',  src: 'adj',    group: 'C01',  groupColor: '#fb923c' },
+  { key: 'c01SignOffActSnap', label: 'C01 Sign\nOff (Act)', src: 'actual', group: 'C01', groupColor: '#fb923c' },
   // Production
-  { key: 'prodDateP',      label: 'Prod\n(Plan)',          src: 'plan',   group: 'Prod', groupColor: '#4ade80' },
-  { key: 'prodDateAdj',    label: 'Prod\n(Adj)',           src: 'adj',    group: 'Prod', groupColor: '#4ade80' },
-  { key: 'instDate',       label: 'Install\nDate',         src: 'plan',   group: 'Prod', groupColor: '#4ade80' },
+  { key: 'prodDateP',       label: 'Prod\n(Plan)',          src: 'plan',   group: 'Prod', groupColor: '#4ade80' },
+  { key: 'prodDateAdj',     label: 'Prod\n(Adj)',           src: 'adj',    group: 'Prod', groupColor: '#4ade80' },
+  { key: 'instDate',        label: 'Install\nDate',         src: 'plan',   group: 'Prod', groupColor: '#4ade80' },
 ];
 
-// ── NCA-skipped milestone keys ────────────────────────────────────────────────
 const NCA_SKIPPED = new Set([
-  'sub1P','sub1A','sub1ActDate','dtSlip1','s4ApprovalPlan',
-  'sub2P','sub2A','sub2ActDate','dtSlip2','s5ApprovalPlan',
+  'sub1P','sub1A','sub1Act','dtSlip1','s4ApprovalPlan','s4Date',
+  'sub2P','sub2A','sub2Act','dtSlip2','s5ApprovalPlan','s5Date',
 ]);
 
+// ── Build display row (calcRow + ISO) ─────────────────────────────────────────
+function buildDisplayRow(item, override) {
+  const cfg = DEFAULT_PROJ_CFG;
+  const nca = override?.noClientApproval ?? item.noClientApproval;
+  const rowInput = {
+    dtStart1Plan:    item.dtStart1Plan,
+    dtStart1Act:     item.dtStart1Act,
+    del1ActDate:     item.del1ActDate,
+    sub1ActDate:     item.sub1ActDate,
+    dtStart2Act:     item.dtStart2Act,
+    del2ActDate:     item.del2ActDate,
+    sub2ActDate:     item.sub2ActDate,
+    stCActDate:      item.stCActDate,
+    delCActDate:     item.delCActDate,
+    subCActDate:     item.subCActDate,
+    s4Date:          item.s4Date,
+    s5Date:          item.s5Date,
+    c01SignOffActDate: item.c01SignOffActDate,
+    dd1:             override?.dd1            ?? 0,
+    qa1:             override?.qa1            ?? cfg.qaDefault,
+    qa2:             override?.qa2            ?? cfg.qaDefault,
+    constrDrawDays:  override?.constrDrawDays ?? 15,
+    qaC:             override?.qaC            ?? cfg.qaDefault,
+    noClientApproval: nca,
+    productionTime:  null,
+  };
+  const calc = calcRow(rowInput, cfg);
+  const calc2 = {};
+  for (const [k, v] of Object.entries(calc)) calc2[k] = v instanceof Date ? toISO(v) : v;
+  return {
+    dtStart1Plan: item.dtStart1Plan,
+    dtStart1Act:  item.dtStart1Act,
+    s4Date:       item.s4Date,
+    s5Date:       item.s5Date,
+    nca,
+    ...calc2,
+  };
+}
+
 // ── CSV export ────────────────────────────────────────────────────────────────
-function exportCSV(items, projects) {
-  const fmt = iso => iso ? (() => {
+function exportCSV(items, displayRows, projects) {
+  const projMap = Object.fromEntries(projects.map(p => [p.id, p.name]));
+  const fmt     = iso => {
+    if (!iso) return '';
     const d = new Date(iso);
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  })() : '';
+  };
   const fmtSlip = n => n == null ? '' : n === 0 ? '0d' : (n > 0 ? `+${n}d` : `${n}d`);
-  const projMap = Object.fromEntries(projects.map(p => [p.id, p.name]));
 
-  const slipKeys = new Set(['dtSlip1','dtSlip2','dtSlipC']);
-  const headers = ['Project', 'Item Name', 'Status', 'NCA', ...MILESTONES.map(m => m.label.replace('\n', ' '))];
-  const rows = items.map(item => [
-    projMap[item.projectId] ?? '',
-    item.name,
-    item.status ?? '',
-    item.noClientApproval ? 'Yes' : '',
-    ...MILESTONES.map(m => {
-      if (item.noClientApproval && NCA_SKIPPED.has(m.key)) return 'N/A';
-      if (m.src === 'slip') return fmtSlip(item[m.key]);
-      return fmt(item[m.key]);
-    }),
-  ]);
+  const headers = ['Project', 'Item Name', 'Status', 'NCA',
+    ...MILESTONES.map(m => m.label.replace('\n', ' '))];
+
+  const rows = items.map((item, i) => {
+    const dr = displayRows[i];
+    return [
+      projMap[item.projectId] ?? '', item.name, item.status ?? '', dr.nca ? 'Yes' : '',
+      ...MILESTONES.map(m => {
+        if (dr.nca && NCA_SKIPPED.has(m.key)) return 'N/A';
+        if (m.src === 'slip') return fmtSlip(dr[m.key]);
+        return fmt(dr[m.key]);
+      }),
+    ];
+  });
 
   const csv = [headers, ...rows]
-    .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
     .join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
@@ -91,69 +138,62 @@ export default function DTSchedulePage() {
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState(null);
   const [selProject,    setSelProject]    = useState('');
+  const [selPhase,      setSelPhase]      = useState('');
+  const [selStatus,     setSelStatus]     = useState('');
   const [itemSearch,    setItemSearch]    = useState('');
   const [lastRefreshed, setLastRefreshed] = useState(null);
+
+  const [rowOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_OVERRIDES) ?? '{}'); }
+    catch { return {}; }
+  });
 
   const fetchData = useCallback(async (projectId) => {
     setLoading(true); setError(null);
     try {
-      const qs = projectId ? `?projectId=${projectId}` : '';
+      const qs  = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
       const res = await fetch(`/api/schedule-items${qs}`);
       if (!res.ok) throw new Error(`${res.status}`);
-      const json = await res.json();
-      setData({ ...json, items: json.items.map(enrichItem) });
+      setData(await res.json());
       setLastRefreshed(new Date());
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(''); }, [fetchData]);
 
-  function handleProjectChange(pid) {
-    setSelProject(pid);
-    fetchData(pid);
-  }
+  function handleProjectChange(pid) { setSelProject(pid); fetchData(pid); }
 
   const projects = data?.projects ?? [];
-  const allItems = data?.items ?? [];
+  const allItems = data?.items    ?? [];
 
-  const visItems = allItems.filter(item => {
+  const phases   = useMemo(() => [...new Set(allItems.map(i => i.dmPhase).filter(Boolean))].sort(), [allItems]);
+  const statuses = useMemo(() => [...new Set(allItems.map(i => i.status).filter(Boolean))].sort(), [allItems]);
+
+  const visItems = useMemo(() => allItems.filter(item => {
     if (selProject && item.projectId !== selProject) return false;
+    if (selPhase   && item.dmPhase   !== selPhase)   return false;
+    if (selStatus  && item.status    !== selStatus)   return false;
     if (itemSearch && !item.name.toLowerCase().includes(itemSearch.toLowerCase())) return false;
     return true;
-  });
+  }), [allItems, selProject, selPhase, selStatus, itemSearch]);
 
-  // ── Styles ──────────────────────────────────────────────────────────────────
+  const displayRows = useMemo(
+    () => visItems.map(item => buildDisplayRow(item, rowOverrides[item.id])),
+    [visItems, rowOverrides],
+  );
+
+  // Build group header spans
+  const groups = [];
+  for (const m of MILESTONES) {
+    if (!groups.length || groups[groups.length - 1].label !== m.group) {
+      groups.push({ label: m.group, color: m.groupColor, count: 1 });
+    } else {
+      groups[groups.length - 1].count++;
+    }
+  }
+
   const S = {
-    page: {
-      minHeight: '100vh', background: C.bg, color: C.text,
-      fontFamily: "'DM Mono','ui-monospace',monospace",
-      padding: '24px 20px',
-    },
-    heading: { fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: C.text, margin: 0 },
-    subtext:  { fontSize: 11, color: C.muted, marginLeft: 10 },
-    topBar: {
-      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      marginBottom: 16,
-    },
-    select: {
-      background: C.surface, border: `1px solid ${C.border}`, color: C.text,
-      fontSize: 11, padding: '5px 9px', borderRadius: 4, fontFamily: 'inherit',
-      cursor: 'pointer', minWidth: 200,
-    },
-    input: {
-      background: C.surface, border: `1px solid ${C.border}`, color: C.text,
-      fontSize: 11, padding: '5px 9px', borderRadius: 4, fontFamily: 'inherit',
-      width: 200,
-    },
-    btn: {
-      background: 'transparent', border: `1px solid ${C.border}`, color: C.active,
-      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '5px 12px',
-      borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
-    },
     th: {
       position: 'sticky', top: 0, zIndex: 10,
       background: '#0d1010', border: `1px solid ${C.border}`,
@@ -166,92 +206,65 @@ export default function DTSchedulePage() {
       background: '#0a0f1a', border: `1px solid ${C.border}`,
       minWidth: 220, maxWidth: 280, textAlign: 'left',
     },
-    td: { padding: '3px 6px', border: `1px solid ${C.border}`, fontSize: 11, whiteSpace: 'nowrap' },
-    matrix: {
-      borderCollapse: 'collapse', fontSize: 10,
-      fontFamily: "'DM Mono','ui-monospace',monospace",
-    },
+    td: { padding: '2px 4px', border: `1px solid ${C.border}`, fontSize: 11, whiteSpace: 'nowrap' },
   };
 
-  function statusBadge(status) {
-    const colors = {
-      'Not started':    { bg: '#1a2035', text: '#7b90b0' },
-      'In progress':    { bg: '#0d1e35', text: '#60a5fa' },
-      'Complete':       { bg: '#0a1f14', text: '#4ade80' },
-      'PC Approved':    { bg: '#0a1f14', text: '#4ade80' },
-      'In Manufacture': { bg: '#1a1400', text: '#facc15' },
-      'Omitted':        { bg: '#1a1010', text: '#ef4444' },
-    };
-    const c = colors[status] ?? { bg: '#14182a', text: C.muted };
-    return (
-      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3,
-        background: c.bg, color: c.text, fontWeight: 600, letterSpacing: '0.04em',
-        textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-        {status ?? '—'}
-      </span>
-    );
-  }
+  const pageWrap = {
+    minHeight: '100vh', background: C.bg, color: C.text,
+    fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 20px',
+  };
+  const h1Style = {
+    fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+    margin: '0 0 16px', color: C.text,
+  };
 
-  if (loading && !data) {
-    return (
-      <div style={S.page}>
-        <AppNav />
-        <p style={{ color: C.muted, fontSize: 11 }}>Loading schedule data…</p>
-      </div>
-    );
-  }
+  if (loading && !data) return (
+    <div style={pageWrap}>
+      <h1 style={h1Style}>DT SCHEDULE</h1>
+      <AppNav />
+      <p style={{ color: C.muted, fontSize: 11, marginTop: 24 }}>Loading schedule data…</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div style={S.page}>
-        <AppNav />
-        <p style={{ color: '#f87171', fontSize: 11 }}>Error: {error}</p>
-      </div>
-    );
-  }
-
-  // Build group spans for the header
-  const groups = [];
-  let gi = 0;
-  for (const m of MILESTONES) {
-    if (!groups.length || groups[groups.length - 1].label !== m.group) {
-      groups.push({ label: m.group, color: m.groupColor, count: 1 });
-    } else {
-      groups[groups.length - 1].count++;
-    }
-  }
+  if (error) return (
+    <div style={pageWrap}>
+      <h1 style={h1Style}>DT SCHEDULE</h1>
+      <AppNav />
+      <p style={{ color: '#f87171', fontSize: 11, marginTop: 24 }}>Error: {error}</p>
+    </div>
+  );
 
   return (
-    <div style={S.page}>
+    <div style={pageWrap}>
+
+      {/* Heading ABOVE nav */}
+      <h1 style={h1Style}>
+        DT SCHEDULE
+        {lastRefreshed && (
+          <span style={{ fontSize: 10, fontWeight: 400, color: C.muted, marginLeft: 10 }}>
+            updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </h1>
+
       <AppNav />
 
-      {/* ── Header ── */}
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <div>
-          <span style={S.heading}>DT SCHEDULE</span>
-          {lastRefreshed && (
-            <span style={S.subtext}>
-              last updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
-        <span style={{ fontSize: 11, color: C.muted }}>
-          {visItems.length} item{visItems.length !== 1 ? 's' : ''}
-          {visItems.length !== allItems.length ? ` of ${allItems.length}` : ''}
-        </span>
-      </div>
+      {/* ── Filter bar ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: 20 }}>
 
-      {/* ── Filters + CSV ── */}
-      <div style={S.topBar}>
-        <select
-          value={selProject}
-          onChange={e => handleProjectChange(e.target.value)}
-          style={S.select}
-        >
+        <select value={selProject} onChange={e => handleProjectChange(e.target.value)} style={selStyle}>
           <option value=''>All Projects</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+
+        <select value={selPhase} onChange={e => setSelPhase(e.target.value)} style={selStyle}>
+          <option value=''>All Phases</option>
+          {phases.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+
+        <select value={selStatus} onChange={e => setSelStatus(e.target.value)} style={selStyle}>
+          <option value=''>All Statuses</option>
+          {statuses.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
         <input
@@ -259,30 +272,34 @@ export default function DTSchedulePage() {
           placeholder='Search items…'
           value={itemSearch}
           onChange={e => setItemSearch(e.target.value)}
-          style={S.input}
+          style={{ ...selStyle, width: 160, color: C.text }}
         />
 
-        {loading && <span style={{ fontSize: 10, color: C.muted }}>Refreshing…</span>}
+        {loading && <span style={{ fontSize: 10, color: C.muted }}>↺</span>}
+
+        <span style={{ flex: 1 }} />
+
+        <span style={{ fontSize: 10, color: C.muted }}>
+          {visItems.length} item{visItems.length !== 1 ? 's' : ''}
+          {visItems.length !== allItems.length ? ` of ${allItems.length}` : ''}
+        </span>
 
         <button
-          style={{ ...S.btn, marginLeft: 'auto' }}
-          onClick={() => exportCSV(visItems, projects)}
+          onClick={() => exportCSV(visItems, displayRows, projects)}
+          style={{ ...selStyle, color: C.active, padding: '3px 10px' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.active; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e2d45'; }}
         >
           EXPORT CSV
         </button>
       </div>
 
       {/* ── Table ── */}
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 210px)', border: `1px solid ${C.border}`, borderRadius: 6 }}>
-        <table style={S.matrix}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)', border: `1px solid ${C.border}`, borderRadius: 6 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 10, fontFamily: "'DM Mono','ui-monospace',monospace" }}>
           <thead>
-            {/* Group header row */}
             <tr>
-              <th rowSpan={2} style={{ ...S.th, ...S.stickyName, zIndex: 30, verticalAlign: 'middle', height: 28 }}>
-                Item Name
-              </th>
+              <th rowSpan={2} style={{ ...S.th, ...S.stickyName, zIndex: 30, verticalAlign: 'middle', height: 28 }}>Item Name</th>
               <th rowSpan={2} style={{ ...S.th, minWidth: 80, verticalAlign: 'middle' }}>Status</th>
               {groups.map((g, i) => (
                 <th
@@ -300,17 +317,15 @@ export default function DTSchedulePage() {
                 </th>
               ))}
             </tr>
-            {/* Column header row */}
             <tr>
               {MILESTONES.map((m, mi) => {
-                const prevGroup = mi === 0 ? null : MILESTONES[mi - 1].group;
-                const isGroupStart = prevGroup !== m.group;
+                const isGroupStart = mi === 0 || MILESTONES[mi - 1].group !== m.group;
                 return (
                   <th
                     key={m.key}
                     style={{
                       ...S.th,
-                      minWidth: m.src === 'slip' ? 54 : 90,
+                      minWidth: m.src === 'slip' ? 50 : 84,
                       borderLeft: isGroupStart ? `3px solid ${m.groupColor}66` : undefined,
                     }}
                   >
@@ -330,32 +345,34 @@ export default function DTSchedulePage() {
               </tr>
             )}
             {visItems.map((item, ri) => {
+              const dr    = displayRows[ri];
               const rowBg = ri % 2 === 0 ? 'transparent' : 'rgba(30,45,69,0.3)';
+              const scfg  = ITEM_STATUS_COLORS[item.status] ?? ITEM_STATUS_DEFAULT;
+
               return (
                 <tr key={item.id} style={{ background: rowBg }}>
-                  {/* Sticky name */}
-                  <td style={{ ...S.td, ...S.stickyName, background: ri % 2 === 0 ? C.bg : '#0c1220', zIndex: 5 }}>
-                    <span style={{ fontSize: 11, color: C.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.name}
-                    </span>
-                    {item.noClientApproval && (
-                      <span style={{ fontSize: 8, color: '#facc15', background: '#1a1400', padding: '0 3px', borderRadius: 2, marginTop: 1, display: 'inline-block' }}>NCA</span>
-                    )}
+                  <td style={{ ...S.td, ...S.stickyName, background: ri % 2 === 0 ? C.bg : '#0c1220', zIndex: 5, padding: '3px 6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                      <span style={{ fontSize: 11, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {item.name}
+                      </span>
+                      {dr.nca && (
+                        <span style={{ fontSize: 8, color: '#facc15', background: '#1a1400', padding: '0 3px', borderRadius: 2, flexShrink: 0 }}>NCA</span>
+                      )}
+                    </div>
                   </td>
 
-                  {/* Status */}
                   <td style={{ ...S.td, textAlign: 'center' }}>
-                    {statusBadge(item.status)}
+                    <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: scfg.bg, color: scfg.text, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                      {item.status ?? '—'}
+                    </span>
                   </td>
 
-                  {/* Milestone cells */}
                   {MILESTONES.map((m, mi) => {
-                    const prevGroup = mi === 0 ? null : MILESTONES[mi - 1].group;
-                    const isGroupStart = prevGroup !== m.group;
-                    const groupBorder = isGroupStart ? `3px solid ${m.groupColor}66` : undefined;
+                    const isGroupStart = mi === 0 || MILESTONES[mi - 1].group !== m.group;
+                    const groupBorder  = isGroupStart ? `3px solid ${m.groupColor}66` : undefined;
 
-                    // NCA skip
-                    if (item.noClientApproval && NCA_SKIPPED.has(m.key)) {
+                    if (dr.nca && NCA_SKIPPED.has(m.key)) {
                       return (
                         <td key={m.key} style={{ ...S.td, textAlign: 'center', borderLeft: groupBorder, background: 'rgba(30,45,69,0.1)' }}>
                           <span style={{ fontSize: 10, color: '#2a3a4a' }}>N/A</span>
@@ -364,39 +381,29 @@ export default function DTSchedulePage() {
                     }
 
                     if (m.src === 'slip') {
-                      const slip = item[m.key];
-                      if (slip == null) {
-                        return (
-                          <td key={m.key} style={{ ...S.td, textAlign: 'center', borderLeft: groupBorder }}>
-                            <span style={{ color: '#2a3a4a', fontSize: 10 }}>—</span>
-                          </td>
-                        );
-                      }
+                      const slip = dr[m.key];
+                      if (slip == null) return (
+                        <td key={m.key} style={{ ...S.td, textAlign: 'center', borderLeft: groupBorder }}>
+                          <span style={{ color: '#2a3a4a', fontSize: 10 }}>—</span>
+                        </td>
+                      );
                       const late = slip > 0;
                       return (
                         <td key={m.key} style={{ ...S.td, textAlign: 'center', borderLeft: groupBorder }}>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700,
-                            color: late ? '#f97316' : slip < 0 ? '#4ade80' : '#555',
-                            background: late ? '#1a0800' : slip < 0 ? '#001a0a' : 'transparent',
-                            padding: '1px 3px', borderRadius: 3,
-                          }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: late ? '#f97316' : slip < 0 ? '#4ade80' : '#555', background: late ? '#1a0800' : slip < 0 ? '#001a0a' : 'transparent', padding: '1px 3px', borderRadius: 3 }}>
                             {slip === 0 ? '0d' : (late ? `+${slip}` : `${slip}`) + 'd'}
                           </span>
                         </td>
                       );
                     }
 
-                    const iso = item[m.key];
+                    const iso     = dr[m.key];
                     const display = fmtShort(iso ? new Date(iso) : null);
-                    const color = m.src === 'actual' ? C.actual : m.src === 'adj' ? C.adj : C.plan;
-                    const bg    = m.src === 'adj' ? 'rgba(139,92,246,0.06)' : 'transparent';
-
+                    const color   = m.src === 'actual' ? C.actual : m.src === 'adj' ? C.adj : C.plan;
+                    const bg      = m.src === 'adj' ? 'rgba(139,92,246,0.06)' : 'transparent';
                     return (
                       <td key={m.key} style={{ ...S.td, textAlign: 'center', borderLeft: groupBorder, background: bg }}>
-                        <span style={{ fontSize: 10, color: iso ? color : '#2a3a4a' }}>
-                          {display}
-                        </span>
+                        <span style={{ fontSize: 10, color: iso ? color : '#2a3a4a' }}>{display}</span>
                       </td>
                     );
                   })}

@@ -1,7 +1,7 @@
 /**
  * scheduleCalc.js
- * Workday helpers and date formatting for the Item Date Matrix.
- * Ported from SchedulingTool/App.jsx.
+ * Workday helpers + schedule engine for the Item Date Matrix.
+ * calcRow logic ported verbatim from SchedulingTool/App.jsx.
  */
 
 // ── UK Public Holidays — England & Wales 2024–2028 ────────────────────────────
@@ -59,28 +59,122 @@ export function fmtShort(d) {
   if (!d) return '—';
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return '—';
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const dd = String(dt.getDate()).padStart(2, '0');
-  const mm = MONTHS[dt.getMonth()];
-  const yy = String(dt.getFullYear()).slice(2);
-  return `${dd}${mm}${yy}`; // e.g. "27Mar26"
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(dt.getDate()).padStart(2,'0')}${M[dt.getMonth()]}${String(dt.getFullYear()).slice(2)}`;
 }
 
-/**
- * Enrich an item with computed fields:
- *   - dtSlip1, dtSlip2, dtSlipC  (workday slippage: plan submission vs actual)
- *   - s4ApprovalPlan              (alias for st2P — same Notion field)
- *   - s5ApprovalPlan              (alias for stCP — same Notion field)
- *   - c01SignOffPlan               (subCP + 2 workdays)
- */
-export function enrichItem(item) {
+// ── Schedule engine (per-row calculation) ─────────────────────────────────────
+// r = row data (dtStart1Plan, actuals, draw-day overrides)
+// project = { approvalDays, revisionDays, productionPrepPeriod, qaDefault }
+export function calcRow(r, project) {
+  const nca = !!r.noClientApproval;
+
+  const approvalDays   = nca ? 0 : (project?.approvalDays   ?? 0);
+  const revisionDays   = nca ? 0 : (project?.revisionDays   ?? 0);
+  const effDD1         = nca ? 0 : (r.dd1 ?? 0);
+  const effQA1         = nca ? 0 : (r.qa1 ?? project?.qaDefault ?? 0);
+  const effQA2         = nca ? 0 : (r.qa2 ?? project?.qaDefault ?? 0);
+  const effQaC         = r.qaC          ?? project?.qaDefault ?? 0;
+  const constrDrawDays = r.constrDrawDays ?? 15;
+
+  if (!r.dtStart1Plan) return {};
+
+  const start1 = snapFwd(new Date(r.dtStart1Plan));
+
+  if (nca) {
+    const stCP  = snapFwd(new Date(r.dtStart1Plan));
+    const stCA  = snapFwd(new Date(r.dtStart1Plan));
+    const delCP = addWD(stCP, constrDrawDays);
+    const subCP = addWD(delCP, effQaC);
+    const delCA = addWD(stCA, constrDrawDays);
+    const delCActSnap  = r.delCActDate ? snapFwd(new Date(r.delCActDate)) : null;
+    const subCActSnap  = r.subCActDate ? snapFwd(new Date(r.subCActDate)) : null;
+    const subCA        = subCActSnap ?? addWD(delCActSnap ?? delCA, effQaC);
+    const c01SignOffPlan = addWD(subCP, 2);
+    const c01SignOffAdj  = addWD(subCA, 2);
+    const dtSlipC        = (subCP && subCActSnap) ? wdBetween(subCP, subCActSnap) : null;
+    const c01SignOffActSnap = r.c01SignOffActDate ? snapFwd(new Date(r.c01SignOffActDate)) : null;
+    const approvalSlipC  = (c01SignOffPlan && c01SignOffActSnap) ? wdBetween(c01SignOffPlan, c01SignOffActSnap) : null;
+    const prodDateP   = addWD(c01SignOffPlan, project?.productionPrepPeriod ?? 0);
+    const prodDateAdj = addWD(c01SignOffActSnap ?? c01SignOffAdj, project?.productionPrepPeriod ?? 0);
+    const instDate    = r.productionTime ? addWD(prodDateAdj, r.productionTime) : null;
+    return {
+      nca: true,
+      del1P: null, sub1P: null, del1A: null, sub1A: null, sub1Act: null,
+      del1ActSnap: null, del2ActSnap: null,
+      s4ApprovalPlan: null, dtSlip1: null, approvalSlip1: null,
+      st2P: null, st2A: null, del2P: null, del2A: null,
+      sub2P: null, sub2A: null, sub2Act: null,
+      s5ApprovalPlan: null, dtSlip2: null, approvalSlip2: null,
+      stCP, stCA, delCP, delCA, subCP, subCA, delCActSnap, subCActSnap, c01SignOffPlan,
+      c01SignOffAdj, dtSlipC, approvalSlipC, prodDateP, prodDateAdj, instDate,
+    };
+  }
+
+  // 1st Issue Plan
+  const del1P   = addWD(start1, effDD1);
+  const sub1P   = addWD(del1P, effQA1);
+  const sub1Act = r.sub1ActDate ? snapFwd(new Date(r.sub1ActDate)) : null;
+
+  // 1st Issue Adj
+  const start1A     = r.dtStart1Act  ? snapFwd(new Date(r.dtStart1Act))  : start1;
+  const del1A       = addWD(start1A, effDD1);
+  const del1ActSnap = r.del1ActDate  ? snapFwd(new Date(r.del1ActDate))  : null;
+  const sub1A       = sub1Act ?? addWD(del1ActSnap ?? del1A, effQA1);
+
+  const s4ApprovalPlan = addWD(sub1Act ?? sub1P, approvalDays);
+  const dtSlip1        = (sub1P && sub1Act) ? wdBetween(sub1P, sub1Act) : null;
+  const approvalSlip1  = (s4ApprovalPlan && r.s4Date)
+    ? wdBetween(s4ApprovalPlan, snapFwd(new Date(r.s4Date))) : null;
+
+  // 2nd Issue Plan
+  const st2P  = s4ApprovalPlan;
+  const del2P = addWD(st2P, revisionDays);
+  const sub2P = addWD(del2P, effQA2);
+  const sub2Act = r.sub2ActDate ? snapFwd(new Date(r.sub2ActDate)) : null;
+
+  const s5ApprovalPlan = addWD(sub2Act ?? sub2P, approvalDays);
+  const approvalSlip2  = (s5ApprovalPlan && r.s5Date)
+    ? wdBetween(s5ApprovalPlan, snapFwd(new Date(r.s5Date))) : null;
+
+  // 2nd Issue Adj
+  const st2A        = r.dtStart2Act  ? snapFwd(new Date(r.dtStart2Act))  : st2P;
+  const del2A       = addWD(st2A, revisionDays);
+  const del2ActSnap = r.del2ActDate  ? snapFwd(new Date(r.del2ActDate))  : null;
+  const sub2A       = sub2Act ?? addWD(del2ActSnap ?? del2A, effQA2);
+  const dtSlip2     = (sub2P && sub2Act) ? wdBetween(sub2P, sub2Act) : null;
+
+  // Construction Plan
+  const stCP  = s5ApprovalPlan;
+  const delCP = addWD(stCP, constrDrawDays);
+  const subCP = addWD(delCP, effQaC);
+
+  const subCActSnap    = r.subCActDate ? snapFwd(new Date(r.subCActDate)) : null;
+  const c01SignOffPlan = addWD(subCP, 2);
+  const dtSlipC        = (subCP && subCActSnap) ? wdBetween(subCP, subCActSnap) : null;
+  const approvalSlipC  = (c01SignOffPlan && r.c01SignOffActDate)
+    ? wdBetween(c01SignOffPlan, snapFwd(new Date(r.c01SignOffActDate))) : null;
+
+  // Construction Adj
+  const stCA        = r.stCActDate  ? snapFwd(new Date(r.stCActDate))  : stCP;
+  const delCA       = addWD(stCA, constrDrawDays);
+  const delCActSnap = r.delCActDate ? snapFwd(new Date(r.delCActDate)) : null;
+  const subCA       = subCActSnap ?? addWD(delCActSnap ?? delCA, effQaC);
+  const c01SignOffAdj = addWD(subCA, 2);
+
+  // Production & Install
+  const c01SignOffActSnap = r.c01SignOffActDate ? snapFwd(new Date(r.c01SignOffActDate)) : null;
+  const prodDateP   = addWD(c01SignOffPlan, project?.productionPrepPeriod ?? 0);
+  const prodDateAdj = addWD(c01SignOffActSnap ?? c01SignOffAdj, project?.productionPrepPeriod ?? 0);
+  const instDate    = r.productionTime ? addWD(prodDateAdj, r.productionTime) : null;
+
   return {
-    ...item,
-    s4ApprovalPlan: item.st2P,
-    s5ApprovalPlan: item.stCP,
-    c01SignOffPlan: item.subCP ? toISO(addWD(new Date(item.subCP), 2)) : null,
-    dtSlip1: (item.sub1P && item.sub1ActDate) ? wdBetween(new Date(item.sub1P), new Date(item.sub1ActDate)) : null,
-    dtSlip2: (item.sub2P && item.sub2ActDate) ? wdBetween(new Date(item.sub2P), new Date(item.sub2ActDate)) : null,
-    dtSlipC: (item.subCP && item.subCActDate) ? wdBetween(new Date(item.subCP), new Date(item.subCActDate)) : null,
+    del1P, sub1P, del1A, del1ActSnap, sub1A, sub1Act,
+    s4ApprovalPlan, dtSlip1, approvalSlip1,
+    st2P, st2A, del2P, del2A, del2ActSnap, sub2P, sub2A, sub2Act,
+    s5ApprovalPlan, dtSlip2, approvalSlip2,
+    stCP, stCA, delCP, delCA, delCActSnap,
+    subCP, subCA, subCActSnap, c01SignOffPlan, c01SignOffAdj,
+    dtSlipC, approvalSlipC, prodDateP, prodDateAdj, instDate,
   };
 }
