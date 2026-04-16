@@ -151,6 +151,11 @@
   to     = "/.netlify/functions/dt-checker-export-pdf"
   status = 200
 
+[[redirects]]
+  from   = "/api/schedule-items"
+  to     = "/.netlify/functions/schedule-items"
+  status = 200
+
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"

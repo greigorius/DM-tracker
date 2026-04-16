@@ -588,6 +588,94 @@ app.post('/api/tasks/update', async (req, res) => {
   }
 })
 
+// ── GET /api/schedule-items?projectId=<id> ────────────────────────────────────
+// Returns all projects + schedule items with every Notion date field for the
+// Item Date Matrix. Optional projectId filter; excludes PCSA items.
+app.get('/api/schedule-items', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { projectId } = req.query;
+
+  function d(props, key) { return props[key]?.date?.start ?? null; }
+
+  function transformScheduleItem(page, pid) {
+    const p = page.properties ?? {};
+    return {
+      id:               page.id,
+      name:             p['Item Name']?.title?.[0]?.plain_text ?? '',
+      status:           p['Status']?.status?.name              ?? null,
+      projectId:        pid,
+      noClientApproval: p['No Client Approval']?.checkbox      ?? false,
+      s4Status:         p['S4 Status']?.select?.name           ?? null,
+      s5Status:         p['S5 Status']?.select?.name           ?? null,
+      dtStart1Plan:  d(p, '1st DT Start (Plan)'),
+      dtStart1Act:   d(p, '1st DT Start (Actual)'),
+      del1P:         d(p, '1st DT Delivery (Plan)'),
+      del1A:         d(p, '1st DT Delivery (Adj)'),
+      del1ActDate:   d(p, '1st DT Delivery (Actual)'),
+      sub1P:         d(p, '1st Submission Date (Plan)'),
+      sub1A:         d(p, '1st Submission Date (Adj)'),
+      sub1ActDate:   d(p, '1st Submission Date (Actual)'),
+      st2P:          d(p, '2nd DT Start (Plan)'),
+      st2A:          d(p, '2nd DT Start (Adj)'),
+      dtStart2Act:   d(p, '2nd DT Start (Actual)'),
+      del2P:         d(p, '2nd DT Delivery (Plan)'),
+      del2A:         d(p, '2nd DT Delivery (Adj)'),
+      del2ActDate:   d(p, '2nd DT Delivery (Actual)'),
+      sub2P:         d(p, '2nd Submission Date (Plan)'),
+      sub2A:         d(p, '2nd Submission Date (Adj)'),
+      sub2ActDate:   d(p, '2nd Submission Date (Actual)'),
+      stCP:          d(p, 'Constr. DT Start (Plan)'),
+      stCA:          d(p, 'Constr. DT Start (Adj)'),
+      stCActDate:    d(p, 'Constr. DT Start (Actual)'),
+      delCP:         d(p, 'Constr. DT Delivery (Plan)'),
+      delCA:         d(p, 'Constr. DT Delivery (Adj)'),
+      delCActDate:   d(p, 'Constr. DT Delivery (Actual)'),
+      subCP:         d(p, 'Constr. Submission Date (Plan)'),
+      subCA:         d(p, 'Constr. Submission Date (Adj)'),
+      subCActDate:   d(p, 'Constr. Submission Date (Actual)'),
+      prodDateP:     d(p, 'Production Date (Plan)'),
+      prodDateAdj:   d(p, 'Production Date (Adj)'),
+      instDate:      d(p, 'Install Date'),
+    };
+  }
+
+  try {
+    const [projectPages, taskPages] = await Promise.all([
+      queryAll(DB.projects,
+        { property: 'Status', status: { does_not_equal: 'Done' } },
+        { sorts: [{ property: 'Start Date', direction: 'descending' }] },
+      ),
+      queryAll(DB.tasks,
+        projectId
+          ? { and: [
+              { property: 'Projects', relation: { contains: projectId } },
+              { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
+            ]}
+          : { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
+        { sorts: [{ property: 'Item Name', direction: 'ascending' }] },
+      ),
+    ]);
+
+    const projects = projectPages.map(p => ({
+      id:   p.id,
+      name: p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
+    }));
+
+    const items = taskPages.map(page => {
+      const pid = projectId
+        ?? page.properties['Projects']?.relation?.[0]?.id
+        ?? null;
+      return transformScheduleItem(page, pid);
+    });
+
+    res.json({ projects, items });
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again' });
+    console.error('[schedule-items]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });
