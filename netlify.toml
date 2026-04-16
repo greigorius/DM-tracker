@@ -42,11 +42,6 @@
   status = 200
 
 [[redirects]]
-  from   = "/api/schedule-items"
-  to     = "/.netlify/functions/schedule-items"
-  status = 200
-
-[[redirects]]
   from   = "/api/item-drawings"
   to     = "/.netlify/functions/item-drawings"
   status = 200
