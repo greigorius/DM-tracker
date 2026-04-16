@@ -174,7 +174,7 @@ export default function TimelinePage() {
       <div style={{ marginBottom: 20 }}>
         <Link to="/" style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>← Back to DM Tracker</Link>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.02em' }}>
-          {projectId && selected ? selected.name : 'DM Timeline'}
+          {projectId && selected ? selected.name : 'DT Schedule'}
         </h1>
         <div style={{ fontSize: 12, color: '#7b90b0', marginTop: 4 }}>
           {projectId && selected ? 'Project programme timeline' : 'All active projects · programme overview'}
