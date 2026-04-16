@@ -557,7 +557,7 @@ app.post('/api/drawings-register/bulk', async (req, res) => {
 // ── POST /api/tasks/update ────────────────────────────────────────────────────
 app.post('/api/tasks/update', async (req, res) => {
   if (!notionRequired(res)) return
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate } = req.body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate, noClientApproval } = req.body
   if (!id) return res.status(400).json({ error: 'id is required' })
   const properties = {}
   if (description  !== undefined && description !== null)
@@ -576,6 +576,8 @@ app.post('/api/tasks/update', async (req, res) => {
     properties['Start Date'] = startDate ? { date: { start: startDate } } : { date: null }
   if (endDate      !== undefined)
     properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
+  if (noClientApproval !== undefined)
+    properties['No Client Approval'] = { checkbox: Boolean(noClientApproval) }
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
       method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),

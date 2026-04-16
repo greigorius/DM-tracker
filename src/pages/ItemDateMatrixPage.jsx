@@ -565,6 +565,15 @@ export default function ItemDateMatrixPage() {
     const updated = { ...rowOverrides, [itemId]: { ...(rowOverrides[itemId] ?? {}), [field]: value } };
     setRowOverrides(updated);
     localStorage.setItem(LS_OVERRIDES, JSON.stringify(updated));
+
+    // Sync NCA to Notion on click
+    if (field === 'noClientApproval') {
+      fetch('/api/tasks/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, noClientApproval: value }),
+      }).catch(err => console.warn('[NCA sync]', err.message));
+    }
   }
 
   function handleProjCfgChange(projId, field, value) {
@@ -585,14 +594,24 @@ export default function ItemDateMatrixPage() {
   const statuses   = useMemo(() => [...new Set(allItems.map(i => i.status).filter(Boolean))].sort(), [allItems]);
   const categories = useMemo(() => [...new Set(allItems.map(i => i.contractCategory).filter(Boolean))].sort(), [allItems]);
 
+  // Item names for the item dropdown (from the current project/phase/status/category filtered set,
+  // ignoring item and NCA filters so the list always shows what's available)
+  const itemOptions = useMemo(() => allItems.filter(item => {
+    if (selProject  && item.projectId        !== selProject)  return false;
+    if (selPhase    && item.dmPhase          !== selPhase)    return false;
+    if (selStatus   && item.status           !== selStatus)   return false;
+    if (selCategory && item.contractCategory !== selCategory) return false;
+    return true;
+  }).map(i => i.name).sort(), [allItems, selProject, selPhase, selStatus, selCategory]);
+
   const filteredItems = useMemo(() => allItems.filter(item => {
-    if (selProject  && item.projectId      !== selProject)  return false;
-    if (selPhase    && item.dmPhase        !== selPhase)    return false;
-    if (selStatus   && item.status         !== selStatus)   return false;
+    if (selProject  && item.projectId        !== selProject)  return false;
+    if (selPhase    && item.dmPhase          !== selPhase)    return false;
+    if (selStatus   && item.status           !== selStatus)   return false;
     if (selCategory && item.contractCategory !== selCategory) return false;
     if (selNca === 'nca'      && !item.noClientApproval) return false;
     if (selNca === 'standard' &&  item.noClientApproval) return false;
-    if (itemSearch && !item.name.toLowerCase().includes(itemSearch.toLowerCase())) return false;
+    if (itemSearch && item.name !== itemSearch) return false;
     return true;
   }), [allItems, selProject, selPhase, selStatus, selCategory, selNca, itemSearch]);
 
@@ -727,8 +746,13 @@ export default function ItemDateMatrixPage() {
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
-        <select value={selNca} onChange={e => setSelNca(e.target.value)} style={selStyle}>
+        <select value={itemSearch} onChange={e => setItemSearch(e.target.value)} style={selStyle}>
           <option value=''>All Items</option>
+          {itemOptions.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+
+        <select value={selNca} onChange={e => setSelNca(e.target.value)} style={selStyle}>
+          <option value=''>All (NCA)</option>
           <option value='nca'>NCA Only</option>
           <option value='standard'>Standard Only</option>
         </select>
@@ -739,14 +763,6 @@ export default function ItemDateMatrixPage() {
           <option value='phase'>By Phase</option>
           <option value='category'>By Category</option>
         </select>
-
-        <input
-          type='text'
-          placeholder='Search items…'
-          value={itemSearch}
-          onChange={e => setItemSearch(e.target.value)}
-          style={{ ...selStyle, width: 150, color: C.text }}
-        />
 
         {groupBy !== 'none' && (
           <>
@@ -780,12 +796,11 @@ export default function ItemDateMatrixPage() {
 
         {/* Export */}
         <button
+          title="Export current view to CSV"
           onClick={() => exportCSV(filteredItems, displayRows, projects)}
-          style={{ ...selStyle, color: C.active, padding: '3px 10px' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = C.active; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1e2d45'; }}
+          style={{ background: '#0b1020', border: '1px solid #166534', color: '#4ade80', fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit' }}
         >
-          EXPORT CSV
+          ↓ Export CSV (current view)
         </button>
       </div>
 
