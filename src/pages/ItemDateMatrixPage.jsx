@@ -460,11 +460,7 @@ const TD_BASE = {
   padding: '2px 4px', border: `1px solid ${C.border}`,
   fontSize: 11, whiteSpace: 'nowrap',
 };
-const STICKY_NAME = {
-  position: 'sticky', left: 0, zIndex: 20,
-  background: '#0a0f1a', border: `1px solid ${C.border}`,
-  minWidth: 220, maxWidth: 280, textAlign: 'left',
-};
+// STICKY_NAME width is driven by nameWidth state — no static constant
 const EDIT_INPUT = {
   width: 32, background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
   fontSize: 10, textAlign: 'center', borderRadius: 3, padding: '1px 2px',
@@ -491,6 +487,25 @@ export default function ItemDateMatrixPage() {
   const [rowGroupCollapsed, setRowGroupCollapsed] = useState({});
   // Column group collapse (horizontal)
   const [colGroupCollapsed, setColGroupCollapsed] = useState({});
+
+  // Name column width (drag-to-resize)
+  const [nameWidth, setNameWidth] = useState(220);
+  const nameResizeRef = useRef(null);
+
+  function startNameResize(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = nameWidth;
+    function onMove(me) {
+      setNameWidth(Math.max(120, startW + (me.clientX - startX)));
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
 
   // Column visibility
   const [colVis, setColVis]         = useState(initColVisibility);
@@ -809,8 +824,15 @@ export default function ItemDateMatrixPage() {
           <thead>
             {/* Row 1 — group headers */}
             <tr>
-              <th rowSpan={2} style={{ ...TH, ...STICKY_NAME, zIndex: 30, verticalAlign: 'middle', height: 28 }}>
-                Item Name
+              <th rowSpan={2} style={{ ...TH, position: 'sticky', left: 0, zIndex: 30, verticalAlign: 'middle', height: 28, width: nameWidth, minWidth: nameWidth, textAlign: 'left', padding: 0 }}>
+                <div style={{ position: 'relative', padding: '3px 14px 3px 6px', height: '100%', display: 'flex', alignItems: 'center' }}>
+                  Item Name
+                  {/* Resize handle */}
+                  <div
+                    onMouseDown={startNameResize}
+                    style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize', background: 'transparent' }}
+                  />
+                </div>
               </th>
               <th rowSpan={2} style={{ ...TH, minWidth: 80, verticalAlign: 'middle' }}>
                 Status
@@ -909,7 +931,7 @@ export default function ItemDateMatrixPage() {
                       <tr key={item.id} style={{ background: rowBg }}>
 
                         {/* Sticky name cell */}
-                        <td style={{ ...TD_BASE, ...STICKY_NAME, background: nameBg, zIndex: 5, padding: '3px 6px' }}>
+                        <td style={{ ...TD_BASE, position: 'sticky', left: 0, zIndex: 5, background: nameBg, width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth, textAlign: 'left', padding: '3px 6px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                             <span style={{ fontSize: 11, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                               {item.name}
