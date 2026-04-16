@@ -3,6 +3,7 @@ import AxiomHome from './pages/AxiomHome.jsx';
 import ClientHome from './pages/ClientHome.jsx';
 import ProjectHome from './pages/ProjectHome.jsx';
 import TimelinePage from './pages/TimelinePage.jsx';
+import ItemDateMatrixPage from './pages/ItemDateMatrixPage.jsx';
 import TasksPage from './pages/TasksPage.jsx';
 import ProductionPage from './pages/ProductionPage.jsx';
 import ItemSchedulePage from './pages/ItemSchedulePage.jsx';
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/client/:clientId" element={<ClientHome />} />
         <Route path="/project/:projectId" element={<ProjectHome />} />
         <Route path="/timeline" element={<TimelinePage />} />
+        <Route path="/timeline/item-date-matrix" element={<ItemDateMatrixPage />} />
         <Route path="/timeline/:projectId" element={<TimelinePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/tasks/production" element={<ProductionPage />} />

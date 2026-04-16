@@ -15,7 +15,14 @@ const NAV = [
       { to: '/tasks/production', label: 'Production'            },
     ],
   },
-  { to: '/timeline', label: 'TIMELINE' },
+  {
+    label: 'TIMELINE',
+    match: '/timeline',
+    children: [
+      { to: '/timeline',                  label: 'DT Schedule',      end: true },
+      { to: '/timeline/item-date-matrix', label: 'Item Date Matrix'             },
+    ],
+  },
   {
     label: 'TRACKERS',
     match: '/trackers',

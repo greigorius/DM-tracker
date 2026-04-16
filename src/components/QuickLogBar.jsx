@@ -5,7 +5,6 @@
 
 import { useState } from 'react';
 import { useQueue } from '../hooks/useQueue.js';
-import { PROJECTS, MOCK_ITEMS, PHASE_ORDER } from '../data/mockData.js';
 import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 
 const C = {
@@ -74,14 +73,6 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
     setSubmitting(prev => ({ ...prev, [cfg.type]: false }));
   };
 
-  const inlineSelectStyle = {
-    background: C.input, border: `1px solid ${C.border}`, borderRadius: 4,
-    color: C.sec, fontSize: 10, padding: '2px 4px', cursor: 'pointer', fontFamily: 'inherit',
-  };
-  const inlineInputStyle = {
-    background: C.input, border: `1px solid ${C.border}`, borderRadius: 4,
-    color: C.sec, fontSize: 10, padding: '2px 6px', fontFamily: 'inherit',
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -134,85 +125,75 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                   </div>
                 )}
                 {items.map(item => {
-                  const projColor = projectColor(item.projectId);
-                  const rowItems  = item.projectId ? MOCK_ITEMS.filter(i => i.projectId === item.projectId) : [];
-                  const itemName  = rowItems.find(i => i.id === item.itemId)?.name ?? null;
-                  const projName  = PROJECTS.find(p => p.id === item.projectId)?.name ?? null;
+                  const projColor  = projectColor(item.projectId);
+                  const isAssigned = !!(item.assignee);
+                  const isDone     = !!(item.taskDone);
 
                   return (
                     <div
                       key={item.id}
                       style={{
-                        background:   C.bg,
-                        border:       `1px solid ${C.border}`,
-                        borderLeft:   projColor ? `3px solid ${projColor}` : `1px solid ${C.border}`,
-                        borderRadius: 7,
-                        padding:      '9px 12px',
-                        boxShadow:    projColor ? `0 2px 10px ${hexToRgba(projColor, 0.18)}` : 'none',
-                        display:      'flex',
-                        flexDirection: 'column',
-                        gap:          6,
+                        background:    C.bg,
+                        border:        `1px solid ${C.border}`,
+                        borderLeft:    projColor ? `3px solid ${projColor}` : `1px solid ${C.border}`,
+                        borderRadius:  7,
+                        padding:       '8px 12px',
+                        boxShadow:     projColor ? `0 2px 10px ${hexToRgba(projColor, 0.18)}` : 'none',
+                        display:       'flex',
+                        alignItems:    'center',
+                        gap:           10,
+                        opacity:       isDone ? 0.55 : 1,
                       }}
                     >
-                      {/* Description row */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                        <input
-                          value={item.description || ''}
-                          onChange={e => updateItem(item.id, { description: e.target.value })}
-                          placeholder="Description…"
-                          style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${C.grid}`, color: C.text, fontSize: 12, fontWeight: 700, padding: '0 0 3px', outline: 'none', fontFamily: 'inherit' }}
-                        />
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
-                          title="Remove"
-                        >×</button>
-                      </div>
+                      {/* Done checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        onChange={e => updateItem(item.id, { taskDone: e.target.checked })}
+                        style={{ cursor: 'pointer', accentColor: '#4ade80', flexShrink: 0 }}
+                        title="Mark done"
+                      />
 
-                      {/* Metadata row */}
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <select
-                          value={item.projectId || ''}
-                          onChange={e => updateItem(item.id, { projectId: e.target.value || null, itemId: null })}
-                          style={inlineSelectStyle}
-                        >
-                          <option value="">Project —</option>
-                          {PROJECTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                      {/* Description */}
+                      <span style={{
+                        flex: 1, fontSize: 12, fontWeight: 600,
+                        color: isDone ? C.muted : C.text,
+                        textDecoration: isDone ? 'line-through' : 'none',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.description || <span style={{ color: C.muted, fontStyle: 'italic' }}>No description</span>}
+                      </span>
 
-                        <select
-                          value={item.itemId || ''}
-                          onChange={e => updateItem(item.id, { itemId: e.target.value || null })}
-                          style={inlineSelectStyle}
-                          disabled={!item.projectId}
-                        >
-                          <option value="">Item —</option>
-                          {rowItems.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                        </select>
+                      {/* Assigned / Unassigned badge */}
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, flexShrink: 0,
+                        padding: '2px 7px', borderRadius: 999,
+                        background: isAssigned ? 'rgba(96,165,250,0.12)' : 'rgba(123,144,176,0.1)',
+                        color: isAssigned ? '#60a5fa' : C.muted,
+                        border: `1px solid ${isAssigned ? 'rgba(96,165,250,0.25)' : 'rgba(123,144,176,0.2)'}`,
+                      }}>
+                        {isAssigned ? item.assignee : 'Unassigned'}
+                      </span>
 
-                        <input
-                          value={item.assignee || ''}
-                          onChange={e => updateItem(item.id, { assignee: e.target.value })}
-                          placeholder="Assignee"
-                          style={{ ...inlineInputStyle, width: 64 }}
-                        />
+                      {/* Date raised badge */}
+                      {item.date && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 600, flexShrink: 0,
+                          padding: '2px 7px', borderRadius: 999,
+                          background: 'rgba(30,45,69,0.8)',
+                          color: C.muted,
+                          border: `1px solid ${C.border}`,
+                        }}>
+                          {new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                        </span>
+                      )}
 
-                        <select
-                          value={item.dmPhase || ''}
-                          onChange={e => updateItem(item.id, { dmPhase: e.target.value || null })}
-                          style={{ ...inlineSelectStyle, maxWidth: 64 }}
-                        >
-                          <option value="">Phase —</option>
-                          {PHASE_ORDER.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-
-                        <input
-                          type="date"
-                          value={item.date || ''}
-                          onChange={e => updateItem(item.id, { date: e.target.value })}
-                          style={{ ...inlineInputStyle, width: 110 }}
-                        />
-                      </div>
+                      {/* Remove */}
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                        title="Remove"
+                      >×</button>
                     </div>
                   );
                 })}
