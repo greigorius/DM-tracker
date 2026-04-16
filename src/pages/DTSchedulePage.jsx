@@ -213,14 +213,35 @@ export default function DTSchedulePage() {
     minHeight: '100vh', background: C.bg, color: C.text,
     fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 20px',
   };
-  const h1Style = {
-    fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-    margin: '0 0 16px', color: C.text,
-  };
+
+  function PageHeader() {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>DT SCHEDULE</h1>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+            Programme · key milestone dates per design intent, approval and construction issue
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {lastRefreshed && (
+            <span style={{ fontSize: 10, color: C.muted }}>
+              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => fetchData(selProject)}
+            title="Refresh"
+            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}
+          >↻</button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !data) return (
     <div style={pageWrap}>
-      <h1 style={h1Style}>DT SCHEDULE</h1>
+      <PageHeader />
       <AppNav />
       <p style={{ color: C.muted, fontSize: 11, marginTop: 24 }}>Loading schedule data…</p>
     </div>
@@ -228,7 +249,7 @@ export default function DTSchedulePage() {
 
   if (error) return (
     <div style={pageWrap}>
-      <h1 style={h1Style}>DT SCHEDULE</h1>
+      <PageHeader />
       <AppNav />
       <p style={{ color: '#f87171', fontSize: 11, marginTop: 24 }}>Error: {error}</p>
     </div>
@@ -238,14 +259,7 @@ export default function DTSchedulePage() {
     <div style={pageWrap}>
 
       {/* Heading ABOVE nav */}
-      <h1 style={h1Style}>
-        DT SCHEDULE
-        {lastRefreshed && (
-          <span style={{ fontSize: 10, fontWeight: 400, color: C.muted, marginLeft: 10 }}>
-            updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
-      </h1>
+      <PageHeader />
 
       <AppNav />
 

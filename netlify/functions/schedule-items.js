@@ -89,22 +89,29 @@ export const handler = async (event) => {
       return transformScheduleItem(page, pid)
     })
 
-    // ── Drawings: s4/s5 dates + statuses + C01 sign-off ───────────────────────
-    const taskIds    = items.map(i => i.id)
-    const drawingMap = await fetchDrawingMap(taskIds)
+    // ── Drawings: s4/s5 dates + statuses + C01 sign-off ─────────────────────
+    // Wrapped in try/catch — if drawings fetch fails or times out we still
+    // return items (s4/s5 fields will be null). Only fetch when we have items.
+    if (items.length > 0) {
+      try {
+        const taskIds    = items.map(i => i.id)
+        const drawingMap = await fetchDrawingMap(taskIds)
 
-    for (const item of items) {
-      const drawings = drawingMap.get(item.id) ?? []
-
-      const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean)
-      const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean)
-      const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean)
-
-      item.s4Date            = s4Dates.length  ? [...s4Dates].sort()[0]  : null
-      item.s5Date            = s5Dates.length  ? [...s5Dates].sort()[0]  : null
-      item.c01SignOffActDate  = c01Dates.length ? [...c01Dates].sort()[0] : null
-      item.s4Statuses        = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))]
-      item.s5Statuses        = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))]
+        for (const item of items) {
+          const drawings = drawingMap.get(item.id) ?? []
+          const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean)
+          const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean)
+          const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean)
+          item.s4Date           = s4Dates.length  ? [...s4Dates].sort()[0]  : null
+          item.s5Date           = s5Dates.length  ? [...s5Dates].sort()[0]  : null
+          item.c01SignOffActDate = c01Dates.length ? [...c01Dates].sort()[0] : null
+          item.s4Statuses       = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))]
+          item.s5Statuses       = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))]
+        }
+      } catch (drawErr) {
+        console.warn('[schedule-items] drawings fetch failed:', drawErr.message)
+        // Items still returned, drawings fields will be absent (undefined → null in UI)
+      }
     }
 
     return {
