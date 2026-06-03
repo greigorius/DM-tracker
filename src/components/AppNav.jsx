@@ -1,20 +1,15 @@
 import { useState, useRef, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import QuickEntryModal from './QuickEntryModal.jsx';
+import { useAppData } from '../context/AppDataContext.jsx';
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
-// Plain items have `to`; items with sub-menus have `children` and `match`
-// (match is the path prefix used to decide active state for the parent label).
+// Plain items have `to`; items with sub-menus have `children` and `match`.
+// Items with type: 'projects' use a dynamic dropdown populated from context.
 const NAV = [
   { to: '/', label: 'HOME', end: true },
-  {
-    label: 'TASKS',
-    match: '/tasks',
-    children: [
-      { to: '/tasks',            label: 'Task List',  end: true },
-      { to: '/tasks/production', label: 'Production'            },
-    ],
-  },
+  // PROJECTS is handled dynamically via ProjectsDropdown
+  { type: 'projects', label: 'PROJECTS', match: '/project' },
   {
     label: 'TIMELINE',
     match: '/timeline',
@@ -27,18 +22,21 @@ const NAV = [
     label: 'TRACKERS',
     match: '/trackers',
     children: [
-      { to: '/trackers/item-schedule', label: 'Item Schedule',      end: true },
-      { to: '/trackers/rfis',          label: 'RFI Schedule'                  },
-      { to: '/trackers/variations',    label: 'Variation Schedule'             },
+      { to: '/trackers/task-schedule',       label: 'Task Schedule'      },
+      { to: '/trackers/item-schedule',       label: 'Item Schedule'      },
+      { to: '/trackers/rfis',               label: 'RFI Schedule'        },
+      { to: '/trackers/variations',         label: 'Variation Schedule'  },
+      { to: '/trackers/production-schedule', label: 'Production Schedule' },
+      { to: '/trackers/finishes-schedule',  label: 'Finishes Schedule'   },
+      { to: '/trackers/hardware-schedule',  label: 'Hardware Schedule'   },
     ],
   },
   {
     label: 'DRAWINGS',
     match: '/drawings',
     children: [
-      { to: '/drawings',                 label: 'Register',              end: true },
-      { to: '/drawings/dt-checks',       label: 'DT Drawing Checks'               },
-      { to: '/drawings/comment-review',  label: 'Client Comment Review'            },
+      { to: '/drawings',                label: 'Register',             end: true },
+      { to: '/drawings/comment-review', label: 'Client Comment Review'           },
     ],
   },
   { to: '/team', label: 'TEAM' },
@@ -210,6 +208,100 @@ function DropdownItem({ label, match, children }) {
   );
 }
 
+// ── ProjectsDropdown — dynamic list of projects from context ─────────────────
+function ProjectsDropdown({ label, match }) {
+  const { projects, projectsLoading } = useAppData();
+  const [open, setOpen]   = useState(false);
+  const closeTimer        = useRef(null);
+  const location          = useLocation();
+  const isActive          = location.pathname.startsWith(match);
+
+  const scheduleClose = useCallback(() => {
+    closeTimer.current = setTimeout(() => setOpen(false), 120);
+  }, []);
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
+
+  // Show project name; navigate to /project/:id
+  const children = projects.map(p => ({ to: `/project/${p.id}`, label: p.name, color: p.color }));
+
+  return (
+    <div
+      style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+      onMouseEnter={() => { cancelClose(); setOpen(true); }}
+      onMouseLeave={scheduleClose}
+    >
+      <button
+        style={{ ...baseLabelStyle, color: isActive ? C.text : C.muted, display: 'flex', alignItems: 'center', gap: 4 }}
+        onMouseEnter={e => { e.currentTarget.style.color = C.sec; }}
+        onMouseLeave={e => { e.currentTarget.style.color = isActive ? C.text : C.muted; }}
+      >
+        {label}
+        <span style={{
+          fontSize: 7, color: isActive ? C.text : C.muted,
+          transition: 'transform 0.15s',
+          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          display: 'inline-block', marginTop: 1, lineHeight: 1,
+        }}>▾</span>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute', top: 'calc(100% + 10px)', left: '50%',
+            transform: 'translateX(-50%)',
+            background: C.bgPanel, border: `1px solid ${C.border}`,
+            borderRadius: 7, minWidth: 220,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 200, overflow: 'hidden',
+          }}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+        >
+          {/* Triangle pointer */}
+          <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: `6px solid ${C.border}` }} />
+          <div style={{ position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `5px solid ${C.bgPanel}` }} />
+
+          {projectsLoading && children.length === 0 ? (
+            <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>Loading…</div>
+          ) : children.length === 0 ? (
+            <div style={{ padding: '10px 16px', fontSize: 11, color: C.muted }}>No projects</div>
+          ) : (
+            children.map(({ to, label: childLabel, color }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                style={({ isActive: childActive }) => ({
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 16px',
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
+                  textDecoration: 'none',
+                  color: childActive ? C.active : C.sec,
+                  background: childActive ? 'rgba(96,165,250,0.08)' : 'transparent',
+                  borderLeft: childActive ? `2px solid ${C.active}` : '2px solid transparent',
+                  transition: 'background 0.1s, color 0.1s',
+                })}
+                onMouseEnter={e => {
+                  const a = e.currentTarget.getAttribute('aria-current') === 'page';
+                  e.currentTarget.style.background = a ? 'rgba(96,165,250,0.12)' : C.bgHover;
+                }}
+                onMouseLeave={e => {
+                  const a = e.currentTarget.getAttribute('aria-current') === 'page';
+                  e.currentTarget.style.background = a ? 'rgba(96,165,250,0.08)' : 'transparent';
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: color ?? C.muted, flexShrink: 0, display: 'inline-block' }} />
+                {childLabel}
+              </NavLink>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── AppNav ────────────────────────────────────────────────────────────────────
 export default function AppNav() {
   const [showQuickEntry, setShowQuickEntry] = useState(false);
@@ -225,7 +317,9 @@ export default function AppNav() {
         borderBottom:  `1px solid ${C.border}`,
       }}>
         {NAV.map(item =>
-          item.children ? (
+          item.type === 'projects' ? (
+            <ProjectsDropdown key="projects" label={item.label} match={item.match} />
+          ) : item.children ? (
             <DropdownItem key={item.label} {...item} />
           ) : (
             <PlainLink key={item.to} {...item} />
@@ -261,3 +355,4 @@ export default function AppNav() {
     </>
   );
 }
+                                                                                    
