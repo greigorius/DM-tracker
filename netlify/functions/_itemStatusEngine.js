@@ -3,7 +3,7 @@
  * every Item Status and Drawing Status, and (outside dry runs) writes the changes.
  */
 import { queryAll, fetchNotion, notionHeaders } from './_helpers.js'
-import { variationHolds, rfiHolds, drawingStatus, itemStatus, cleanId } from './_statusRules.js'
+import { rfiHolds, drawingStatus, itemStatus, cleanId } from './_statusRules.js'
 
 const NOTION_API = 'https://api.notion.com/v1'
 const DB = {
@@ -11,7 +11,6 @@ const DB = {
   drawings:    () => process.env.NOTION_DB_DRAWINGS    || '13b210e4582e8168923ff79fa8628b59',
   submissions: () => process.env.NOTION_DB_SUBMISSIONS || '36f210e4582e80ed8b2ce9e245bda433',
   rfis:        () => process.env.NOTION_DB_RFIS        || '22d210e4582e80189f63f2cee93be4b3',
-  variations:  () => process.env.NOTION_DB_VARIATIONS  || '22d210e4582e81359357c8ce288be096',
 }
 
 const sel   = (p, k) => p[k]?.select?.name ?? null
@@ -33,14 +32,13 @@ async function pool(items, limit, fn) {
 }
 
 async function loadSources() {
-  const [subs, rfis, vars] = await Promise.all([
+  const [subs, rfis] = await Promise.all([
     queryAll(DB.submissions(), null),
     queryAll(DB.rfis(), { or: [
       { property: 'Stops Work', checkbox: { equals: true } },
       { and: [{ property: 'TBC by', select: { equals: 'Supplier' } }, { or: [
         { property: 'RFI Status', select: { equals: 'Raise' } }, { property: 'RFI Status', select: { equals: 'Open' } }] }] },
     ] }),
-    queryAll(DB.variations(), { property: 'Change Request Date', date: { is_not_empty: true } }),
   ])
   return {
     submissions: subs.map((pg) => { const p = pg.properties
@@ -52,9 +50,6 @@ async function loadSources() {
         stopsWork: !!p['Stops Work']?.checkbox, status: sel(p, 'RFI Status'), tbc: sel(p, 'TBC by'),
         raised: date(p, 'Date Raised'), responded: date(p, 'Date Responded'), closed: date(p, 'Date Closed'),
         created: (pg.created_time || '').slice(0, 10) } }),
-    variations: vars.map((pg) => { const p = pg.properties
-      return { id: cleanId(pg.id), items: rel(p, 'Items'), type: sel(p, 'Variation Type'), override: sel(p, 'Pause Override'),
-        status: sel(p, 'Variation Status'), requestDate: date(p, 'Change Request Date'), decisionDate: date(p, 'Decision Date') } }),
   }
 }
 
@@ -94,7 +89,6 @@ export async function computeStatuses(opts = {}) {
     subsByDrawing.get(s.drawing).push(s)
   }
   const heldItems = new Set(), rfisByDrawing = new Map()
-  for (const v of src.variations) if (variationHolds(v, today)) v.items.forEach((i) => heldItems.add(i))
   for (const r of src.rfis) {
     if (rfiHolds(r, today)) r.items.forEach((i) => heldItems.add(i))
     for (const d of r.drawings) { if (!rfisByDrawing.has(d)) rfisByDrawing.set(d, []); rfisByDrawing.get(d).push(r) }
@@ -102,7 +96,7 @@ export async function computeStatuses(opts = {}) {
 
   const items = itemPages.map((pg) => { const p = pg.properties
     return { id: cleanId(pg.id), url: pg.url, name: title(p, 'Item Name'), current: stat(p, 'Item Status'),
-      dtStart: date(p, '1st DT Start (Actual)'), woRaised: date(p, 'WO Raised') } })
+      dtStart: date(p, '1st DT Start (Actual)'), woRaised: date(p, 'WO Raised'), locked: !!p['Lock Status']?.checkbox } })
 
   // Only items with Drawing Flow history or a works order need their drawings.
   const needDrawings = items.filter((i) => subItems.has(i.id) || i.woRaised).map((i) => i.id)
@@ -111,10 +105,11 @@ export async function computeStatuses(opts = {}) {
   const drawingsByItem = new Map(), drawingRows = []
   for (const pg of drawingPages) {
     const p = pg.properties, id = cleanId(pg.id), item = rel(p, 'Item')[0]
-    const current = sel(p, 'Drawing Status')
+    const current = sel(p, 'Drawing Status'), locked = !!p['Lock Status']?.checkbox
     const r = drawingStatus({ current, submissions: subsByDrawing.get(id) || [], rfis: rfisByDrawing.get(id) || [] }, today)
+    if (locked) { r.status = current; r.reason = 'Locked: status set by hand' }
     const row = { id, url: pg.url, item, number: title(p, 'Drawing Number'), current, proposed: r.status, reason: r.reason,
-      fromFlow: r.fromFlow, stage: r.stage, schedProdActual: date(p, 'Schedule Production (Actual)') }
+      fromFlow: r.fromFlow, stage: r.stage, schedProdActual: date(p, 'Schedule Production (Actual)'), locked }
     row.changed = !!row.proposed && row.proposed !== row.current
     drawingRows.push(row)
     if (!drawingsByItem.has(item)) drawingsByItem.set(item, [])
@@ -122,6 +117,7 @@ export async function computeStatuses(opts = {}) {
   }
 
   const itemRows = items.map((i) => {
+    if (i.locked) return { ...i, proposed: i.current, reason: 'Locked: status set by hand', changed: false }
     const r = itemStatus(i, drawingsByItem.get(i.id) || [], heldItems.has(i.id))
     return { ...i, proposed: r.status, reason: r.reason, changed: r.status !== i.current }
   })

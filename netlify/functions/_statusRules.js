@@ -6,8 +6,10 @@
  *    Drawing Flow history keep whatever status they have.
  *  - Item Status is one of To Do / In Progress / Blocked / In Production /
  *    Design Complete / Omitted. Omitted is only ever set by hand.
- *  - The hold rule is the same one the Scheduling Tool uses for its holds, so the
- *    programme and the status board always agree.
+ *  - Only a stop-work RFI blocks an item automatically (same dates as the Scheduling Tool).
+ *    An open variation does not: the DM decides whether to proceed at risk, and sets
+ *    Blocked by hand with Lock Status ticked when it really stops work.
+ *  - Items and drawings with Lock Status ticked are skipped (handled in the engine).
  */
 
 export const ITEM = {
@@ -36,6 +38,7 @@ const activeOn = (start, end, today) => !!start && start <= today && (!end || en
 
 /**
  * Variation hold — mirrors the Scheduling Tool's /api/notion/holds.
+ * Not used for Item Status (variations do not block automatically); kept for reference and reports.
  * v: { type, override, status, requestDate, decisionDate }
  */
 export function variationHolds(v, today) {
@@ -157,6 +160,6 @@ export function itemStatus(item, drawings, held) {
   }
 
   // A hold interrupts any stage before Design Complete.
-  if (held && base.status !== ITEM.COMPLETE) return { status: ITEM.BLOCKED, reason: 'On hold: open pausing variation or stop-work RFI' }
+  if (held && base.status !== ITEM.COMPLETE) return { status: ITEM.BLOCKED, reason: 'On hold: stop-work RFI open' }
   return base
 }
