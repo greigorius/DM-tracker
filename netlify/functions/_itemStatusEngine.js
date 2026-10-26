@@ -19,6 +19,8 @@ const stat  = (p, k) => p[k]?.status?.name ?? null
 const date  = (p, k) => p[k]?.date?.start ?? null
 const rel   = (p, k) => (p[k]?.relation ?? []).map((r) => cleanId(r.id))
 const title = (p, k) => (p[k]?.title ?? []).map((t) => t.plain_text).join('')
+/** Text of whichever property is the page title. */
+const pageTitle = (p) => { const t = Object.values(p).find((v) => v?.type === 'title'); return (t?.title ?? []).map((x) => x.plain_text).join('') }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export const todayLondon = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
@@ -49,12 +51,13 @@ async function loadSources() {
         stage: sel(p, 'Stage'), status: sel(p, 'Status'), grade: sel(p, 'Client Grade'),
         dt: rel(p, 'DT')[0] ?? null, submitted: date(p, 'Submitted'), created: pg.created_time } }),
     rfis: rfis.map((pg) => { const p = pg.properties
-      return { id: cleanId(pg.id), items: rel(p, 'Related Item(s)'), drawings: rel(p, 'Drawing'),
+      return { id: cleanId(pg.id), url: pg.url, name: pageTitle(p), number: p['RFI Number']?.number ?? null,
+        items: rel(p, 'Related Item(s)'), drawings: rel(p, 'Drawing'),
         stopsWork: !!p['Stops Work']?.checkbox, status: sel(p, 'RFI Status'), tbc: sel(p, 'TBC by'),
         raised: date(p, 'Date Raised'), responded: date(p, 'Date Responded'), closed: date(p, 'Date Closed'),
         created: (pg.created_time || '').slice(0, 10) } }),
     variations: vars.map((pg) => { const p = pg.properties
-      return { id: cleanId(pg.id), items: rel(p, 'Items'), type: sel(p, 'Variation Type'), override: sel(p, 'Pause Override'),
+      return { id: cleanId(pg.id), url: pg.url, name: pageTitle(p), items: rel(p, 'Items'), type: sel(p, 'Variation Type'), override: sel(p, 'Pause Override'),
         status: sel(p, 'Variation Status'), requestDate: date(p, 'Change Request Date'), decisionDate: date(p, 'Decision Date') } }),
   }
 }
@@ -94,10 +97,14 @@ export async function computeStatuses(opts = {}) {
     if (!subsByDrawing.has(s.drawing)) subsByDrawing.set(s.drawing, [])
     subsByDrawing.get(s.drawing).push(s)
   }
-  const heldItems = new Set(), rfisByDrawing = new Map()
-  for (const v of src.variations) if (variationHolds(v, today)) v.items.forEach((i) => heldItems.add(i))
+  // heldItems: item id → the variations and stop-work RFIs holding it today.
+  const heldItems = new Map(), rfisByDrawing = new Map()
+  const hold = (i, b) => { if (!heldItems.has(i)) heldItems.set(i, []); heldItems.get(i).push(b) }
+  for (const v of src.variations) if (variationHolds(v, today)) v.items.forEach((i) => hold(i,
+    { kind: 'Variation', name: v.name, url: v.url, since: v.requestDate, status: v.status, type: v.type }))
   for (const r of src.rfis) {
-    if (rfiHolds(r, today)) r.items.forEach((i) => heldItems.add(i))
+    if (rfiHolds(r, today)) r.items.forEach((i) => hold(i,
+      { kind: 'RFI', name: (r.number != null ? `RFI ${r.number}: ` : '') + r.name, url: r.url, since: r.raised || r.created, status: r.status }))
     for (const d of r.drawings) { if (!rfisByDrawing.has(d)) rfisByDrawing.set(d, []); rfisByDrawing.get(d).push(r) }
   }
 
@@ -124,9 +131,11 @@ export async function computeStatuses(opts = {}) {
   }
 
   const itemRows = items.map((i) => {
-    if (i.locked) return { ...i, proposed: i.current, reason: 'Locked: status set by hand', changed: false }
-    const r = itemStatus(i, drawingsByItem.get(i.id) || [], heldItems.has(i.id))
-    return { ...i, proposed: r.status, reason: r.reason, changed: r.status !== i.current }
+    const blockers = heldItems.get(i.id) || []
+    if (i.locked) return { ...i, blockers, proposed: i.current, reason: 'Locked: status set by hand', changed: false }
+    const r = itemStatus(i, drawingsByItem.get(i.id) || [], blockers.length > 0)
+    const reason = r.status === 'Blocked' ? 'On hold: ' + blockers.map((b) => b.name).join('; ') : r.reason
+    return { ...i, blockers, proposed: r.status, reason, changed: r.status !== i.current }
   })
   return { today, items: itemRows, drawings: drawingRows }
 }
@@ -153,6 +162,17 @@ export async function writeChanges(result) {
     await sleep(350)
   }
   return { drawingsWritten: drawings, itemsWritten: items, errors }
+}
+
+/**
+ * Every item with an active hold, or currently Blocked, with what is holding it.
+ * Covers locked items too, so items being worked at risk still show their open holds.
+ */
+export function blockerReport(result) {
+  return result.items
+    .filter((r) => r.blockers.length || r.current === 'Blocked' || r.proposed === 'Blocked')
+    .map(({ name, url, current, proposed, locked, blockers }) => ({ name, url, current, proposed, locked, blockers }))
+    .sort((a, b) => b.blockers.length - a.blockers.length || a.name.localeCompare(b.name))
 }
 
 /** Summary counts for a dry run. */

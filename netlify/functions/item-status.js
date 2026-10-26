@@ -3,13 +3,14 @@
  *
  *   GET  /api/item-status?dryRun=1            → what would change, nothing written
  *   GET  /api/item-status?dryRun=1&detail=1   → the same, with every changing row
+ *   GET  /api/item-status?blockers=1          → every held or Blocked item and what is holding it
  *   POST /api/item-status  { itemIds: [...] } → recompute those items and write changes
  *        header x-status-secret: $STATUS_SECRET   (Make scenarios call this)
  *
  * A full sweep that writes runs in item-status-background (too long for a normal function).
  */
 import { corsHeaders, tokenGuard, errResponse } from './_helpers.js'
-import { computeStatuses, writeChanges, summarise } from './_itemStatusEngine.js'
+import { computeStatuses, writeChanges, summarise, blockerReport } from './_itemStatusEngine.js'
 
 const json = (statusCode, body) => ({ statusCode, headers: corsHeaders, body: JSON.stringify(body) })
 
@@ -20,12 +21,16 @@ export const handler = async (event) => {
 
   try {
     if (event.httpMethod === 'GET') {
-      if (q.dryRun !== '1') return json(400, { error: 'GET only supports dryRun=1. Writes need POST with the shared secret.' })
+      if (q.blockers === '1') {
+        const result = await computeStatuses({ itemIds: q.itemIds ? q.itemIds.split(',') : undefined, today: q.today })
+        return json(200, { today: result.today, items: blockerReport(result) })
+      }
+      if (q.dryRun !== '1') return json(400, { error: 'GET supports dryRun=1 or blockers=1. Writes need POST with the shared secret.' })
       const itemIds = q.itemIds ? q.itemIds.split(',') : undefined
       const result = await computeStatuses({ itemIds, today: q.today })
       const out = summarise(result)
       if (q.detail === '1') {
-        out.itemChanges = result.items.filter((r) => r.changed).map(({ name, url, current, proposed, reason }) => ({ name, url, current, proposed, reason }))
+        out.itemChanges = result.items.filter((r) => r.changed).map(({ name, url, current, proposed, reason, blockers }) => ({ name, url, current, proposed, reason, blockers }))
         out.drawingChanges = result.drawings.filter((r) => r.changed).map(({ number, url, current, proposed, reason }) => ({ number, url, current, proposed, reason }))
       }
       return json(200, out)
