@@ -1,0 +1,88 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  variationHolds, rfiHolds, statusFromSubmission, latestSubmission, drawingStatus, itemStatus, legacyItemStatus, ITEM,
+} from '../netlify/functions/_statusRules.js'
+
+const today = '2026-10-26'
+
+test('variation hold matches the Scheduling Tool', () => {
+  const v = { type: 'Design Change', override: null, status: 'Awaiting Instruction', requestDate: '2026-01-01', decisionDate: null }
+  assert.equal(variationHolds(v, today), true)
+  assert.equal(variationHolds({ ...v, status: 'Instruction Received' }, today), false, 'decided without a date ends the hold')
+  assert.equal(variationHolds({ ...v, decisionDate: '2026-10-20' }, today), false)
+  assert.equal(variationHolds({ ...v, decisionDate: '2026-11-01' }, today), true, 'decision in the future keeps the hold')
+  assert.equal(variationHolds({ ...v, requestDate: null }, today), false, 'no request date, no hold')
+  assert.equal(variationHolds({ ...v, requestDate: '2026-12-01' }, today), false, 'not started yet')
+  assert.equal(variationHolds({ ...v, type: 'Altered for Buildability' }, today), false)
+  assert.equal(variationHolds({ ...v, type: 'Altered for Buildability', override: 'Pauses' }, today), true)
+  assert.equal(variationHolds({ ...v, override: 'Does not pause' }, today), false)
+  assert.equal(variationHolds({ ...v, status: null }, today), true, 'no status counts as undecided')
+})
+
+test('stop-work RFI hold', () => {
+  const r = { stopsWork: true, status: 'Open', raised: '2026-10-01', responded: null, closed: null }
+  assert.equal(rfiHolds(r, today), true)
+  assert.equal(rfiHolds({ ...r, stopsWork: false }, today), false)
+  assert.equal(rfiHolds({ ...r, responded: '2026-10-20' }, today), false)
+  assert.equal(rfiHolds({ ...r, status: 'Close Out' }, today), true, 'Close Out with no response date still holds')
+  assert.equal(rfiHolds({ ...r, status: 'Closed' }, today), false)
+})
+
+test('drawing status from the latest submission', () => {
+  const m = (stage, status, grade) => statusFromSubmission({ stage, status, grade })
+  assert.equal(m('S4', 'Submitted'), 'DM Review')
+  assert.equal(m('S4', 'Awaiting Issue'), 'DM Review')
+  assert.equal(m('S4', 'Rejected'), 'DT Review')
+  assert.equal(m('S5', 'Graded', 'QA Rejected'), 'DT Review')
+  assert.equal(m('S4', 'Issued'), 'Client Review')
+  assert.equal(m('S4', 'Graded', 'B'), 'Approval Updates')
+  assert.equal(m('A4.5', 'Graded', 'Rejected'), 'Approval Updates')
+  assert.equal(m('A4.5', 'Schedule', 'Approved'), 'Schedule')
+  assert.equal(m('PRD', 'Issued'), 'In Production')
+  assert.equal(m('PRD', 'Rejected'), 'Production Updates')
+  assert.equal(m('PRD', 'Complete'), 'Complete')
+  assert.equal(m('S3', 'Complete'), 'Complete')
+  assert.equal(m('AB', 'Issued'), 'As Built Updates')
+  assert.equal(statusFromSubmission(null), null)
+})
+
+test('latest submission picks the newest', () => {
+  const a = { submitted: '2026-09-01', created: '2026-09-01T10:00', stage: 'S4' }
+  const b = { submitted: '2026-10-01', created: '2026-10-01T10:00', stage: 'S5' }
+  assert.equal(latestSubmission([a, b]).stage, 'S5')
+})
+
+test('drawing overrides: hold, supplier, no history', () => {
+  const sub = { stage: 'S4', status: 'Rejected', submitted: '2026-10-01', dt: 'https://app.notion.com/34b210e4582e80cb992cc2906a250c82' }
+  assert.equal(drawingStatus({ current: 'DM Review', submissions: [sub] }, today).status, 'With Supplier')
+  assert.equal(drawingStatus({ current: 'DM Review', submissions: [{ ...sub, status: 'Issued' }] }, today).status, 'Client Review', 'supplier override only during design work')
+  assert.equal(drawingStatus({ current: 'Complete', submissions: [] }, today).status, 'Complete', 'no history keeps current')
+  const stop = { stopsWork: true, status: 'Open', raised: '2026-10-01' }
+  assert.equal(drawingStatus({ current: 'Client Review', submissions: [sub], rfis: [stop] }, today).status, 'On Hold')
+  const supplierRfi = { tbc: 'Supplier', status: 'Open' }
+  assert.equal(drawingStatus({ current: 'X', submissions: [{ ...sub, dt: null }], rfis: [supplierRfi] }, today).status, 'With Supplier')
+})
+
+test('item status rules', () => {
+  const flow = (status, stage = 'S4') => ({ status, fromFlow: true, stage })
+  assert.equal(itemStatus({ current: 'Omitted' }, [], true).status, ITEM.OMITTED)
+  assert.equal(itemStatus({ current: 'Backlog' }, [], false).status, ITEM.TODO)
+  assert.equal(itemStatus({ current: 'Ongoing', dtStart: '2026-01-01' }, [], false).status, ITEM.PROGRESS)
+  assert.equal(itemStatus({ current: 'Complete' }, [], true).status, ITEM.COMPLETE, 'a hold does not reopen a finished item')
+  assert.equal(itemStatus({ current: 'Blocked' }, [], false).status, ITEM.TODO, 'Blocked clears when the hold ends')
+  assert.equal(itemStatus({ current: 'In Design' }, [flow('Client Review')], false).status, ITEM.PROGRESS)
+  assert.equal(itemStatus({ current: 'In Design' }, [flow('Client Review')], true).status, ITEM.BLOCKED)
+  assert.equal(itemStatus({ current: 'In Design', woRaised: '2026-10-01' }, [flow('Schedule', 'A4.5')], false).status, ITEM.PRODUCTION)
+  assert.equal(itemStatus({ current: 'In Design' }, [flow('In Production', 'PRD'), flow('Client Review')], false).status, ITEM.PRODUCTION)
+  assert.equal(itemStatus({ current: 'In Production', woRaised: '2026-10-01' }, [flow('Complete', 'PRD'), flow('Complete', 'PRD')], false).status, ITEM.COMPLETE)
+  assert.equal(itemStatus({ current: 'In Production', woRaised: '2026-10-01' }, [flow('Complete', 'PRD'), flow('Complete', 'PRD')], true).status, ITEM.COMPLETE)
+  assert.equal(itemStatus({ current: 'In Production' }, [flow('In Production', 'PRD')], true).status, ITEM.BLOCKED, 'a hold blocks production')
+})
+
+test('legacy mapping', () => {
+  assert.equal(legacyItemStatus('Close Out'), ITEM.COMPLETE)
+  assert.equal(legacyItemStatus('PC Approved'), ITEM.PROGRESS)
+  assert.equal(legacyItemStatus('Set Up'), ITEM.TODO)
+  assert.equal(legacyItemStatus(undefined), ITEM.TODO)
+})

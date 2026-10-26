@@ -47,6 +47,11 @@
   status = 200
 
 [[redirects]]
+  from   = "/api/item-status"
+  to     = "/.netlify/functions/item-status"
+  status = 200
+
+[[redirects]]
   from   = "/api/rfi-schedule"
   to     = "/.netlify/functions/rfi-schedule"
   status = 200
