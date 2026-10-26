@@ -147,7 +147,7 @@ function StatPanel({ label, value, sub, valueColor = C.text }) {
 }
 
 // ── D: DM Phase summary table ─────────────────────────────────────────────────
-const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
+const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site', 'Design Complete', 'Close Out', 'On Site']);
 
 const GROUP_BY_OPTIONS = [
   { value: 'dmPhase',  label: 'DM Phase' },
@@ -381,7 +381,7 @@ export default function AxiomHome() {
   // Stats derived from items
   const rfisOpen     = allItems.reduce((n, i) => n + (i.rfiCount ?? 0), 0);
   const tdlOpen      = allItems.reduce((n, i) => n + (i.tdlCount ?? 0), 0);
-  const inProduction = allItems.filter(i => i.inProduction || i.status === 'Pre-Production').length;
+  const inProduction = allItems.filter(i => i.inProduction || i.status === 'Pre-Production' || i.status === 'In Production').length;
   const itemsHanging = allItems.filter(i => (i.status ?? '').startsWith('On Hold')).length;
   const drawingCount = allItems.reduce((n, i) => n + (i.drawingCount ?? 0), 0);
 

@@ -25,11 +25,15 @@ export const ITEM_STATUS_COLORS = {
   // ── Gray (not started / backlog / omitted) ──
   'Not Started':        { bg: '#1e2128', text: '#9b9ea4' },
   'Backlog':            { bg: '#1e2128', text: '#9b9ea4' },
+  'To Do':              { bg: '#1e2128', text: '#9b9ea4' },
+  'Ongoing':            { bg: '#1e2128', text: '#9b9ea4' },
   'Omitted':            { bg: '#181b1f', text: '#6b7280' },
 
   // ── Blue (in progress / pre-production) ──
   'In Progress':        { bg: '#0f2340', text: '#5ba5e8' },
   'Pre-Production':     { bg: '#0f2340', text: '#5ba5e8' },
+  'Set Up':             { bg: '#0f2340', text: '#5ba5e8' },
+  'In Design':          { bg: '#0f2340', text: '#5ba5e8' },
 
   // ── Purple (in review) ──
   'In Review':          { bg: '#221b3a', text: '#a582d8' },
@@ -37,6 +41,8 @@ export const ITEM_STATUS_COLORS = {
   // ── Yellow (review / pending client) ──
   'Review':             { bg: '#2b2208', text: '#d4a229' },
   'Pending':            { bg: '#2b2208', text: '#d4a229' },
+  'Awaiting Approval':  { bg: '#2b2208', text: '#d4a229' },
+  'By Others':          { bg: '#2b2208', text: '#d4a229' },
 
   // ── Orange (on hold) ──
   'On Hold':            { bg: '#2e1a08', text: '#e07c30' },
@@ -49,6 +55,9 @@ export const ITEM_STATUS_COLORS = {
   'PC Approved':        { bg: '#0b2418', text: '#4daa7a' },
   'Design Complete':    { bg: '#0b2418', text: '#4daa7a' },
   'In Manufacture':     { bg: '#0b2418', text: '#4daa7a' },
+  'In Production':      { bg: '#0b2418', text: '#4daa7a' },
+  'On Site':            { bg: '#0b2418', text: '#4daa7a' },
+  'Close Out':          { bg: '#0b2418', text: '#4daa7a' },
   'Complete':           { bg: '#0b2418', text: '#4daa7a' },
 };
 

@@ -117,12 +117,12 @@ export function transformTask(page, drawings = []) {
   return {
     id:   page.id,
     name,
-    status:           props['Status']?.status?.name                   ?? null,
+    status:           (props['Item Status'] ?? props['Status'])?.status?.name                   ?? null,
     assignee:         props['Assigned To']?.people?.[0]?.name         ?? null,
     contractCategory: props['Contract Category']?.formula?.string
                    ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
     noClientApproval: props['No Client Approval']?.checkbox           ?? false,
-    inProduction:     props['In Production']?.checkbox                ?? false,
+    inProduction:     (props['In Production']?.checkbox ?? false) || props['Item Status']?.status?.name === 'In Production',
     dmPhase:          props['DM Phase']?.select?.name                 ?? null,
 
     dates: {
@@ -201,12 +201,12 @@ export function transformItem(page) {
   return {
     id,
     name,
-    status:           statusVal(p, 'Status'),
+    status:           statusVal(p, 'Item Status') ?? statusVal(p, 'Status'),
     dmPhase:          selectVal(p, 'DM Phase'),
     assignee:         personVal(p, 'Assigned To'),
     contractCategory: contractCat(name),
     noClientApproval: checkVal(p, 'No Client Approval'),
-    inProduction:     checkVal(p, 'In Production'),
+    inProduction:     checkVal(p, 'In Production') || statusVal(p, 'Item Status') === 'In Production',
     rfiCount,
     tdlCount,
     drawingCount,

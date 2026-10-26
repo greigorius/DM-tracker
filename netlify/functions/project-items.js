@@ -31,9 +31,9 @@ export const handler = async (event) => {
     let items = pages.map(p => transformItem(p))
 
     if (status && status !== 'all') {
-      const COMPLETE = ['PC Approved', 'In Manufacture', 'Complete', 'Omitted']
+      const COMPLETE = ['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site']
       if (status === 'active')        items = items.filter(i => !COMPLETE.includes(i.status))
-      else if (status === 'complete') items = items.filter(i => ['PC Approved', 'In Manufacture', 'Complete'].includes(i.status))
+      else if (status === 'complete') items = items.filter(i => ['PC Approved', 'In Manufacture', 'Complete', 'Design Complete', 'Close Out', 'On Site'].includes(i.status))
       else                            items = items.filter(i => i.status === status)
     }
 
@@ -48,7 +48,7 @@ export const handler = async (event) => {
       return a.name.localeCompare(b.name)
     })
 
-    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted'])
+    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site'])
     const summary = {
       total:  items.length,
       byPhase: {

@@ -119,7 +119,7 @@ function StatPanel({ label, value, sub, valueColor = C.text }) {
 }
 
 // ── Phase table ───────────────────────────────────────────────────────────────
-const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
+const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site', 'Design Complete', 'Close Out', 'On Site']);
 
 const GROUP_BY_OPTIONS = [
   { value: 'dmPhase',  label: 'DM Phase' },
@@ -306,7 +306,7 @@ export default function ProjectHome() {
 
   const projectColor = project.color ?? '#4F9CF9';
   const rfisOpen     = items.reduce((n, i) => n + (i.rfiCount ?? 0), 0);
-  const inProduction = items.filter(i => i.inProduction || i.status === 'Pre-Production').length;
+  const inProduction = items.filter(i => i.inProduction || i.status === 'Pre-Production' || i.status === 'In Production').length;
   const itemsHanging = items.filter(i => (i.status ?? '').startsWith('On Hold')).length;
   const drawingCount = items.reduce((n, i) => n + (i.drawingCount ?? 0), 0);
   const today        = new Date();

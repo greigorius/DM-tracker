@@ -20,7 +20,7 @@ function transformScheduleItem(page, pid) {
   return {
     id:               page.id,
     name,
-    status:           p['Status']?.status?.name              ?? null,
+    status:           (p['Item Status'] ?? p['Status'])?.status?.name              ?? null,
     projectId:        pid,
     noClientApproval: p['No Client Approval']?.checkbox      ?? false,
     dmPhase:          p['DM Phase']?.select?.name            ?? null,
