@@ -9,7 +9,7 @@ const NOTION_API = 'https://api.notion.com/v1'
 const DB = {
   tasks:       () => process.env.NOTION_DB_TASKS       || 'bb783a35a407463789c678ebc76c8699',
   drawings:    () => process.env.NOTION_DB_DRAWINGS    || '13b210e4582e8168923ff79fa8628b59',
-  submissions: () => process.env.NOTION_DB_SUBMISSIONS || '36f210e4582e80ed8b2ce9e245bda433',
+  submissions: () => process.env.NOTION_DB_SUBMISSIONS || '36f210e4582e8035baaeee8d16b11d4e',
   rfis:        () => process.env.NOTION_DB_RFIS        || '22d210e4582e80189f63f2cee93be4b3',
   variations:  () => process.env.NOTION_DB_VARIATIONS  || '22d210e4582e81359357c8ce288be096',
 }
