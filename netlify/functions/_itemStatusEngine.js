@@ -35,10 +35,11 @@ async function pool(items, limit, fn) {
 async function loadSources() {
   const [subs, rfis, vars] = await Promise.all([
     queryAll(DB.submissions(), null),
+    // Notion allows filters nested two levels deep, so the supplier case is spelt out per status.
     queryAll(DB.rfis(), { or: [
       { property: 'Stops Work', checkbox: { equals: true } },
-      { and: [{ property: 'TBC by', select: { equals: 'Supplier' } }, { or: [
-        { property: 'RFI Status', select: { equals: 'Raise' } }, { property: 'RFI Status', select: { equals: 'Open' } }] }] },
+      ...['Raise', 'Open'].map((s) => ({ and: [
+        { property: 'TBC by', select: { equals: 'Supplier' } }, { property: 'RFI Status', select: { equals: s } }] })),
     ] }),
     queryAll(DB.variations(), { property: 'Change Request Date', date: { is_not_empty: true } }),
   ])
