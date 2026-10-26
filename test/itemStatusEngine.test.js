@@ -72,3 +72,15 @@ test('engine works out statuses from Notion pages', async () => {
   assert.deepEqual(patches[0].body, { properties: { 'Drawing Status': { select: { name: 'Client Review' } } } })
   assert.ok(patches.slice(1).every((p) => p.body.properties['Item Status'].status.name))
 })
+
+test('blocker report names what holds each item', async () => {
+  const { blockerReport } = await import('../netlify/functions/_itemStatusEngine.js')
+  const r = await computeStatuses({ today: '2026-10-26' })
+  const rep = blockerReport(r)
+  const e = rep.find((x) => x.url === 'u/e')
+  assert.equal(e.blockers[0].kind, 'Variation')
+  assert.equal(e.blockers[0].since, '2026-01-01')
+  assert.ok(rep.find((x) => x.url === 'u/d').locked, 'locked items still listed')
+  assert.equal(rep.find((x) => x.url === 'u/b').blockers[0].kind, 'RFI')
+  assert.ok(r.items.find((i) => i.url === 'u/e').reason.startsWith('On hold: '))
+})
