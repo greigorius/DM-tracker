@@ -18,7 +18,7 @@ const dt = (start) => ({ date: start ? { start } : null })
 const ttl = (t) => ({ title: [{ plain_text: t }] })
 
 const DATA = {
-  '36f210e4582e80ed8b2ce9e245bda433': [ // submissions
+  '36f210e4582e8035baaeee8d16b11d4e': [ // submissions
     { id: 's1', created_time: '2026-09-01T09:00:00Z', properties: { Drawing: rel(DWG_1), Item: rel(ITEM_A), Stage: sel('S4'), Status: sel('Graded'), 'Client Grade': sel('B'), DT: rel(), Submitted: dt('2026-09-01') } },
     { id: 's2', created_time: '2026-10-01T09:00:00Z', properties: { Drawing: rel(DWG_1), Item: rel(ITEM_A), Stage: sel('S5'), Status: sel('Issued'), 'Client Grade': sel(null), DT: rel(), Submitted: dt('2026-10-01') } },
   ],
