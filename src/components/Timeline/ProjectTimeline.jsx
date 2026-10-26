@@ -98,6 +98,12 @@ const LEGEND_ITEMS = [
 
 const STATUS_COLORS = {
   'Backlog':                  { bg: '#37352f', text: '#c9c8c2' },
+  'To Do':                    { bg: '#37352f', text: '#c9c8c2' },
+  'Blocked':                  { bg: '#3b1a1a', text: '#f09090' },
+  'In Design':                { bg: '#3b2714', text: '#f0a030' },
+  'Awaiting Approval':        { bg: '#0f2a4a', text: '#80b8e8' },
+  'In Production':            { bg: '#14532d', text: '#6ee7a0' },
+  'Design Complete':          { bg: '#14532d', text: '#6ee7a0' },
   'In Review':                { bg: '#2e2459', text: '#c5bcf0' },
   'On Hold - Supplier Info':  { bg: '#3b2f14', text: '#e8c06a' },
   'On Hold - RFIs':           { bg: '#3b1a1a', text: '#f09090' },
@@ -118,7 +124,7 @@ const STATUS_COLORS = {
   'Omitted':                  { bg: '#252525', text: '#909090' },
 };
 
-const COMPLETED = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted']);
+const COMPLETED = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const daysBetween = (a, b) => (b - a) / 86_400_000;

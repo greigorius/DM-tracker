@@ -61,7 +61,7 @@ app.get('/api/projects', async (req, res) => {
     const enriched = pages.map(p => ({
       id:            p.id,
       name:          p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
-      status:        p.properties['Status']?.status?.name                  ?? null,
+      status:        (p.properties['Item Status'] ?? p.properties['Status'])?.status?.name                  ?? null,
       client:        clientMap[p.properties['Client']?.relation?.[0]?.id]  ?? null,
       hoursRequired: p.properties['Total Hours Required']?.rollup?.number  ?? null,
       hoursSpent:    p.properties['Total Hours Spent']?.rollup?.number     ?? null,
@@ -93,9 +93,9 @@ app.get('/api/projects/:id/items', async (req, res) => {
     let items = pages.map(p => transformItem(p));
 
     if (status && status !== 'all') {
-      const COMPLETE = ['PC Approved', 'In Manufacture', 'Complete', 'Omitted'];
+      const COMPLETE = ['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site'];
       if (status === 'active')   items = items.filter(i => !COMPLETE.includes(i.status));
-      else if (status === 'complete') items = items.filter(i => ['PC Approved', 'In Manufacture', 'Complete'].includes(i.status));
+      else if (status === 'complete') items = items.filter(i => ['PC Approved', 'In Manufacture', 'Complete', 'Design Complete', 'Close Out', 'On Site'].includes(i.status));
       else items = items.filter(i => i.status === status);
     }
 
@@ -181,9 +181,9 @@ app.get('/api/stats', async (req, res) => {
       : undefined;
 
     const pages = await queryAll(DB.tasks, filter);
-    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted']);
+    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site']);
     const items = pages.map(p => ({
-      status:  p.properties['Status']?.status?.name   ?? null,
+      status:  (p.properties['Item Status'] ?? p.properties['Status'])?.status?.name   ?? null,
       dmPhase: p.properties['DM Phase']?.select?.name ?? null,
     }));
 
@@ -248,7 +248,7 @@ app.get('/api/tdl', async (req, res) => {
       id:          p.id,
       tdlId:       p.properties['ID']?.unique_id?.number        ?? null,
       description: p.properties['Item Description']?.title?.[0]?.plain_text ?? null,
-      status:      p.properties['Status']?.status?.name         ?? null,
+      status:      (p.properties['Item Status'] ?? p.properties['Status'])?.status?.name         ?? null,
       assignee:    p.properties['Assigned To']?.people?.[0]?.name ?? null,
       date:        p.properties['Start Date']?.date?.start       ?? null,
       category:    p.properties['Task Category']?.select?.name   ?? null,
@@ -387,7 +387,7 @@ app.get('/api/drawings-register/items', async (req, res) => {
     const items  = pages.map(p => ({
       id:        p.id,
       name:      p.properties['Item Name']?.title?.[0]?.plain_text ?? null,
-      status:    p.properties['Status']?.status?.name              ?? null,
+      status:    (p.properties['Item Status'] ?? p.properties['Status'])?.status?.name              ?? null,
       projectId,
     }));
     res.json(items);
@@ -450,7 +450,7 @@ app.get('/api/drawings-register', async (req, res) => {
         const projectPageId = p2['Projects']?.relation?.[0]?.id ?? null;
         itemMap[id] = {
           name: p2['Item Name']?.title?.[0]?.plain_text ?? null,
-          status: p2['Status']?.status?.name ?? null,
+          status: (p2['Item Status'] ?? p2['Status'])?.status?.name ?? null,
           projectPageId,
         };
         if (projectPageId && !projPromises[projectPageId]) {
@@ -606,7 +606,7 @@ app.get('/api/schedule-items', async (req, res) => {
     return {
       id:               page.id,
       name,
-      status:           p['Status']?.status?.name              ?? null,
+      status:           (p['Item Status'] ?? p['Status'])?.status?.name              ?? null,
       projectId:        pid,
       noClientApproval: p['No Client Approval']?.checkbox      ?? false,
       dmPhase:          p['DM Phase']?.select?.name            ?? null,

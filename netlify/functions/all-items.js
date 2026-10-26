@@ -85,7 +85,7 @@ export const handler = async (event) => {
     if (phase    && phase    !== 'all') items = items.filter(i => i.dmPhase          === phase)
     if (category && category !== 'all') items = items.filter(i => i.contractCategory === category)
     if (status   && status   !== 'all') {
-      const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted'])
+      const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site'])
       if      (status === 'active')   items = items.filter(i => !COMPLETE.has(i.status))
       else if (status === 'complete') items = items.filter(i =>  COMPLETE.has(i.status))
       else                            items = items.filter(i => i.status === status)

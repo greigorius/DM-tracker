@@ -18,9 +18,9 @@ export const handler = async (event) => {
       : undefined
 
     const pages = await queryAll(DB_TASKS, withNoPcsa(filter))
-    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted'])
+    const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete', 'Close Out', 'On Site'])
     const items = pages.map(p => ({
-      status:  p.properties['Status']?.status?.name   ?? null,
+      status:  (p.properties['Item Status'] ?? p.properties['Status'])?.status?.name   ?? null,
       dmPhase: p.properties['DM Phase']?.select?.name ?? null,
     }))
 
