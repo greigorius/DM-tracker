@@ -3,7 +3,7 @@
  * every Item Status and Drawing Status, and (outside dry runs) writes the changes.
  */
 import { queryAll, fetchNotion, notionHeaders } from './_helpers.js'
-import { rfiHolds, drawingStatus, itemStatus, cleanId } from './_statusRules.js'
+import { variationHolds, rfiHolds, drawingStatus, itemStatus, cleanId } from './_statusRules.js'
 
 const NOTION_API = 'https://api.notion.com/v1'
 const DB = {
@@ -11,6 +11,7 @@ const DB = {
   drawings:    () => process.env.NOTION_DB_DRAWINGS    || '13b210e4582e8168923ff79fa8628b59',
   submissions: () => process.env.NOTION_DB_SUBMISSIONS || '36f210e4582e80ed8b2ce9e245bda433',
   rfis:        () => process.env.NOTION_DB_RFIS        || '22d210e4582e80189f63f2cee93be4b3',
+  variations:  () => process.env.NOTION_DB_VARIATIONS  || '22d210e4582e81359357c8ce288be096',
 }
 
 const sel   = (p, k) => p[k]?.select?.name ?? null
@@ -32,13 +33,14 @@ async function pool(items, limit, fn) {
 }
 
 async function loadSources() {
-  const [subs, rfis] = await Promise.all([
+  const [subs, rfis, vars] = await Promise.all([
     queryAll(DB.submissions(), null),
     queryAll(DB.rfis(), { or: [
       { property: 'Stops Work', checkbox: { equals: true } },
       { and: [{ property: 'TBC by', select: { equals: 'Supplier' } }, { or: [
         { property: 'RFI Status', select: { equals: 'Raise' } }, { property: 'RFI Status', select: { equals: 'Open' } }] }] },
     ] }),
+    queryAll(DB.variations(), { property: 'Change Request Date', date: { is_not_empty: true } }),
   ])
   return {
     submissions: subs.map((pg) => { const p = pg.properties
@@ -50,6 +52,9 @@ async function loadSources() {
         stopsWork: !!p['Stops Work']?.checkbox, status: sel(p, 'RFI Status'), tbc: sel(p, 'TBC by'),
         raised: date(p, 'Date Raised'), responded: date(p, 'Date Responded'), closed: date(p, 'Date Closed'),
         created: (pg.created_time || '').slice(0, 10) } }),
+    variations: vars.map((pg) => { const p = pg.properties
+      return { id: cleanId(pg.id), items: rel(p, 'Items'), type: sel(p, 'Variation Type'), override: sel(p, 'Pause Override'),
+        status: sel(p, 'Variation Status'), requestDate: date(p, 'Change Request Date'), decisionDate: date(p, 'Decision Date') } }),
   }
 }
 
@@ -89,6 +94,7 @@ export async function computeStatuses(opts = {}) {
     subsByDrawing.get(s.drawing).push(s)
   }
   const heldItems = new Set(), rfisByDrawing = new Map()
+  for (const v of src.variations) if (variationHolds(v, today)) v.items.forEach((i) => heldItems.add(i))
   for (const r of src.rfis) {
     if (rfiHolds(r, today)) r.items.forEach((i) => heldItems.add(i))
     for (const d of r.drawings) { if (!rfisByDrawing.has(d)) rfisByDrawing.set(d, []); rfisByDrawing.get(d).push(r) }
@@ -110,7 +116,7 @@ export async function computeStatuses(opts = {}) {
     if (locked) { r.status = current; r.reason = 'Locked: status set by hand' }
     const row = { id, url: pg.url, item, number: title(p, 'Drawing Number'), current, proposed: r.status, reason: r.reason,
       fromFlow: r.fromFlow, stage: r.stage, schedProdActual: date(p, 'Schedule Production (Actual)'), locked }
-    row.changed = !!row.proposed && row.proposed !== row.current
+    row.changed = !locked && !!row.proposed && row.proposed !== row.current
     drawingRows.push(row)
     if (!drawingsByItem.has(item)) drawingsByItem.set(item, [])
     drawingsByItem.get(item).push({ status: row.proposed, fromFlow: row.fromFlow, stage: row.stage, schedProdActual: row.schedProdActual })
@@ -154,7 +160,9 @@ export function summarise(result) {
     const k = `${r.current ?? '(blank)'} → ${r.proposed}`; m[k] = (m[k] || 0) + 1; return m }, {})
   return {
     today: result.today,
-    items: { total: result.items.length, changing: result.items.filter((r) => r.changed).length, byChange: count(result.items) },
-    drawings: { checked: result.drawings.length, changing: result.drawings.filter((r) => r.changed).length, byChange: count(result.drawings) },
+    items: { total: result.items.length, changing: result.items.filter((r) => r.changed).length, byChange: count(result.items),
+      locked: result.items.filter((r) => r.locked).map(({ name, url, current }) => ({ name, url, current })) },
+    drawings: { checked: result.drawings.length, changing: result.drawings.filter((r) => r.changed).length, byChange: count(result.drawings),
+      locked: result.drawings.filter((r) => r.locked).map(({ number, url, current }) => ({ number, url, current })) },
   }
 }

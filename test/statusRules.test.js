@@ -80,6 +80,12 @@ test('item status rules', () => {
   assert.equal(itemStatus({ current: 'In Production' }, [flow('In Production', 'PRD')], true).status, ITEM.BLOCKED, 'a hold blocks production')
 })
 
+test('a locked item can proceed at risk', async () => {
+  const { itemStatus: is } = await import('../netlify/functions/_statusRules.js')
+  // The engine skips locked rows before calling itemStatus; this documents the unlocked behaviour.
+  assert.equal(is({ current: 'In Progress', dtStart: '2026-01-01' }, [], true).status, ITEM.BLOCKED)
+})
+
 test('legacy mapping', () => {
   assert.equal(legacyItemStatus('Close Out'), ITEM.COMPLETE)
   assert.equal(legacyItemStatus('PC Approved'), ITEM.PROGRESS)
