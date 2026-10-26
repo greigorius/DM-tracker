@@ -11,6 +11,10 @@ const ITEM_E = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'   // In Progress, open variati
 const ITEM_D = 'dddddddddddddddddddddddddddddddd'   // Blocked by hand, locked
 const DWG_1 = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1'
 const DWG_2 = 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2'
+const ITEM_F = 'ffffffffffffffffffffffffffffffff'   // drawing blocked in Drawing Flow
+const ITEM_G = '99999999999999999999999999999999'   // stop-work RFI on its drawing only
+const DWG_3 = 'd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3'
+const DWG_4 = 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4'
 
 const rel = (...ids) => ({ relation: ids.map((id) => ({ id })) })
 const sel = (name) => ({ select: name ? { name } : null })
@@ -21,9 +25,11 @@ const DATA = {
   '36f210e4582e8035baaeee8d16b11d4e': [ // submissions
     { id: 's1', created_time: '2026-09-01T09:00:00Z', properties: { Drawing: rel(DWG_1), Item: rel(ITEM_A), Stage: sel('S4'), Status: sel('Graded'), 'Client Grade': sel('B'), DT: rel(), Submitted: dt('2026-09-01') } },
     { id: 's2', created_time: '2026-10-01T09:00:00Z', properties: { Drawing: rel(DWG_1), Item: rel(ITEM_A), Stage: sel('S5'), Status: sel('Issued'), 'Client Grade': sel(null), DT: rel(), Submitted: dt('2026-10-01') } },
+    { id: 's3', created_time: '2026-10-02T09:00:00Z', properties: { Drawing: rel(DWG_3), Item: rel(ITEM_F), Stage: sel('S4'), Status: sel('Submitted'), 'Client Grade': sel(null), DT: rel(), Submitted: dt('2026-10-02'), Blocked: { checkbox: true } } },
   ],
   '22d210e4582e80189f63f2cee93be4b3': [ // rfis
     { id: 'r1', created_time: '2026-10-01T09:00:00Z', properties: { 'Related Item(s)': rel(ITEM_B), Drawing: rel(), 'Stops Work': { checkbox: true }, 'RFI Status': sel('Open'), 'TBC by': sel('Architect'), 'Date Raised': dt('2026-10-01'), 'Date Responded': dt(null), 'Date Closed': dt(null) } },
+    { id: 'r2', url: 'u/r2', created_time: '2026-10-01T09:00:00Z', properties: { 'Related Item(s)': rel(), Drawing: rel(DWG_4), 'Stops Work': { checkbox: true }, 'RFI Status': sel('Open'), 'TBC by': sel('Architect'), 'Date Raised': dt('2026-10-01'), 'Date Responded': dt(null), 'Date Closed': dt(null) } },
   ],
   '22d210e4582e81359357c8ce288be096': [ // variations
     { id: 'v1', properties: { Items: rel(ITEM_C, ITEM_D, ITEM_E), 'Variation Type': sel('Scope Change'), 'Pause Override': sel(null), 'Variation Status': sel('Awaiting Instruction'), 'Change Request Date': dt('2026-01-01'), 'Decision Date': dt(null) } },
@@ -34,17 +40,22 @@ const DATA = {
     { id: ITEM_C, url: 'u/c', properties: { 'Item Name': ttl('C'), 'Item Status': { status: { name: 'Complete' } }, '1st DT Start (Actual)': dt(null), 'WO Raised': dt(null) } },
     { id: ITEM_E, url: 'u/e', properties: { 'Item Name': ttl('E'), 'Item Status': { status: { name: 'In Progress' } }, '1st DT Start (Actual)': dt('2026-06-01'), 'WO Raised': dt(null) } },
     { id: ITEM_D, url: 'u/d', properties: { 'Item Name': ttl('D'), 'Item Status': { status: { name: 'Blocked' } }, '1st DT Start (Actual)': dt(null), 'WO Raised': dt(null), 'Lock Status': { checkbox: true } } },
+    { id: ITEM_F, url: 'u/f', properties: { 'Item Name': ttl('F'), 'Item Status': { status: { name: 'In Progress' } }, '1st DT Start (Actual)': dt('2026-06-01'), 'WO Raised': dt(null) } },
+    { id: ITEM_G, url: 'u/g', properties: { 'Item Name': ttl('G'), 'Item Status': { status: { name: 'In Progress' } }, '1st DT Start (Actual)': dt('2026-06-01'), 'WO Raised': dt(null) } },
   ],
   '13b210e4582e8168923ff79fa8628b59': [ // drawings
     { id: DWG_1, url: 'u/d1', properties: { Item: rel(ITEM_A), 'Drawing Number': ttl('D-001'), 'Drawing Status': sel('DM Review'), 'Schedule Production (Actual)': dt(null) } },
     { id: DWG_2, url: 'u/d2', properties: { Item: rel(ITEM_A), 'Drawing Number': ttl('D-002'), 'Drawing Status': sel('Complete'), 'Schedule Production (Actual)': dt(null) } },
+    { id: DWG_3, url: 'u/d3', properties: { Item: rel(ITEM_F), 'Drawing Number': ttl('D-003'), 'Drawing Status': sel('DM Review'), 'Schedule Production (Actual)': dt(null) } },
   ],
 }
+const DWG_4_PAGE = { id: DWG_4, url: 'u/d4', properties: { Item: rel(ITEM_G), 'Drawing Number': ttl('D-004'), 'Drawing Status': sel('Client Review'), 'Schedule Production (Actual)': dt(null) } }
 
 const patches = []
 globalThis.fetch = async (url, opts = {}) => {
   const m = url.match(/databases\/([0-9a-f]+)\/query/)
   if (m) return { ok: true, json: async () => ({ results: DATA[m[1]] ?? [], has_more: false }) }
+  if (url.endsWith(`/pages/${DWG_4}`) && !opts.method) return { ok: true, json: async () => DWG_4_PAGE }
   if (opts.method === 'PATCH') { patches.push({ url, body: JSON.parse(opts.body) }); return { ok: true, json: async () => ({}) } }
   throw new Error('unexpected fetch ' + url)
 }
@@ -65,12 +76,17 @@ test('engine works out statuses from Notion pages', async () => {
   assert.equal(d2.proposed, 'Complete', 'no history keeps its status')
   assert.equal(d2.changed, false)
 
+  assert.equal(item(ITEM_F).proposed, 'Blocked', 'a Drawing Flow block stops the item')
+  assert.equal(r.drawings.find((d) => d.id === DWG_3).proposed, 'On Hold')
+  assert.equal(item(ITEM_G).proposed, 'Blocked', 'a stop-work RFI on a drawing blocks its item')
+  assert.equal(r.drawings.find((d) => d.id === DWG_4).proposed, 'On Hold')
+
   const w = await writeChanges(r)
   assert.equal(w.errors.length, 0)
-  assert.equal(w.drawingsWritten, 1)
-  assert.equal(w.itemsWritten, 4, 'A, B, C, E change; D is locked')
+  assert.equal(w.drawingsWritten, 3)
+  assert.equal(w.itemsWritten, 6, 'A, B, C, E, F, G change; D is locked')
   assert.deepEqual(patches[0].body, { properties: { 'Drawing Status': { select: { name: 'Client Review' } } } })
-  assert.ok(patches.slice(1).every((p) => p.body.properties['Item Status'].status.name))
+  assert.ok(patches.slice(3).every((p) => p.body.properties['Item Status'].status.name))
 })
 
 test('blocker report names what holds each item', async () => {
@@ -82,5 +98,7 @@ test('blocker report names what holds each item', async () => {
   assert.equal(e.blockers[0].since, '2026-01-01')
   assert.ok(rep.find((x) => x.url === 'u/d').locked, 'locked items still listed')
   assert.equal(rep.find((x) => x.url === 'u/b').blockers[0].kind, 'RFI')
+  assert.equal(rep.find((x) => x.url === 'u/f').blockers[0].kind, 'Drawing Flow')
+  assert.match(rep.find((x) => x.url === 'u/g').blockers[0].name, /on D-004/)
   assert.ok(r.items.find((i) => i.url === 'u/e').reason.startsWith('On hold: '))
 })

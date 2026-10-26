@@ -3,7 +3,7 @@
  * every Item Status and Drawing Status, and (outside dry runs) writes the changes.
  */
 import { queryAll, fetchNotion, notionHeaders } from './_helpers.js'
-import { variationHolds, rfiHolds, drawingStatus, itemStatus, cleanId } from './_statusRules.js'
+import { variationHolds, rfiHolds, drawingStatus, itemStatus, latestSubmission, cleanId } from './_statusRules.js'
 
 const NOTION_API = 'https://api.notion.com/v1'
 const DB = {
@@ -47,7 +47,8 @@ async function loadSources() {
   ])
   return {
     submissions: subs.map((pg) => { const p = pg.properties
-      return { id: cleanId(pg.id), drawing: rel(p, 'Drawing')[0] ?? null, item: rel(p, 'Item')[0] ?? null,
+      return { id: cleanId(pg.id), url: pg.url, name: pageTitle(p), blocked: !!p['Blocked']?.checkbox,
+        drawing: rel(p, 'Drawing')[0] ?? null, item: rel(p, 'Item')[0] ?? null,
         stage: sel(p, 'Stage'), status: sel(p, 'Status'), grade: sel(p, 'Client Grade'),
         dt: rel(p, 'DT')[0] ?? null, submitted: date(p, 'Submitted'), created: pg.created_time } }),
     rfis: rfis.map((pg) => { const p = pg.properties
@@ -99,9 +100,14 @@ export async function computeStatuses(opts = {}) {
   }
   // heldItems: item id → the variations and stop-work RFIs holding it today.
   const heldItems = new Map(), rfisByDrawing = new Map()
-  const hold = (i, b) => { if (!heldItems.has(i)) heldItems.set(i, []); heldItems.get(i).push(b) }
+  const hold = (i, b) => {
+    if (!heldItems.has(i)) heldItems.set(i, [])
+    const list = heldItems.get(i); if (!list.some((x) => x.url === b.url)) list.push(b)
+  }
   for (const v of src.variations) if (variationHolds(v, today)) v.items.forEach((i) => hold(i,
     { kind: 'Variation', name: v.name, url: v.url, since: v.requestDate, status: v.status, type: v.type }))
+  for (const s of src.submissions) if (s.blocked && !s.drawing && s.item) hold(s.item,
+    { kind: 'Drawing Flow', name: `${s.name} (blocked submission)`, url: s.url, since: s.submitted })
   for (const r of src.rfis) {
     if (rfiHolds(r, today)) r.items.forEach((i) => hold(i,
       { kind: 'RFI', name: (r.number != null ? `RFI ${r.number}: ` : '') + r.name, url: r.url, since: r.raised || r.created, status: r.status }))
@@ -115,12 +121,29 @@ export async function computeStatuses(opts = {}) {
   // Only items with Drawing Flow history or a works order need their drawings.
   const needDrawings = items.filter((i) => subItems.has(i.id) || i.woRaised).map((i) => i.id)
   const drawingPages = needDrawings.length ? await loadDrawings(needDrawings) : []
+  // Drawings named by a stop-work RFI but not loaded above: fetch them so the RFI can block their item.
+  const loaded = new Set(drawingPages.map((pg) => cleanId(pg.id)))
+  const extra = [...rfisByDrawing.keys()].filter((d) => !loaded.has(d) && rfisByDrawing.get(d).some((r) => rfiHolds(r, today)))
+  if (extra.length) {
+    const pages = await pool(extra, 3, (id) =>
+      fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() }).then((r) => (r.ok ? r.json() : null)))
+    const wanted = new Set(items.map((i) => i.id))
+    drawingPages.push(...pages.filter((pg) => pg && wanted.has(rel(pg.properties, 'Item')[0])))
+  }
 
   const drawingsByItem = new Map(), drawingRows = []
   for (const pg of drawingPages) {
     const p = pg.properties, id = cleanId(pg.id), item = rel(p, 'Item')[0]
     const current = sel(p, 'Drawing Status'), locked = !!p['Lock Status']?.checkbox
-    const r = drawingStatus({ current, submissions: subsByDrawing.get(id) || [], rfis: rfisByDrawing.get(id) || [] }, today)
+    const subs = subsByDrawing.get(id) || [], drfis = rfisByDrawing.get(id) || []
+    const r = drawingStatus({ current, submissions: subs, rfis: drfis }, today)
+    if (r.held && item) {
+      const number = title(p, 'Drawing Number')
+      const rfi = drfis.find((x) => rfiHolds(x, today))
+      hold(item, rfi
+        ? { kind: 'RFI', name: `${rfi.number != null ? `RFI ${rfi.number}: ` : ''}${rfi.name} (on ${number})`, url: rfi.url, since: rfi.raised || rfi.created, status: rfi.status }
+        : { kind: 'Drawing Flow', name: `${number} blocked in Drawing Flow`, url: pg.url, since: latestSubmission(subs)?.submitted ?? null })
+    }
     if (locked) { r.status = current; r.reason = 'Locked: status set by hand' }
     const row = { id, url: pg.url, item, number: title(p, 'Drawing Number'), current, proposed: r.status, reason: r.reason,
       fromFlow: r.fromFlow, stage: r.stage, schedProdActual: date(p, 'Schedule Production (Actual)'), locked }

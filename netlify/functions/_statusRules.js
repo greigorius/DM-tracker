@@ -8,6 +8,8 @@
  *    Design Complete / Omitted. Omitted is only ever set by hand.
  *  - An item is Blocked by an open pausing variation or a stop-work RFI, using the same
  *    hold rule as the Scheduling Tool. An RFI only blocks when Stops Work is ticked.
+ *  - A drawing whose latest submission has Blocked ticked in Drawing Flow is On Hold, and
+ *    work stops on its item. A stop-work RFI linked only to a drawing also blocks that item.
  *  - To proceed at risk while a variation is open, the DM ticks Lock Status on the item
  *    and sets its status by hand. Locked items and drawings are skipped (handled in the engine).
  */
@@ -102,7 +104,8 @@ export function drawingStatus(d, today) {
   const latest = latestSubmission(d.submissions)
   const base = statusFromSubmission(latest)
 
-  if (rfis.some((r) => rfiHolds(r, today))) return { status: 'On Hold', reason: 'Stop-work RFI open on this drawing', fromFlow: !!base, stage: latest?.stage ?? null }
+  if (rfis.some((r) => rfiHolds(r, today))) return { status: 'On Hold', reason: 'Stop-work RFI open on this drawing', fromFlow: !!base, stage: latest?.stage ?? null, held: true }
+  if (latest?.blocked) return { status: 'On Hold', reason: 'Blocked in Drawing Flow', fromFlow: true, stage: latest.stage, held: true }
 
   if (!base) return { status: d.current || null, reason: 'No Drawing Flow history', fromFlow: false, stage: null }
 

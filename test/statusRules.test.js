@@ -60,6 +60,8 @@ test('drawing overrides: hold, supplier, no history', () => {
   assert.equal(drawingStatus({ current: 'Complete', submissions: [] }, today).status, 'Complete', 'no history keeps current')
   const stop = { stopsWork: true, status: 'Open', raised: '2026-10-01' }
   assert.equal(drawingStatus({ current: 'Client Review', submissions: [sub], rfis: [stop] }, today).status, 'On Hold')
+  assert.equal(drawingStatus({ current: 'DM Review', submissions: [{ ...sub, dt: null, blocked: true }] }, today).status, 'On Hold', 'blocked in Drawing Flow')
+  assert.equal(drawingStatus({ current: 'DM Review', submissions: [{ ...sub, dt: null, blocked: true, submitted: '2026-09-01' }, { ...sub, dt: null, submitted: '2026-10-05' }] }, today).status, 'DT Review', 'only the latest submission counts')
   const supplierRfi = { tbc: 'Supplier', status: 'Open' }
   assert.equal(drawingStatus({ current: 'X', submissions: [{ ...sub, dt: null }], rfis: [supplierRfi] }, today).status, 'With Supplier')
 })
