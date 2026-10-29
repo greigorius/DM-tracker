@@ -193,7 +193,6 @@ export const mappers = {
   todo: page => ({
     ...base(page),
     title: v(page, 'Item Description'),
-    status: v(page, 'Status'),
     done: v(page, 'Task Done'),
     itemIds: ids(page, 'Item'),
     personIds: ids(page, 'Person'),
@@ -201,7 +200,6 @@ export const mappers = {
     end: day(v(page, 'End Date (Manual)')),
     number: v(page, 'ID'),
     hours: v(page, 'Task Hours (Est)'),
-    designStage: v(page, 'Design Stage'),
     changeTask: v(page, 'Change Task'),
     rfiIds: ids(page, 'Related RFI'),
     vcIds: ids(page, 'Related Variation'),

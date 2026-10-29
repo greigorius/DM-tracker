@@ -72,8 +72,20 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 - Tasks page uses Task Done as the only open/done flag, drops design stage, and shows the linked variation and a "From action" tag. To Do rows are editable through `PATCH /api/records/todo/:id` (no UI yet).
 - `npm run audit:todo` (run locally) backs up every To Do row to `_archive/` and writes `docs/todo-audit.md`. That file lists each property's formula, what reads it, and which Items formulas depend on To Do. It's the input for the strip-back.
 
+## To Do DB stripped back (29 Oct, 16:30)
+Backup of all 2,327 rows and the old schemas: `_archive/todo-backup-2026-10-29.json`, `_archive/todo-schema-2026-10-29.json`.
+- **To Do keeps 12:** Item Description, ID, Task Done, Item, Person, Start Date, End Date (Manual), Task Hours (Est), Change Task, Related Variation, Related RFI, From Action. The page layout is reduced to two sections, Task and Links.
+- **To Do removed (25):**
+  - 13 formulas: the hours splits, Task Status 1, End Date, Hours Per Scope, Total Hours Spent, Total Sub Task Hours. Four of these were already broken by the deleted sub-task relation.
+  - 9 look-ups: Dept, Project, Suffix No., RFI ID / Status, TBC by, Variation Ref / Status / Type.
+  - Status, Design Stage, Design Stage 1.
+- **Items removed (12):**
+  - Roll-ups: 1st / 2nd / Constr. Issue Hrs (Est), Contracted / Variation Hours Scheduled / Spent, Est. Hours Spent, Blocker-1 (which was dead).
+  - Formulas: Contract Hrs, Variation Hrs, Est. Hrs Spent #.
+- **Items kept:** Total Scheduled Hours, which still feeds Est. Hours Required and Remaining Hrs.
+- Neither the Weekly Client Report nor Contract vs Variation Hours reads any of these. Both use Timesheets, Original Allocation and Variations Est Hrs.
+
 ## Still to do
-- Strip the To Do DB back (option A) once `docs/todo-audit.md` has been reviewed.
 - Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
 - Lighthouse check on the deployed site.
