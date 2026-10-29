@@ -48,6 +48,24 @@ export function ToolTile({ tool, count, updatedAt, onHover }) {
     </>
   );
   const cls = 'block bg-surface border border-line hover:bg-surface-hi hover:border-line-strong no-underline text-text p-4 min-h-[124px]';
+  if (tool.links) {
+    // Several destinations: a tile with its own small menu of links.
+    return (
+      <nav aria-label={tool.name} className="bg-surface border border-line text-text p-4 min-h-[124px] flex flex-col">
+        <Icon size={20} className="text-text-2" aria-hidden="true" />
+        <div className="mt-4 text-[15px] font-semibold">{tool.name}</div>
+        <ul className="m-0 mt-1 p-0 list-none flex flex-col">
+          {tool.links.map(l => (
+            <li key={l.href}>
+              <a href={l.href} target="_blank" rel="noreferrer" className="min-h-11 -mx-2 px-2 flex items-center justify-between gap-2 font-mono text-[12px] text-text-2 hover:text-accent hover:bg-surface-hi no-underline">
+                {l.label} <ExternalLink size={12} aria-label="opens in a new tab" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    );
+  }
   if (external) {
     if (!tool.href) {
       return <div className={cx(cls, 'opacity-60 hover:bg-surface hover:border-line')} title={`Set ${tool.envVar} to link this tool`}>{body}</div>;

@@ -45,7 +45,7 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 ## Still to do
 - Migrate legacy pages (Tasks, Item schedule, RFIs, Variations, Finishes, Drawings, Timeline, Client/Project home) from `usePageCache` + legacy endpoints to `useSnapshot`, and restyle each with the UI kit. Then delete `AppNav`, `AppDataContext`, `usePageCache`, `server/notionHelpers.js` and the legacy functions.
 - Triage is read-only; add multi-field editing.
-- Port Daily Brief, Drawing Flow, Drawing Studio and Reports, or set their `VITE_URL_*` links.
+- Port Daily Brief, Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`). The Triage tile opens the Daily Triage artifact; the count cards open the Hub's read-only `/triage` lists.
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
 - Lighthouse check on the deployed site.
 
