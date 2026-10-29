@@ -1,5 +1,5 @@
+import { PageShell } from '../components/ui/index.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 import {
@@ -9,21 +9,20 @@ import {
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const C = {
-  bg:      '#0a0f1a',
-  bgCard:  '#0d1525',
-  bgPanel: '#0d1830',
-  bgDeep:  '#080e18',
-  border:  '#1e2d45',
-  text:    '#e2e8f0',
-  sec:     '#94a3b8',
-  muted:   '#7b90b0',
-  grid:    '#1a2540',
-  input:   '#0b1020',
+  bg:      'var(--color-ground)',
+  bgCard:  'var(--color-surface)',
+  bgPanel: 'var(--color-surface)',
+  bgDeep:  'var(--color-ground)',
+  border:  'var(--color-line)',
+  text:    'var(--color-text)',
+  sec:     'var(--color-text-2)',
+  muted:   'var(--color-muted)',
+  grid:    'var(--color-line)',
+  input:   'var(--color-ground)',
 };
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function hexToRgba(color, alpha) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 function fmtDate(str) {
   if (!str) return null;
@@ -32,27 +31,27 @@ function fmtDate(str) {
 
 // ── APPROVED select config ────────────────────────────────────────────────────
 const APPROVED_CFG = {
-  'A':                 { color: '#34d399', label: 'A — Approved'       },
-  'B':                 { color: '#f59e0b', label: 'B — Minor Comments' },
-  'C':                 { color: '#f87171', label: 'C — Major Comments' },
-  'Awaiting Approval': { color: '#60a5fa', label: 'Awaiting Approval'  },
-  'Not Submitted':     { color: '#7b90b0', label: 'Not Submitted'      },
+  'A':                 { color: 'var(--color-ok)', label: 'A — Approved'       },
+  'B':                 { color: 'var(--color-accent)', label: 'B — Minor Comments' },
+  'C':                 { color: 'var(--color-danger)', label: 'C — Major Comments' },
+  'Awaiting Approval': { color: 'var(--color-info)', label: 'Awaiting Approval'  },
+  'Not Submitted':     { color: 'var(--color-muted)', label: 'Not Submitted'      },
 };
 const APPROVED_ORDER = ['A','B','C','Awaiting Approval','Not Submitted'];
-const approvedColor  = v => APPROVED_CFG[v]?.color ?? '#7b90b0';
+const approvedColor  = v => APPROVED_CFG[v]?.color ?? 'var(--color-muted)';
 
 // ── SAMPLE TYPE select config ─────────────────────────────────────────────────
 const SAMPLE_TYPE_CFG = {
-  'MATERIAL ONLY':            { color: '#b08060' },
-  'MATERIAL FINISH & COLOUR': { color: '#60a5fa' },
-  'MOCK UP':                  { color: '#a78bfa' },
-  'COLOUR ONLY':              { color: '#f472b6' },
+  'MATERIAL ONLY':            { color: 'var(--color-text-2)' },
+  'MATERIAL FINISH & COLOUR': { color: 'var(--color-info)' },
+  'MOCK UP':                  { color: 'var(--color-text-2)' },
+  'COLOUR ONLY':              { color: 'var(--color-text-2)' },
 };
 const SAMPLE_TYPE_ORDER = ['MATERIAL ONLY','MATERIAL FINISH & COLOUR','MOCK UP','COLOUR ONLY'];
-const sampleTypeColor   = v => SAMPLE_TYPE_CFG[v]?.color ?? '#94a3b8';
+const sampleTypeColor   = v => SAMPLE_TYPE_CFG[v]?.color ?? 'var(--color-text-2)';
 
 // ── Spec Ref badge colours ────────────────────────────────────────────────────
-const SPEC_COLORS = ['#60a5fa','#a78bfa','#34d399','#f472b6','#38bdf8','#fbbf24','#4ade80','#f87171','#fb923c'];
+const SPEC_COLORS = ['var(--color-info)','var(--color-text-2)','var(--color-ok)','var(--color-text-2)','var(--color-info)','var(--color-accent)','var(--color-ok)','var(--color-danger)','var(--color-accent)'];
 const specColor = ref => SPEC_COLORS[Math.abs([...String(ref)].reduce((h,c) => h*31 + c.charCodeAt(0), 0)) % SPEC_COLORS.length];
 
 // ── Finish Description field order ────────────────────────────────────────────
@@ -110,9 +109,9 @@ const COL_LS_KEY = 'dmtracker:finishes-col-config-v2';
 // ── Shared toolbar styles ─────────────────────────────────────────────────────
 const selStyle = {
   background: C.input, border: `1px solid ${C.border}`, color: C.sec,
-  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+  fontSize: 10, borderRadius: 0, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
 };
-const toolSel = { ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' };
+const toolSel = { ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' };
 
 // ── Badge components ──────────────────────────────────────────────────────────
 function SpecBadge({ spec, active, onClick }) {
@@ -126,7 +125,7 @@ function SpecBadge({ spec, active, onClick }) {
         background: active ? hexToRgba(col, 0.22) : hexToRgba(col, 0.1),
         color: col,
         border: `1px solid ${active ? hexToRgba(col, 0.6) : hexToRgba(col, 0.3)}`,
-        borderRadius: 4, padding: '2px 7px', whiteSpace: 'nowrap',
+        borderRadius: 0, padding: '2px 7px', whiteSpace: 'nowrap',
         cursor: onClick ? 'pointer' : 'default',
       }}
     >{spec}</span>
@@ -142,7 +141,7 @@ function ApprovedPill({ value }) {
       fontSize: 9, fontWeight: 700,
       background: hexToRgba(col, 0.12), color: col,
       border: `1px solid ${hexToRgba(col, 0.28)}`,
-      borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+      borderRadius: 0, padding: '2px 8px', whiteSpace: 'nowrap',
     }}>{label}</span>
   );
 }
@@ -155,7 +154,7 @@ function SampleTypePill({ value }) {
       fontSize: 9, fontWeight: 700,
       background: hexToRgba(col, 0.12), color: col,
       border: `1px solid ${hexToRgba(col, 0.28)}`,
-      borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+      borderRadius: 0, padding: '2px 8px', whiteSpace: 'nowrap',
     }}>{value}</span>
   );
 }
@@ -176,9 +175,9 @@ function FinishDescCell({ row, fieldOrder }) {
       {parts.map((part, i) => (
         <span key={i} style={{
           fontSize: 10, color: C.text,
-          background: hexToRgba('#4a90d9', 0.07),
-          border: `1px solid ${hexToRgba('#4a90d9', 0.18)}`,
-          borderRadius: 3, padding: '2px 7px', whiteSpace: 'nowrap',
+          background: hexToRgba('var(--color-info)', 0.07),
+          border: `1px solid ${hexToRgba('var(--color-info)', 0.18)}`,
+          borderRadius: 0, padding: '2px 7px', whiteSpace: 'nowrap',
         }}>{part}</span>
       ))}
     </div>
@@ -209,10 +208,9 @@ function FinishFieldOrderPanel({ fields, onApply, onClose }) {
     background: 'rgba(0,0,0,0.55)',
   };
   const boxStyle = {
-    background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10,
+    background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 0,
     padding: '20px 22px', minWidth: 280, maxHeight: '80vh',
     display: 'flex', flexDirection: 'column', gap: 0,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
   };
 
   return (
@@ -231,21 +229,21 @@ function FinishFieldOrderPanel({ fields, onApply, onClose }) {
             return (
               <div key={f.key} style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 8px', borderRadius: 5,
-                background: visible ? hexToRgba('#4a90d9', 0.05) : 'transparent',
-                border: `1px solid ${visible ? hexToRgba('#4a90d9', 0.15) : C.border}`,
+                padding: '6px 8px', borderRadius: 0,
+                background: visible ? hexToRgba('var(--color-info)', 0.05) : 'transparent',
+                border: `1px solid ${visible ? hexToRgba('var(--color-info)', 0.15) : C.border}`,
               }}>
                 {/* Visible toggle */}
                 <div
                   onClick={() => toggle(i)}
                   style={{
-                    width: 13, height: 13, borderRadius: 3, flexShrink: 0, cursor: 'pointer',
-                    background: visible ? '#4a90d9' : 'transparent',
-                    border: `1.5px solid ${visible ? '#4a90d9' : C.muted}`,
+                    width: 13, height: 13, borderRadius: 0, flexShrink: 0, cursor: 'pointer',
+                    background: visible ? 'var(--color-info)' : 'transparent',
+                    border: `1.5px solid ${visible ? 'var(--color-info)' : C.muted}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  {visible && <span style={{ color: '#fff', fontSize: 8, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  {visible && <span style={{ color: 'var(--color-text)', fontSize: 8, fontWeight: 600, lineHeight: 1 }}>✓</span>}
                 </div>
 
                 {/* Drag handle / label */}
@@ -279,7 +277,7 @@ function FinishFieldOrderPanel({ fields, onApply, onClose }) {
             <button onClick={onClose} style={{ ...selStyle }}>Cancel</button>
             <button
               onClick={() => { onApply(local); onClose(); }}
-              style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd', fontWeight: 700 }}
+              style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)', fontWeight: 700 }}
             >Apply</button>
           </div>
         </div>
@@ -316,8 +314,8 @@ function MultiSelectFilter({ label, options, selected, onChange, colorFn, labelF
         onClick={() => setOpen(o => !o)}
         style={{
           ...selStyle,
-          borderColor: count > 0 ? '#2d4a6e' : undefined,
-          color:       count > 0 ? '#93c5fd' : undefined,
+          borderColor: count > 0 ? 'var(--color-line-strong)' : undefined,
+          color:       count > 0 ? 'var(--color-info)' : undefined,
           userSelect: 'none',
         }}
       >
@@ -327,9 +325,8 @@ function MultiSelectFilter({ label, options, selected, onChange, colorFn, labelF
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 3px)', left: 0, zIndex: 200,
-          background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6,
+          background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 0,
           padding: '4px 0', minWidth: 200,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
         }}>
           {count > 0 && (
             <button
@@ -360,12 +357,12 @@ function MultiSelectFilter({ label, options, selected, onChange, colorFn, labelF
                 }}
               >
                 <span style={{
-                  width: 12, height: 12, borderRadius: 2, flexShrink: 0,
+                  width: 12, height: 12, borderRadius: 0, flexShrink: 0,
                   background: checked ? col : 'transparent',
                   border: `1.5px solid ${col}`,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  {checked && <span style={{ color: '#000', fontSize: 8, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  {checked && <span style={{ color: '#000', fontSize: 8, fontWeight: 600, lineHeight: 1 }}>✓</span>}
                 </span>
                 {lbl}
               </div>
@@ -387,7 +384,7 @@ function FinishCell({ row, colKey, activeSpecRef, onSpecClick, fieldOrder }) {
           {row.itemNames.map((name, i) => (
             <span key={i} style={{
               fontSize: 10, color: C.sec, background: C.bgDeep,
-              border: `1px solid ${C.border}`, borderRadius: 3,
+              border: `1px solid ${C.border}`, borderRadius: 0,
               padding: '1px 6px', whiteSpace: 'nowrap',
             }}>{name}</span>
           ))}
@@ -418,12 +415,12 @@ function FinishCell({ row, colKey, activeSpecRef, onSpecClick, fieldOrder }) {
 
     case 'suffix':
       return row.suffix
-        ? <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', background: hexToRgba('#a78bfa', 0.1), border: `1px solid ${hexToRgba('#a78bfa', 0.25)}`, borderRadius: 4, padding: '2px 7px' }}>{row.suffix}</span>
+        ? <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-2)', background: hexToRgba('var(--color-text-2)', 0.1), border: `1px solid ${hexToRgba('var(--color-text-2)', 0.25)}`, borderRadius: 0, padding: '2px 7px' }}>{row.suffix}</span>
         : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
 
     case 'cuttingList':
       return row.cuttingListRequired
-        ? <span style={{ fontSize: 13, color: '#60a5fa' }} title="Required">✓</span>
+        ? <span style={{ fontSize: 13, color: 'var(--color-info)' }} title="Required">✓</span>
         : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
 
     case 'approved':
@@ -442,7 +439,7 @@ function FinishRow({ row, odd, visibleCols, activeSpecRef, onSpecClick, fieldOrd
   const [hov, setHov] = useState(false);
   return (
     <tr
-      style={{ background: hov ? C.bgPanel : (odd ? '#0b1020' : C.bgCard), borderBottom: `1px solid ${C.grid}`, transition: 'background 0.1s' }}
+      style={{ background: hov ? C.bgPanel : (odd ? 'var(--color-ground)' : C.bgCard), borderBottom: `1px solid ${C.grid}`, transition: 'background 0.1s' }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
     >
@@ -550,12 +547,12 @@ function SummaryBar({ items }) {
   const sorted = APPROVED_ORDER.filter(k => counts[k])
     .concat(Object.keys(counts).filter(k => !APPROVED_ORDER.includes(k)));
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0, alignItems: 'center' }}>
       {sorted.map(k => {
         const col   = approvedColor(k);
         const label = APPROVED_CFG[k]?.label ?? k;
         return (
-          <span key={k} style={{ fontSize: 10, fontWeight: 700, background: hexToRgba(col, 0.1), color: col, border: `1px solid ${hexToRgba(col, 0.25)}`, borderRadius: 4, padding: '3px 9px' }}>
+          <span key={k} style={{ fontSize: 10, fontWeight: 700, background: hexToRgba(col, 0.1), color: col, border: `1px solid ${hexToRgba(col, 0.25)}`, borderRadius: 0, padding: '3px 9px' }}>
             {label} <span style={{ opacity: 0.7 }}>· {counts[k]}</span>
           </span>
         );
@@ -583,10 +580,10 @@ function GroupHeader({ label, count, color, open, onToggle }) {
 // ── Not configured notice ─────────────────────────────────────────────────────
 function NotConfiguredNotice() {
   return (
-    <div style={{ padding: '40px 24px', textAlign: 'center', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+    <div style={{ padding: '40px 24px', textAlign: 'center', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: C.sec, marginBottom: 8 }}>Finishes database not configured</div>
       <div style={{ fontSize: 11, color: C.muted, maxWidth: 420, margin: '0 auto' }}>
-        Add <code style={{ color: '#60a5fa', background: C.bgDeep, padding: '1px 5px', borderRadius: 3 }}>NOTION_DB_FINISHES</code> to your <code style={{ color: '#60a5fa', background: C.bgDeep, padding: '1px 5px', borderRadius: 3 }}>.env</code> file and restart the server.
+        Add <code style={{ color: 'var(--color-info)', background: C.bgDeep, padding: '1px 5px', borderRadius: 0 }}>NOTION_DB_FINISHES</code> to your <code style={{ color: 'var(--color-info)', background: C.bgDeep, padding: '1px 5px', borderRadius: 0 }}>.env</code> file and restart the server.
       </div>
     </div>
   );
@@ -816,33 +813,7 @@ export default function FinishesSchedulePage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
-
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>FINISHES SCHEDULE</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Material &amp; finish specifications</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 11, color: C.muted }}>
-            {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </div>
-          {lastRefreshed && (
-            <span style={{ fontSize: 10, color: C.muted }}>
-              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          <button
-            onClick={() => { setCached(CACHE_KEY, null); setRefreshKey(k => k + 1); }}
-            title="Refresh data"
-            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
-          >↻</button>
-        </div>
-      </div>
-
-      <AppNav />
-
+    <PageShell legacy title="Finishes" subtitle={<>Material &amp; finish specifications</>}>
       {!loading && !configured && <NotConfiguredNotice />}
       {!loading && configured && filtered.length > 0 && <SummaryBar items={filtered} />}
 
@@ -918,26 +889,26 @@ export default function FinishesSchedulePage() {
           </select>
           <button
             onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd', minWidth: 30 }}
+            style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)', minWidth: 30 }}
             title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
           >{sortDir === 'asc' ? '↑' : '↓'}</button>
 
           {/* Expand / Collapse */}
           {groupBy !== 'none' && (
             <>
-              <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
-              <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
+              <button onClick={expandAll}   style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Expand All</button>
+              <button onClick={collapseAll} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Collapse All</button>
             </>
           )}
 
           {/* Columns */}
-          <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
+          <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>⚙ Columns</button>
 
           {/* Finish fields order */}
           <button
             onClick={() => setShowFieldPanel(true)}
             title="Configure Finish Description field order and visibility"
-            style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}
+            style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}
           >⚙ Finish Fields</button>
 
           {/* Count */}
@@ -953,7 +924,7 @@ export default function FinishesSchedulePage() {
           <button
             onClick={handleExportCSV}
             title={groupBy !== 'none' ? 'Export grouped view to CSV' : 'Export to CSV'}
-            style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}
+            style={{ ...selStyle, borderColor: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', color: 'var(--color-ok)' }}
           >↓ CSV</button>
         </div>
       )}
@@ -979,11 +950,11 @@ export default function FinishesSchedulePage() {
       {loading ? (
         <div style={{ color: C.muted, fontSize: 12 }}>Loading finishes…</div>
       ) : !configured ? null : filtered.length === 0 ? (
-        <div style={{ padding: '24px', color: C.muted, fontSize: 12, textAlign: 'center', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+        <div style={{ padding: '24px', color: C.muted, fontSize: 12, textAlign: 'center', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0 }}>
           No finishes match the current filters.
         </div>
       ) : groupBy === 'none' ? (
-        <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0, overflow: 'hidden' }}>
           <FinishTable rows={sorted} visibleCols={visibleCols} startResize={startResize} activeSpecRef={filterSpecRef} onSpecClick={handleSpecClick} fieldOrder={fieldOrder} />
         </div>
       ) : (
@@ -995,8 +966,7 @@ export default function FinishesSchedulePage() {
                 key={key}
                 style={{
                   background: C.bgCard, border: `1px solid ${C.border}`,
-                  borderLeft: `3px solid ${color}`, borderRadius: 10, overflow: 'hidden',
-                  boxShadow: `0 2px 10px ${hexToRgba(color, 0.08)}`,
+                  borderLeft: `3px solid ${color}`, borderRadius: 0, overflow: 'hidden',
                 }}
               >
                 <GroupHeader
@@ -1012,6 +982,6 @@ export default function FinishesSchedulePage() {
           })}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

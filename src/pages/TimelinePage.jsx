@@ -1,8 +1,8 @@
+import { PageShell } from '../components/ui/index.js';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import ProjectTimeline from '../components/Timeline/ProjectTimeline.jsx';
 import { PROJECT_COLORS, assignProjectColors } from '../data/colors.js';
-import AppNav from '../components/AppNav.jsx';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
 export default function TimelinePage() {
@@ -136,7 +136,7 @@ export default function TimelinePage() {
   const S = {
     page: {
       padding:    '24px 32px',
-      background: '#0a0f1a',
+      background: 'var(--color-ground)',
       minHeight:  '100vh',
       fontFamily: "'DM Mono', 'ui-monospace', monospace",
     },
@@ -149,15 +149,15 @@ export default function TimelinePage() {
     },
     label: {
       fontSize:      11,
-      color:         '#94a3b8',
+      color:         'var(--color-text-2)',
       letterSpacing: '0.1em',
       textTransform: 'uppercase',
     },
     select: {
-      background:   '#131c2e',
-      border:       '1px solid #1e2d45',
-      borderRadius: 6,
-      color:        '#e2e8f0',
+      background:   'var(--color-surface)',
+      border:       '1px solid var(--color-line)',
+      borderRadius: 0,
+      color:        'var(--color-text)',
       fontFamily:   'inherit',
       fontSize:     12,
       padding:      '6px 10px',
@@ -168,20 +168,10 @@ export default function TimelinePage() {
   };
 
   return (
-    <div style={S.page}>
-
-      {/* Page header */}
-      <div style={{ marginBottom: 20 }}>
-        <Link to="/" style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>← Back to DM Tracker</Link>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '-0.02em' }}>
-          {projectId && selected ? selected.name : 'DT Schedule'}
-        </h1>
-        <div style={{ fontSize: 12, color: '#7b90b0', marginTop: 4 }}>
-          {projectId && selected ? 'Project programme timeline' : 'All active projects · programme overview'}
-        </div>
-      </div>
-
-      <AppNav />
+    <PageShell legacy
+      title={projectId && selected ? selected.name : 'Timeline'}
+      subtitle={projectId && selected ? 'Project programme timeline' : 'DT schedule · all active projects'}
+    >
 
       <div style={S.topBar}>
         <span style={S.label}>Project</span>
@@ -193,21 +183,21 @@ export default function TimelinePage() {
         </select>
 
         {!projectId && isLoadingAll && (
-          <span style={{ fontSize: 10, color: '#7b90b0', fontStyle: 'italic' }}>
+          <span style={{ fontSize: 10, color: 'var(--color-muted)', fontStyle: 'italic' }}>
             Loading {loadingSet.size} project{loadingSet.size !== 1 ? 's' : ''}…
           </span>
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {lastRefreshed && (
-            <span style={{ fontSize: 10, color: '#7b90b0' }}>
+            <span style={{ fontSize: 10, color: 'var(--color-muted)' }}>
               updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           <button
             onClick={() => setRefreshKey(k => k + 1)}
             title="Refresh data"
-            style={{ background: 'none', border: '1px solid #1e2d45', borderRadius: 4, color: '#7b90b0', fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
+            style={{ background: 'none', border: '1px solid var(--color-line)', borderRadius: 0, color: 'var(--color-muted)', fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
           >
             ↻
           </button>
@@ -218,7 +208,7 @@ export default function TimelinePage() {
             {projects
               .filter(p => p.status === 'In progress' || p.status === 'Active')
               .map(p => (
-                <span key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#94a3b8' }}>
+                <span key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--color-text-2)' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
                   {p.name}
                 </span>
@@ -237,10 +227,10 @@ export default function TimelinePage() {
       )}
 
       {!projectId && !isLoadingAll && combinedItems.length === 0 && !projLoading && (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#7b90b0', fontSize: 12 }}>
+        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--color-muted)', fontSize: 12 }}>
           No active projects found
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

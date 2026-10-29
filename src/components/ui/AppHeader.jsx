@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { useBootstrap, useSyncNow } from '../../hooks/hub.js';
 import { useToast } from './Toast.jsx';
 import { cx } from './primitives.jsx';
+import { HubNav } from './HubNav.jsx';
 
 export function timeAgo(iso, now = Date.now()) {
   if (!iso) return 'never';
@@ -31,7 +32,7 @@ export function LogoMark({ className }) {
   );
 }
 
-export function AppHeader({ title, back }) {
+export function AppHeader({ title, subtitle }) {
   const { data } = useBootstrap();
   const sync = useSyncNow();
   const toast = useToast();
@@ -57,8 +58,8 @@ export function AppHeader({ title, back }) {
         </Link>
         <span className="hidden sm:block w-px h-6 bg-line" aria-hidden="true" />
         <div className="flex items-baseline gap-3 min-w-0">
-          {back && <Link to={back} className="font-mono text-[12px] text-muted hover:text-text no-underline">← Cockpit</Link>}
           <h1 className="m-0 text-[20px] font-semibold tracking-[-0.01em] truncate">{title}</h1>
+          {subtitle && <span className="hidden md:inline font-mono text-[12px] text-muted truncate">{subtitle}</span>}
         </div>
         <div className="ml-auto flex items-center gap-4">
           <span className="hidden md:inline font-mono text-[12px] text-muted">{date}</span>
@@ -77,6 +78,21 @@ export function AppHeader({ title, back }) {
           </button>
         </div>
       </div>
+      <HubNav />
     </header>
+  );
+}
+
+// Every Hub page renders inside this: same header, nav, width and gutters.
+// `legacy` scopes the compatibility styles for pages not yet rebuilt on the UI kit.
+export function PageShell({ title, subtitle, toolbar, legacy, children }) {
+  return (
+    <div className="hub">
+      <AppHeader title={title} subtitle={subtitle} />
+      <main className={cx('mx-auto max-w-[1440px] px-4 sm:px-6 py-6 flex flex-col gap-6', legacy && 'legacy')}>
+        {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
+        {children}
+      </main>
+    </div>
   );
 }

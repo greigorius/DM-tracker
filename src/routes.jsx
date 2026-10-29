@@ -12,8 +12,8 @@ export const pages = {
   timeline: lazyPage(() => import('./pages/TimelinePage.jsx')),
   tasks: lazyPage(() => import('./pages/TasksPage.jsx')),
   itemSchedule: lazyPage(() => import('./pages/ItemSchedulePage.jsx')),
-  rfis: lazyPage(() => import('./pages/RFISchedulePage.jsx')),
-  variations: lazyPage(() => import('./pages/VariationSchedulePage.jsx')),
+  rfis: lazyPage(() => import('./pages/RFIsPage.jsx')),
+  variations: lazyPage(() => import('./pages/VariationsPage.jsx')),
   finishes: lazyPage(() => import('./pages/FinishesSchedulePage.jsx')),
   drawings: lazyPage(() => import('./pages/DrawingsPage.jsx')),
 };
@@ -27,8 +27,8 @@ export const ROUTES = [
   ['/timeline/:projectId', pages.timeline, { legacy: true }],
   ['/trackers/task-schedule', pages.tasks, { legacy: true }],
   ['/trackers/item-schedule', pages.itemSchedule, { legacy: true }],
-  ['/trackers/rfis', pages.rfis, { legacy: true }],
-  ['/trackers/variations', pages.variations, { legacy: true }],
+  ['/trackers/rfis', pages.rfis],
+  ['/trackers/variations', pages.variations],
   ['/trackers/finishes-schedule', pages.finishes, { legacy: true }],
   ['/drawings', pages.drawings, { legacy: true }],
 ];

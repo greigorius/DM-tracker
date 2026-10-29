@@ -1,23 +1,22 @@
+import { PageShell } from '../components/ui/index.js';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
 const C = {
-  bg:      '#0a0f1a',
-  bgCard:  '#0d1525',
-  bgPanel: '#0d1830',
-  border:  '#1e2d45',
-  text:    '#e2e8f0',
-  sec:     '#94a3b8',
-  muted:   '#7b90b0',
-  grid:    '#1a2540',
-  input:   '#0b1020',
+  bg:      'var(--color-ground)',
+  bgCard:  'var(--color-surface)',
+  bgPanel: 'var(--color-surface)',
+  border:  'var(--color-line)',
+  text:    'var(--color-text)',
+  sec:     'var(--color-text-2)',
+  muted:   'var(--color-muted)',
+  grid:    'var(--color-line)',
+  input:   'var(--color-ground)',
 };
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function hexToRgba(color, alpha) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function fmtDate(iso) {
@@ -28,17 +27,17 @@ function fmtDate(iso) {
 
 // ── Status colour coding ──────────────────────────────────────────────────────
 const STATUS_COLORS = {
-  'A':  { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'A1': { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'A2': { bg: '#14532d', text: '#4ade80', border: '#166534' },
-  'B':  { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'B1': { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'B2': { bg: '#78350f', text: '#fcd34d', border: '#92400e' },
-  'C':  { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
-  'C1': { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
-  'C2': { bg: '#7f1d1d', text: '#fca5a5', border: '#991b1b' },
+  'A':  { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)', border: 'color-mix(in srgb, var(--color-ok) 16%, transparent)' },
+  'A1': { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)', border: 'color-mix(in srgb, var(--color-ok) 16%, transparent)' },
+  'A2': { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)', border: 'color-mix(in srgb, var(--color-ok) 16%, transparent)' },
+  'B':  { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)', border: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' },
+  'B1': { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)', border: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' },
+  'B2': { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)', border: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' },
+  'C':  { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-danger)', border: 'color-mix(in srgb, var(--color-danger) 16%, transparent)' },
+  'C1': { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-danger)', border: 'color-mix(in srgb, var(--color-danger) 16%, transparent)' },
+  'C2': { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-danger)', border: 'color-mix(in srgb, var(--color-danger) 16%, transparent)' },
 };
-const STATUS_DEFAULT = { bg: '#1e2d45', text: '#94a3b8', border: '#2d3f5a' };
+const STATUS_DEFAULT = { bg: 'var(--color-line)', text: 'var(--color-text-2)', border: 'var(--color-line)' };
 
 function statusStyle(s) {
   if (!s) return STATUS_DEFAULT;
@@ -52,7 +51,7 @@ function StatusBadge({ value }) {
   return (
     <span style={{
       display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-      padding: '2px 6px', borderRadius: 4, background: st.bg, color: st.text,
+      padding: '2px 6px', borderRadius: 0, background: st.bg, color: st.text,
       border: `1px solid ${st.border}`, whiteSpace: 'nowrap', maxWidth: 140,
       overflow: 'hidden', textOverflow: 'ellipsis',
     }} title={value}>
@@ -66,7 +65,7 @@ function ItemStatusBadge({ value }) {
   const sc = ITEM_STATUS_COLORS[value] ?? ITEM_STATUS_DEFAULT;
   return (
     <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-      padding: '2px 6px', borderRadius: 3, background: sc.bg, color: sc.text }}>
+      padding: '2px 6px', borderRadius: 0, background: sc.bg, color: sc.text }}>
       {value}
     </span>
   );
@@ -141,9 +140,9 @@ function ColumnConfigPanel({ colConfig, onClose, onChange }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10,
+      <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 0,
         padding: 24, width: 320, maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12,
-        fontFamily: "'DM Mono','ui-monospace',monospace" }}>
+        fontFamily: 'var(--font-mono)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Configure Columns</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
@@ -153,16 +152,16 @@ function ColumnConfigPanel({ colConfig, onClose, onChange }) {
             <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 0', borderBottom: `1px solid ${C.grid}` }}>
               <input type="checkbox" checked={col.visible} onChange={() => toggle(col.key)}
-                style={{ cursor: 'pointer', accentColor: '#3b82f6', flexShrink: 0 }} />
+                style={{ cursor: 'pointer', accentColor: 'var(--color-info)', flexShrink: 0 }} />
               <span style={{ flex: 1, fontSize: 11, color: col.visible ? C.text : C.muted }}>
                 {defMap.get(col.key)?.label ?? col.key}
               </span>
               <button onClick={() => move(col.key, -1)} disabled={idx === 0}
-                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 3,
+                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 0,
                   color: C.muted, cursor: idx === 0 ? 'default' : 'pointer',
                   fontSize: 9, padding: '2px 5px', opacity: idx === 0 ? 0.3 : 1, fontFamily: 'inherit' }}>▲</button>
               <button onClick={() => move(col.key, 1)} disabled={idx === local.length - 1}
-                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 3,
+                style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 0,
                   color: C.muted, cursor: idx === local.length - 1 ? 'default' : 'pointer',
                   fontSize: 9, padding: '2px 5px', opacity: idx === local.length - 1 ? 0.3 : 1, fontFamily: 'inherit' }}>▼</button>
             </div>
@@ -170,13 +169,13 @@ function ColumnConfigPanel({ colConfig, onClose, onChange }) {
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={reset}
-            style={{ padding: '5px 12px', borderRadius: 5, border: `1px solid ${C.border}`,
+            style={{ padding: '5px 12px', borderRadius: 0, border: `1px solid ${C.border}`,
               background: 'transparent', color: C.sec, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
             Reset
           </button>
           <button onClick={apply}
-            style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: '#1d4ed8',
-              color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ padding: '5px 14px', borderRadius: 0, border: 'none', background: 'var(--color-info)',
+              color: 'var(--color-text)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             Apply
           </button>
         </div>
@@ -273,7 +272,7 @@ function CellContent({ colKey, drawing }) {
 // ── Drawing row ───────────────────────────────────────────────────────────────
 function DrawingRow({ drawing, odd, visibleCols }) {
   return (
-    <tr style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
+    <tr style={{ background: odd ? 'var(--color-ground)' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
       {visibleCols.map(col => {
         const isLeft = col.key === 'drawingNumber' || col.key === 'item' || col.key === 'title';
         return (
@@ -294,10 +293,10 @@ function DrawingRow({ drawing, odd, visibleCols }) {
 // ── Item group card (groupBy=item): dwg-type sub-tabs + summary badges ────────
 const DWG_TYPE_ORDER = ['Drawing', 'Sketch', 'Model', 'Unassigned'];
 const DWG_TYPE_COLORS = {
-  Drawing:    '#60a5fa',
-  Sketch:     '#a78bfa',
-  Model:      '#34d399',
-  Unassigned: '#7b90b0',
+  Drawing:    'var(--color-info)',
+  Sketch:     'var(--color-text-2)',
+  Model:      'var(--color-ok)',
+  Unassigned: 'var(--color-muted)',
 };
 
 function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibleCols, onResizeStart }) {
@@ -340,8 +339,7 @@ function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibl
 
   return (
     <div style={{ background: C.bgCard, border: `1px solid ${C.border}`,
-      borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
-      boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}` }}>
+      borderLeft: `3px solid ${projColor}`, borderRadius: 0, overflow: 'hidden', }}>
 
       {/* Header */}
       <div onClick={() => setOpen(o => !o)}
@@ -363,7 +361,7 @@ function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibl
           <div style={{ display: 'flex', gap: 3, marginLeft: 4 }}>
             {uniqueRevs.map(r => (
               <span key={r} style={{ fontSize: 9, fontWeight: 700, color: C.sec,
-                background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 0, padding: '1px 5px' }}>
                 r{r}
               </span>
             ))}
@@ -374,7 +372,7 @@ function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibl
             {uniqueS4.map(s => {
               const st = statusStyle(s);
               return <span key={s} style={{ fontSize: 9, fontWeight: 700, color: st.text,
-                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 0, padding: '1px 5px' }}>
                 S4:{s.split(/[\s–]/)[0]}
               </span>;
             })}
@@ -385,23 +383,23 @@ function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibl
             {uniqueS5.map(s => {
               const st = statusStyle(s);
               return <span key={s} style={{ fontSize: 9, fontWeight: 700, color: st.text,
-                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 3, padding: '1px 5px' }}>
+                background: st.bg, border: `1px solid ${st.border}`, borderRadius: 0, padding: '1px 5px' }}>
                 S5:{s.split(/[\s–]/)[0]}
               </span>;
             })}
           </div>
         )}
         {hasC01 && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#34d399',
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-ok)',
             background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)',
-            borderRadius: 3, padding: '1px 6px' }}>C01 ✓</span>
+            borderRadius: 0, padding: '1px 6px' }}>C01 ✓</span>
         )}
       </div>
 
       {/* Dwg-type filter tabs (inside expanded card) */}
       {open && sortedTypes.length > 1 && (
         <div style={{ display: 'flex', gap: 6, padding: '7px 16px',
-          background: '#090e1a', borderBottom: `1px solid ${C.grid}` }}>
+          background: 'var(--color-ground)', borderBottom: `1px solid ${C.grid}` }}>
           {sortedTypes.map(t => {
             const count   = dwgs.filter(d => (d.dwgNoAssigned ?? 'Unassigned') === t).length;
             const active  = typeFilters.has(t);
@@ -412,7 +410,7 @@ function ItemGroupCard({ itemKey, projectId, itemStatus, dwgs, projColor, visibl
                   background: active ? hexToRgba(color, 0.12) : 'transparent',
                   border: `1px solid ${active ? hexToRgba(color, 0.4) : C.border}`,
                   color: active ? color : C.muted,
-                  borderRadius: 4, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  borderRadius: 0, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {t} <span style={{ opacity: 0.7, fontSize: 9 }}>{count}</span>
               </button>
             );
@@ -444,7 +442,7 @@ function TableHead({ visibleCols, onResizeStart }) {
               width: col.width,
               minWidth: def?.minWidth ?? 40,
               borderBottom: `1px solid ${C.border}`,
-              background: '#080d17',
+              background: 'var(--color-ground)',
               userSelect: 'none',
             }}>
               {def?.label ?? col.key}
@@ -509,8 +507,8 @@ function exportToCSV(visibleCols, grouped) {
 
 // ── Filter bar select style ───────────────────────────────────────────────────
 const selStyle = {
-  background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
-  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+  background: 'var(--color-ground)', border: '1px solid var(--color-line)', color: 'var(--color-text-2)',
+  fontSize: 10, borderRadius: 0, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
 };
 
 const CHUNK_SIZE = 25;
@@ -791,34 +789,7 @@ export default function DrawingsPage() {
   const groupByLabel = { item: 'item', project: 'project', designStage: 'design stage', rev: 'rev', dwgType: 'drawing type', none: 'none' };
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
-      {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>DRAWINGS</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            Drawing register · grouped by {groupByLabel[groupBy] ?? groupBy}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 11, color: C.muted }}>
-            {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </div>
-          {lastRefreshed && (
-            <span style={{ fontSize: 10, color: C.muted }}>
-              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            title="Refresh"
-            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}
-          >↻</button>
-        </div>
-      </div>
-
-      <AppNav />
-
+    <PageShell legacy title="Drawings" subtitle={<>Drawing register · grouped by {groupByLabel[groupBy] ?? groupBy}</>}>
       {/* Filter / toolbar */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={filterProject} onChange={e => setFilterProject(e.target.value)} style={selStyle}>
@@ -848,7 +819,7 @@ export default function DrawingsPage() {
 
         {/* Group by */}
         <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-          style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          style={{ ...selStyle, marginLeft: 4, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
           <option value="dwgType">Group: Dwg Type</option>
           <option value="item">Group: Item</option>
           <option value="project">Group: Project</option>
@@ -859,26 +830,26 @@ export default function DrawingsPage() {
 
         {/* Expand / collapse all */}
         <button onClick={expandAll}
-          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          style={{ ...selStyle, cursor: 'pointer', borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
           Expand All
         </button>
         <button onClick={collapseAll}
-          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          style={{ ...selStyle, cursor: 'pointer', borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
           Collapse All
         </button>
 
         {/* Column configurator */}
         <button onClick={() => setShowColPanel(true)}
-          style={{ ...selStyle, cursor: 'pointer', borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          style={{ ...selStyle, cursor: 'pointer', borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
           ⚙ Columns
         </button>
 
         {/* Assigned only toggle */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
-          fontSize: 10, color: filterAssignedOnly ? '#93c5fd' : C.muted, userSelect: 'none' }}>
+          fontSize: 10, color: filterAssignedOnly ? 'var(--color-info)' : C.muted, userSelect: 'none' }}>
           <input type="checkbox" checked={filterAssignedOnly}
             onChange={e => setFilterAssignedOnly(e.target.checked)}
-            style={{ accentColor: '#3b82f6', cursor: 'pointer' }} />
+            style={{ accentColor: 'var(--color-info)', cursor: 'pointer' }} />
           Assigned only
         </label>
 
@@ -892,15 +863,15 @@ export default function DrawingsPage() {
         </span>
         <button onClick={() => exportToCSV(visibleCols, grouped)}
           title="Export current view to CSV"
-          style={{ ...selStyle, cursor: 'pointer', borderColor: '#166534', color: '#4ade80' }}>
+          style={{ ...selStyle, cursor: 'pointer', borderColor: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', color: 'var(--color-ok)' }}>
           ↓ Export CSV (current view)
         </button>
       </div>
 
       {/* Content */}
       {fetchError ? (
-        <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(239,68,68,0.08)',
-          border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12 }}>
+        <div style={{ padding: '10px 14px', borderRadius: 0, background: 'rgba(239,68,68,0.08)',
+          border: '1px solid rgba(239,68,68,0.25)', color: 'var(--color-danger)', fontSize: 12 }}>
           Error: {fetchError}
         </div>
       ) : itemsLoading ? (
@@ -954,7 +925,7 @@ export default function DrawingsPage() {
               return (
                 <div key={key} style={{
                   background: C.bgCard, border: `1px solid ${C.border}`,
-                  borderRadius: 10, overflow: 'hidden',
+                  borderRadius: 0, overflow: 'hidden',
                 }}>
                   {table}
                 </div>
@@ -964,8 +935,7 @@ export default function DrawingsPage() {
             return (
               <div key={key} style={{
                 background: C.bgCard, border: `1px solid ${C.border}`,
-                borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
-                boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
+                borderLeft: `3px solid ${projColor}`, borderRadius: 0, overflow: 'hidden',
               }}>
                 {/* Group header */}
                 <div
@@ -1001,6 +971,6 @@ export default function DrawingsPage() {
           onChange={newConfig => { setColConfig(newConfig); persistColConfig(newConfig); }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

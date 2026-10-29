@@ -13,44 +13,20 @@ export function assignProjectColors(projects) {
   return map;
 }
 
-/**
- * Item progress status colours — matches Notion's status select property palette
- * adapted for the app's dark (#0a0f1a) background.
- *
- * Each entry: { bg: hex, text: hex }
- *   bg  = background (Notion hue at ~15–18% opacity on #0a0f1a)
- *   text = Notion's canonical foreground colour for that hue
- */
+// Item status colours, from the Hub tokens (src/styles/tokens.css).
+const tint = n => `color-mix(in srgb, var(--color-${n}) 16%, transparent)`;
+const tone = n => ({ bg: tint(n), text: `var(--color-${n})` });
+const neutral = { bg: 'var(--color-surface-hi)', text: 'var(--color-muted)' };
+
 export const ITEM_STATUS_COLORS = {
-  // ── Gray (not started / backlog / omitted) ──
-  'Not Started':        { bg: '#1e2128', text: '#9b9ea4' },
-  'Backlog':            { bg: '#1e2128', text: '#9b9ea4' },
-  'Omitted':            { bg: '#181b1f', text: '#6b7280' },
-
-  // ── Blue (in progress / pre-production) ──
-  'In Progress':        { bg: '#0f2340', text: '#5ba5e8' },
-  'Pre-Production':     { bg: '#0f2340', text: '#5ba5e8' },
-
-  // ── Purple (in review) ──
-  'In Review':          { bg: '#221b3a', text: '#a582d8' },
-
-  // ── Yellow (review / pending client) ──
-  'Review':             { bg: '#2b2208', text: '#d4a229' },
-  'Pending':            { bg: '#2b2208', text: '#d4a229' },
-
-  // ── Orange (on hold) ──
-  'On Hold':            { bg: '#2e1a08', text: '#e07c30' },
-  'On Hold - RFIs':     { bg: '#2e1a08', text: '#e07c30' },
-
-  // ── Red (blocked) ──
-  'Blocked':            { bg: '#321010', text: '#e05555' },
-
-  // ── Green (approved / complete / manufacture) ──
-  'PC Approved':        { bg: '#0b2418', text: '#4daa7a' },
-  'Design Complete':    { bg: '#0b2418', text: '#4daa7a' },
-  'In Manufacture':     { bg: '#0b2418', text: '#4daa7a' },
-  'Complete':           { bg: '#0b2418', text: '#4daa7a' },
+  'Backlog': neutral, 'Not Started': neutral, 'To Do': neutral, 'Set Up': neutral, 'Omitted': neutral, 'By Others': neutral,
+  'In Progress': tone('info'), 'In Design': tone('info'), 'Ongoing': tone('info'), 'Pre-Production': tone('info'),
+  'Awaiting Approval': tone('accent'), 'In Review': tone('accent'), 'Review': tone('accent'), 'Pending': tone('accent'),
+  'On Hold': tone('accent'), 'On Hold - RFIs': tone('accent'),
+  'Blocked': tone('danger'),
+  'In Production': tone('ok'), 'In Manufacture': tone('ok'), 'On Site': tone('ok'), 'Close Out': tone('ok'),
+  'PC Approved': tone('ok'), 'Design Complete': tone('ok'), 'Complete': tone('ok'),
 };
 
 /** Fallback for unknown statuses */
-export const ITEM_STATUS_DEFAULT = { bg: '#181c24', text: '#94a3b8' };
+export const ITEM_STATUS_DEFAULT = neutral;

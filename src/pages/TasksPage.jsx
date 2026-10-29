@@ -1,5 +1,5 @@
+import { PageShell } from '../components/ui/index.js';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 import {
@@ -8,9 +8,9 @@ import {
 } from '../components/TableConfig.jsx';
 
 const C = {
-  bg: '#0a0f1a', bgCard: '#0d1525', bgPanel: '#0d1830',
-  border: '#1e2d45', text: '#e2e8f0', sec: '#94a3b8',
-  muted: '#7b90b0', grid: '#1a2540', input: '#0b1020',
+  bg: 'var(--color-ground)', bgCard: 'var(--color-surface)', bgPanel: 'var(--color-surface)',
+  border: 'var(--color-line)', text: 'var(--color-text)', sec: 'var(--color-text-2)',
+  muted: 'var(--color-muted)', grid: 'var(--color-line)', input: 'var(--color-ground)',
 };
 
 const DONE_STORE  = 'dm-task-done-dates';
@@ -21,9 +21,8 @@ function getDoneDates() {
   try { return JSON.parse(localStorage.getItem(DONE_STORE) || '{}'); } catch { return {}; }
 }
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function hexToRgba(color, alpha) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function fmtDate(str) {
@@ -65,7 +64,7 @@ function TaskRow({ task, odd, visibleCols, onToggleDone }) {
   const [busy, setBusy] = useState(false);
   const done = task.taskDone;
   return (
-    <tr style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
+    <tr style={{ background: odd ? 'var(--color-ground)' : C.bgCard, borderBottom: `1px solid ${C.grid}` }}>
       {visibleCols.map(col => {
         const isLeft = col.align === 'left';
         let content;
@@ -95,13 +94,13 @@ function TaskRow({ task, odd, visibleCols, onToggleDone }) {
             break;
           case 'category':
             content = task.taskCategory
-              ? <span style={{ fontSize: 10, fontWeight: 700, background: '#1e2d45',
-                  color: C.sec, padding: '2px 7px', borderRadius: 4 }}>{task.taskCategory}</span>
+              ? <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--color-line)',
+                  color: C.sec, padding: '2px 7px', borderRadius: 0 }}>{task.taskCategory}</span>
               : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
             break;
           case 'change':
             content = task.changeTask
-              ? <span style={{ fontSize: 10, color: '#818cf8', fontWeight: 700 }}>✓</span>
+              ? <span style={{ fontSize: 10, color: 'var(--color-text-2)', fontWeight: 700 }}>✓</span>
               : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
             break;
           case 'done':
@@ -112,12 +111,12 @@ function TaskRow({ task, odd, visibleCols, onToggleDone }) {
                 title={done ? 'Mark not done' : 'Mark done'}
                 style={{ background: 'none', border: 'none', cursor: busy ? 'wait' : 'pointer', padding: 2 }}
               >
-                <div style={{ width: 14, height: 14, borderRadius: 3,
-                  border: `2px solid ${done ? '#34d399' : C.border}`,
-                  background: done ? '#34d399' : 'transparent',
+                <div style={{ width: 14, height: 14, borderRadius: 0,
+                  border: `2px solid ${done ? 'var(--color-ok)' : C.border}`,
+                  background: done ? 'var(--color-ok)' : 'transparent',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   opacity: busy ? 0.5 : 1 }}>
-                  {done && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                  {done && <span style={{ color: 'var(--color-text)', fontSize: 9, lineHeight: 1, fontWeight: 600 }}>✓</span>}
                 </div>
               </button>
             );
@@ -201,7 +200,7 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
 
   const inp = {
     background: C.input, border: `1px solid ${C.border}`, color: C.text,
-    fontSize: 11, borderRadius: 4, padding: '4px 7px', fontFamily: 'inherit',
+    fontSize: 11, borderRadius: 0, padding: '4px 7px', fontFamily: 'inherit',
     outline: 'none', boxSizing: 'border-box',
   };
   const lbl = {
@@ -212,16 +211,16 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
   // Non-editable populated fields to show
   const chips = [];
   if (task.tdlId)        chips.push({ label: task.tdlId,                          color: C.muted });
-  if (task.assignedTo)   chips.push({ label: `👤 ${task.assignedTo}`,              color: '#60a5fa' });
+  if (task.assignedTo)   chips.push({ label: `👤 ${task.assignedTo}`,              color: 'var(--color-info)' });
   if (task.taskCategory) chips.push({ label: task.taskCategory,                   color: C.sec });
   if (task.subTaskHours) chips.push({ label: `${task.subTaskHours}h`,             color: C.sec });
   if (task.startDate)    chips.push({ label: `Start: ${fmtDate(task.startDate)}`, color: C.muted });
   if (task.endDate)      chips.push({ label: `End: ${fmtDate(task.endDate)}`,     color: C.muted });
-  if (task.changeTask)   chips.push({ label: 'Change Task',                       color: '#818cf8' });
+  if (task.changeTask)   chips.push({ label: 'Change Task',                       color: 'var(--color-text-2)' });
 
   return (
     <div style={{
-      background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10,
+      background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0,
       padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       {/* Description + TDL ID */}
@@ -234,9 +233,9 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
             {chips.map((ch, i) => (
               <span key={i} style={{
                 fontSize: 10, color: ch.color,
-                background: hexToRgba(ch.color.startsWith('#') ? ch.color : '#94a3b8', 0.08),
-                border: `1px solid ${hexToRgba(ch.color.startsWith('#') ? ch.color : '#94a3b8', 0.2)}`,
-                borderRadius: 4, padding: '1px 6px',
+                background: hexToRgba(ch.color.startsWith('#') ? ch.color : 'var(--color-text-2)', 0.08),
+                border: `1px solid ${hexToRgba(ch.color.startsWith('#') ? ch.color : 'var(--color-text-2)', 0.2)}`,
+                borderRadius: 0, padding: '1px 6px',
               }}>{ch.label}</span>
             ))}
           </div>
@@ -311,31 +310,31 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
       {/* Checkboxes + Save */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         {/* Change Task checkbox */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: changeTask ? '#818cf8' : C.muted }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: changeTask ? 'var(--color-text-2)' : C.muted }}>
           <div
             onClick={() => setChangeTask(v => !v)}
             style={{
-              width: 14, height: 14, borderRadius: 3, cursor: 'pointer',
-              border: `2px solid ${changeTask ? '#818cf8' : C.border}`,
-              background: changeTask ? '#818cf8' : 'transparent',
+              width: 14, height: 14, borderRadius: 0, cursor: 'pointer',
+              border: `2px solid ${changeTask ? 'var(--color-text-2)' : C.border}`,
+              background: changeTask ? 'var(--color-text-2)' : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-            {changeTask && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+            {changeTask && <span style={{ color: 'var(--color-text)', fontSize: 9, fontWeight: 600 }}>✓</span>}
           </div>
           Change Task
         </label>
 
         {/* Task Done checkbox */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: taskDone ? '#34d399' : C.muted }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11, color: taskDone ? 'var(--color-ok)' : C.muted }}>
           <div
             onClick={() => setTaskDone(v => !v)}
             style={{
-              width: 14, height: 14, borderRadius: 3, cursor: 'pointer',
-              border: `2px solid ${taskDone ? '#34d399' : C.border}`,
-              background: taskDone ? '#34d399' : 'transparent',
+              width: 14, height: 14, borderRadius: 0, cursor: 'pointer',
+              border: `2px solid ${taskDone ? 'var(--color-ok)' : C.border}`,
+              background: taskDone ? 'var(--color-ok)' : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
-            {taskDone && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+            {taskDone && <span style={{ color: 'var(--color-text)', fontSize: 9, fontWeight: 600 }}>✓</span>}
           </div>
           Task Done
         </label>
@@ -349,8 +348,8 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
             {!projectId ? 'Select a project first' : 'Select an item to save'}
           </span>
         )}
-        {saveResult === 'ok'    && <span style={{ fontSize: 11, color: '#34d399' }}>✓ Saved to Notion</span>}
-        {saveResult === 'error' && <span style={{ fontSize: 11, color: '#f87171' }}>✗ Save failed — check console</span>}
+        {saveResult === 'ok'    && <span style={{ fontSize: 11, color: 'var(--color-ok)' }}>✓ Saved to Notion</span>}
+        {saveResult === 'error' && <span style={{ fontSize: 11, color: 'var(--color-danger)' }}>✗ Save failed — check console</span>}
 
         {/* Save button */}
         <button
@@ -358,9 +357,9 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
           disabled={!canSave || saving}
           title={!canSave ? 'Fill Project, Item and Assignee first' : 'Save and move to Assigned'}
           style={{
-            padding: '6px 18px', borderRadius: 5, border: 'none',
-            background: canSave && !saving ? '#1d4ed8' : '#1e2d45',
-            color: canSave && !saving ? '#fff' : C.muted,
+            padding: '6px 18px', borderRadius: 0, border: 'none',
+            background: canSave && !saving ? 'var(--color-info)' : 'var(--color-line)',
+            color: canSave && !saving ? 'var(--color-text)' : C.muted,
             fontSize: 12, fontWeight: 700,
             cursor: canSave && !saving ? 'pointer' : 'not-allowed',
             fontFamily: 'inherit', opacity: saving ? 0.7 : 1,
@@ -374,14 +373,14 @@ function UnassignedTaskCard({ task, projects, allTasks, categories, onSaved }) {
 
 // ── Filter bar styles ──────────────────────────────────────────────────────────
 const selStyle = {
-  background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
-  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+  background: 'var(--color-ground)', border: '1px solid var(--color-line)', color: 'var(--color-text-2)',
+  fontSize: 10, borderRadius: 0, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
 };
 const btnStyle = active => ({
-  background: active ? '#1e3a5f' : '#0b1020',
-  border: `1px solid ${active ? '#60a5fa' : '#1e2d45'}`,
-  color: active ? '#60a5fa' : '#94a3b8',
-  fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
+  background: active ? 'var(--color-surface-hi)' : 'var(--color-ground)',
+  border: `1px solid ${active ? 'var(--color-info)' : 'var(--color-line)'}`,
+  color: active ? 'var(--color-info)' : 'var(--color-text-2)',
+  fontSize: 10, borderRadius: 0, padding: '3px 8px', cursor: 'pointer',
   fontWeight: active ? 700 : 400, fontFamily: 'inherit',
 });
 
@@ -560,50 +559,29 @@ export default function TasksPage() {
   const handleExport = () => exportToCSV(visibleCols, allRows, taskRaw, `tasks-${new Date().toISOString().slice(0,10)}.csv`);
 
   const tabBtnStyle = active => ({
-    padding: '6px 18px', borderRadius: '6px 6px 0 0', border: `1px solid ${active ? '#2d4a6e' : C.border}`,
+    padding: '6px 18px', borderRadius: '6px 6px 0 0', border: `1px solid ${active ? 'var(--color-line-strong)' : C.border}`,
     borderBottom: active ? `1px solid ${C.bgCard}` : `1px solid ${C.border}`,
     background: active ? C.bgCard : C.bgPanel,
-    color: active ? '#93c5fd' : C.muted, fontSize: 11, fontWeight: active ? 700 : 400,
+    color: active ? 'var(--color-info)' : C.muted, fontSize: 11, fontWeight: active ? 700 : 400,
     cursor: 'pointer', fontFamily: 'inherit', marginBottom: -1,
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>TASK SCHEDULE</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            {activeTab === 'assigned'
+    <PageShell legacy title="Tasks" subtitle={<>{activeTab === 'assigned'
               ? `To-do list · ${groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}`
-              : `${unassignedTasks.length} task${unassignedTasks.length !== 1 ? 's' : ''} without project / item`}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 11, color: C.muted }}>
-            {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </div>
-          {lastRefreshed && <span style={{ fontSize: 10, color: C.muted }}>updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={() => { setCached('tasks', null); setRefreshKey(k => k + 1); }} title="Refresh"
-            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}>↻</button>
-        </div>
-      </div>
-
-      <AppNav />
-
+              : `${unassignedTasks.length} task${unassignedTasks.length !== 1 ? 's' : ''} without project / item`}</>}>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 0, borderBottom: `1px solid ${C.border}`, marginTop: 8 }}>
         <button style={tabBtnStyle(activeTab === 'assigned')}   onClick={() => setActiveTab('assigned')}>
           Assigned
           {assignedTasks.length > 0 && (
-            <span style={{ marginLeft: 6, fontSize: 9, background: '#1e3a5f', color: '#60a5fa', padding: '1px 5px', borderRadius: 999 }}>{assignedTasks.length}</span>
+            <span style={{ marginLeft: 6, fontSize: 9, background: 'var(--color-surface-hi)', color: 'var(--color-info)', padding: '1px 5px', borderRadius: 0 }}>{assignedTasks.length}</span>
           )}
         </button>
         <button style={tabBtnStyle(activeTab === 'unassigned')} onClick={() => setActiveTab('unassigned')}>
           Unassigned
           {unassignedTasks.length > 0 && (
-            <span style={{ marginLeft: 6, fontSize: 9, background: '#2d1a1a', color: '#f87171', padding: '1px 5px', borderRadius: 999 }}>{unassignedTasks.length}</span>
+            <span style={{ marginLeft: 6, fontSize: 9, background: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', color: 'var(--color-danger)', padding: '1px 5px', borderRadius: 0 }}>{unassignedTasks.length}</span>
           )}
         </button>
       </div>
@@ -661,7 +639,7 @@ export default function TasksPage() {
 
             {/* Group by */}
             <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-              style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+              style={{ ...selStyle, marginLeft: 4, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
               <option value="item">Group: Item</option>
               <option value="project">Group: Project</option>
               <option value="none">No Grouping</option>
@@ -669,26 +647,26 @@ export default function TasksPage() {
 
             {/* Sort */}
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-              style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+              style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
               <option value="tdlId">Sort: TDL ID</option>
               <option value="startDate">Sort: Date</option>
             </select>
             <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-              style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd', minWidth: 32 }}
+              style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)', minWidth: 32 }}
               title={sortDir === 'asc' ? 'Ascending' : 'Descending'}>
               {sortDir === 'asc' ? '↑' : '↓'}
             </button>
 
-            <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
-            <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
-            <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
+            <button onClick={expandAll}   style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Expand All</button>
+            <button onClick={collapseAll} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Collapse All</button>
+            <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>⚙ Columns</button>
 
             {/* Right side */}
             <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
               {loading ? 'Loading…' : `${filtered.length} task${filtered.length !== 1 ? 's' : ''}`}
             </span>
             <button onClick={handleExport} title="Export current view to CSV"
-              style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV (current view)</button>
+              style={{ ...selStyle, borderColor: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', color: 'var(--color-ok)' }}>↓ Export CSV (current view)</button>
           </div>
 
           {/* Content */}
@@ -720,7 +698,7 @@ export default function TasksPage() {
 
                 if (noGrouping) {
                   return (
-                    <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                    <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0, overflow: 'hidden' }}>
                       {table}
                     </div>
                   );
@@ -729,8 +707,7 @@ export default function TasksPage() {
                 return (
                   <div key={key} style={{
                     background: C.bgCard, border: `1px solid ${C.border}`,
-                    borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
-                    boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
+                    borderLeft: `3px solid ${projColor}`, borderRadius: 0, overflow: 'hidden',
                   }}>
                     <div
                       onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
@@ -764,6 +741,6 @@ export default function TasksPage() {
           onChange={cfg => { setColConfig(cfg); persistColConfig(cfg, COL_LS_KEY); }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

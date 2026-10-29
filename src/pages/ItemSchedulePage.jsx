@@ -1,5 +1,5 @@
+import { PageShell } from '../components/ui/index.js';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import AppNav from '../components/AppNav.jsx';
 import { assignProjectColors, PROJECT_COLORS, ITEM_STATUS_COLORS, ITEM_STATUS_DEFAULT } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 import {
@@ -8,22 +8,22 @@ import {
 } from '../components/TableConfig.jsx';
 
 const C = {
-  bg: '#0a0f1a', bgCard: '#0d1525', bgPanel: '#0d1830', bgDeep: '#080e18',
-  border: '#1e2d45', text: '#e2e8f0', sec: '#94a3b8',
-  muted: '#7b90b0', grid: '#1a2540', input: '#0b1020',
+  bg: 'var(--color-ground)', bgCard: 'var(--color-surface)', bgPanel: 'var(--color-surface)', bgDeep: 'var(--color-ground)',
+  border: 'var(--color-line)', text: 'var(--color-text)', sec: 'var(--color-text-2)',
+  muted: 'var(--color-muted)', grid: 'var(--color-line)', input: 'var(--color-ground)',
 };
 
 const COL_LS_KEY = 'dmtracker:item-schedule-col-config';
 
 const VAR_STATUS_COLORS = {
-  'Approved':           '#34d399',
-  'Pending':            '#60a5fa',
-  'Under Review':       '#a78bfa',
-  'Rejected':           '#f87171',
-  'On Hold':            '#f97316',
-  'Draft':              '#f59e0b',
-  'Submitted':          '#38bdf8',
-  'Partially Approved': '#4ade80',
+  'Approved':           'var(--color-ok)',
+  'Pending':            'var(--color-info)',
+  'Under Review':       'var(--color-text-2)',
+  'Rejected':           'var(--color-danger)',
+  'On Hold':            'var(--color-accent)',
+  'Draft':              'var(--color-accent)',
+  'Submitted':          'var(--color-info)',
+  'Partially Approved': 'var(--color-ok)',
 };
 
 const PHASE_SHORT = {
@@ -36,13 +36,12 @@ const PHASE_SHORT = {
 };
 
 const RFI_STATUS_COLORS = {
-  'Open': '#f59e0b', 'Closed': '#34d399', 'Pending': '#60a5fa',
-  'On Hold': '#f97316', 'In Review': '#a78bfa', 'TBC': '#94a3b8',
+  'Open': 'var(--color-accent)', 'Closed': 'var(--color-ok)', 'Pending': 'var(--color-info)',
+  'On Hold': 'var(--color-accent)', 'In Review': 'var(--color-text-2)', 'TBC': 'var(--color-text-2)',
 };
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function hexToRgba(color, alpha) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function fmtDate(str) {
@@ -59,7 +58,7 @@ function dateUrgency(str) {
   return 'ok';
 }
 
-const URGENCY_COLOR = { overdue: '#f87171', urgent: '#f97316', soon: '#f59e0b', ok: C.sec };
+const URGENCY_COLOR = { overdue: 'var(--color-danger)', urgent: 'var(--color-accent)', soon: 'var(--color-accent)', ok: C.sec };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
@@ -99,8 +98,8 @@ function itemRaw(item, key, varCountMap = {}) {
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 const selStyle = {
-  background: '#0b1020', border: '1px solid #1e2d45', color: '#94a3b8',
-  fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
+  background: 'var(--color-ground)', border: '1px solid var(--color-line)', color: 'var(--color-text-2)',
+  fontSize: 10, borderRadius: 0, padding: '3px 6px', cursor: 'pointer', fontFamily: 'inherit',
 };
 
 function StatusPill({ status, compact = false }) {
@@ -108,7 +107,7 @@ function StatusPill({ status, compact = false }) {
   const cfg = ITEM_STATUS_COLORS[status] ?? ITEM_STATUS_DEFAULT;
   return (
     <span style={{ fontSize: compact ? 9 : 10, fontWeight: 700, background: cfg.bg, color: cfg.text,
-      borderRadius: 4, padding: compact ? '1px 5px' : '2px 7px', whiteSpace: 'nowrap' }}>{status}</span>
+      borderRadius: 0, padding: compact ? '1px 5px' : '2px 7px', whiteSpace: 'nowrap' }}>{status}</span>
   );
 }
 
@@ -127,11 +126,11 @@ function GlobalStatusBar({ items }) {
   for (const i of items) { const s = i.status ?? 'Unknown'; counts[s] = (counts[s] ?? 0) + 1; }
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18, padding: '10px 14px',
-      background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+      background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0 }}>
       {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([status, count]) => {
         const cfg = ITEM_STATUS_COLORS[status] ?? ITEM_STATUS_DEFAULT;
         return (
-          <span key={status} style={{ fontSize: 10, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 4, padding: '3px 8px' }}>
+          <span key={status} style={{ fontSize: 10, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 0, padding: '3px 8px' }}>
             {status} <span style={{ opacity: 0.7 }}>· {count}</span>
           </span>
         );
@@ -151,7 +150,7 @@ function GroupStatusBar({ items }) {
       {Object.entries(counts).map(([s, n]) => {
         const cfg = ITEM_STATUS_COLORS[s] ?? ITEM_STATUS_DEFAULT;
         return (
-          <span key={s} style={{ fontSize: 9, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 3, padding: '1px 5px' }}>
+          <span key={s} style={{ fontSize: 9, fontWeight: 700, background: cfg.bg, color: cfg.text, borderRadius: 0, padding: '1px 5px' }}>
             {s} {n}
           </span>
         );
@@ -187,7 +186,7 @@ function ItemDetailPanel({ item, detail, varCountMap }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {detail.drawings.slice(0, 8).map(d => (
                   <div key={d.id} style={{ fontSize: 10 }}>
-                    <span style={{ color: '#60a5fa', fontWeight: 700 }}>{d.drawingNumber}</span>
+                    <span style={{ color: 'var(--color-info)', fontWeight: 700 }}>{d.drawingNumber}</span>
                     {d.designStage && <span style={{ color: C.muted, marginLeft: 5 }}>{d.designStage}</span>}
                     {d.rev && <span style={{ color: C.sec, marginLeft: 4 }}>r{d.rev}</span>}
                   </div>
@@ -207,7 +206,7 @@ function ItemDetailPanel({ item, detail, varCountMap }) {
                     <div key={r.id} style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: C.muted, fontWeight: 700 }}>RFI-{r.rfiNumber ?? '?'}</span>
                       <span style={{ color: C.sec, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{r.description}</span>
-                      {r.status && <span style={{ fontSize: 9, color: sc, background: hexToRgba(sc, 0.12), borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>{r.status}</span>}
+                      {r.status && <span style={{ fontSize: 9, color: sc, background: hexToRgba(sc, 0.12), borderRadius: 0, padding: '1px 4px', flexShrink: 0 }}>{r.status}</span>}
                     </div>
                   );
                 })}
@@ -226,9 +225,9 @@ function ItemDetailPanel({ item, detail, varCountMap }) {
                   const vc = VAR_STATUS_COLORS[v.status] ?? C.sec;
                   return (
                     <div key={v.id} style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#a78bfa', fontWeight: 700, flexShrink: 0 }}>VAR-{v.varNumber ?? '?'}</span>
+                      <span style={{ color: 'var(--color-text-2)', fontWeight: 700, flexShrink: 0 }}>VAR-{v.varNumber ?? '?'}</span>
                       <span style={{ color: C.sec, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{v.title}</span>
-                      {v.status && <span style={{ fontSize: 9, color: vc, background: hexToRgba(vc, 0.12), borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>{v.status}</span>}
+                      {v.status && <span style={{ fontSize: 9, color: vc, background: hexToRgba(vc, 0.12), borderRadius: 0, padding: '1px 4px', flexShrink: 0 }}>{v.status}</span>}
                     </div>
                   );
                 })}
@@ -249,15 +248,15 @@ function ItemRow({ item, isExpanded, onToggle, odd, visibleCols, varCountMap }) 
   const CountChip = ({ n, color }) => (
     <span style={{ fontSize: 9, fontWeight: 700, color: n > 0 ? color : C.muted,
       background: n > 0 ? hexToRgba(color, 0.12) : 'transparent',
-      borderRadius: 3, padding: '1px 5px', minWidth: 16, textAlign: 'center', display: 'inline-block' }}>{n ?? 0}</span>
+      borderRadius: 0, padding: '1px 5px', minWidth: 16, textAlign: 'center', display: 'inline-block' }}>{n ?? 0}</span>
   );
 
   return (
     <tr
       onClick={onToggle}
-      style={{ background: odd ? '#0b1020' : C.bgCard, borderBottom: `1px solid ${C.grid}`, cursor: 'pointer', transition: 'background 0.1s' }}
+      style={{ background: odd ? 'var(--color-ground)' : C.bgCard, borderBottom: `1px solid ${C.grid}`, cursor: 'pointer', transition: 'background 0.1s' }}
       onMouseEnter={e => { e.currentTarget.style.background = C.bgPanel; }}
-      onMouseLeave={e => { e.currentTarget.style.background = odd ? '#0b1020' : C.bgCard; }}
+      onMouseLeave={e => { e.currentTarget.style.background = odd ? 'var(--color-ground)' : C.bgCard; }}
     >
       {/* Always-present expand toggle (not in colConfig) */}
       <td style={{ padding: '7px 8px', width: 20 }}>
@@ -270,14 +269,14 @@ function ItemRow({ item, isExpanded, onToggle, odd, visibleCols, varCountMap }) 
             content = (
               <>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{item.name}</span>
-                {item.noClientApproval && <span style={{ fontSize: 9, color: '#a78bfa', marginLeft: 6 }}>NCA</span>}
+                {item.noClientApproval && <span style={{ fontSize: 9, color: 'var(--color-text-2)', marginLeft: 6 }}>NCA</span>}
               </>
             );
             break;
           case 'status': content = <StatusPill status={item.status} />; break;
           case 'phase':
             content = item.dmPhase
-              ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 6px' }}>{PHASE_SHORT[item.dmPhase] ?? item.dmPhase}</span>
+              ? <span style={{ fontSize: 10, color: C.sec, background: C.bgDeep, border: `1px solid ${C.border}`, borderRadius: 0, padding: '2px 6px' }}>{PHASE_SHORT[item.dmPhase] ?? item.dmPhase}</span>
               : <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
             break;
           case 'sub1':   content = <DateUrgencySpan dateStr={d.sub1?.adj} />;     break;
@@ -285,10 +284,10 @@ function ItemRow({ item, isExpanded, onToggle, odd, visibleCols, varCountMap }) 
           case 'sub2':   content = <DateUrgencySpan dateStr={d.sub2?.adj} />;     break;
           case 's5':     content = <DateUrgencySpan dateStr={d.s5Status?.adj} />; break;
           case 'subC01': content = <DateUrgencySpan dateStr={d.subC01?.adj} />;   break;
-          case 'tdl':    content = <CountChip n={item.tdlCount}     color="#60a5fa" />; break;
-          case 'drw':    content = <CountChip n={item.drawingCount} color="#a78bfa" />; break;
-          case 'rfi':    content = <CountChip n={item.rfiCount}               color="#f59e0b" />; break;
-          case 'var':    content = <CountChip n={varCountMap?.[item.id] ?? 0} color="#a78bfa" />; break;
+          case 'tdl':    content = <CountChip n={item.tdlCount}     color="var(--color-info)" />; break;
+          case 'drw':    content = <CountChip n={item.drawingCount} color="var(--color-text-2)" />; break;
+          case 'rfi':    content = <CountChip n={item.rfiCount}               color="var(--color-accent)" />; break;
+          case 'var':    content = <CountChip n={varCountMap?.[item.id] ?? 0} color="var(--color-text-2)" />; break;
           default:       content = <span style={{ color: C.muted, fontSize: 10 }}>—</span>;
         }
         return (
@@ -450,26 +449,7 @@ export default function ItemSchedulePage() {
   const handleExport = () => exportToCSV(visibleCols, allRows, (item, key) => itemRaw(item, key, varCountMap), `item-schedule-${new Date().toISOString().slice(0,10)}.csv`);
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace',monospace", padding: '24px 32px' }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>ITEM SCHEDULE</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            Progress status · drawing submission dates · {groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 11, color: C.muted }}>{today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
-          {lastRefreshed && <span style={{ fontSize: 10, color: C.muted }}>updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={() => { setCached('all-items', null); setRefreshKey(k => k + 1); }} title="Refresh"
-            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }}>↻</button>
-        </div>
-      </div>
-
-      <AppNav />
-
+    <PageShell legacy title="Items" subtitle={<>Progress status · drawing submission dates · {groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}</>}>
       {!loading && visible.length > 0 && <GlobalStatusBar items={visible} />}
 
       {/* Filter / toolbar */}
@@ -493,7 +473,7 @@ export default function ItemSchedulePage() {
         </select>
 
         <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-          style={{ ...selStyle, marginLeft: 4, borderColor: '#2d4a6e', color: '#93c5fd' }}>
+          style={{ ...selStyle, marginLeft: 4, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>
           <option value="project">Group: Project</option>
           <option value="phase">Group: Phase</option>
           <option value="status">Group: Status</option>
@@ -501,15 +481,15 @@ export default function ItemSchedulePage() {
           <option value="none">No Grouping</option>
         </select>
 
-        <button onClick={expandAll}   style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Expand All</button>
-        <button onClick={collapseAll} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>Collapse All</button>
-        <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: '#2d4a6e', color: '#93c5fd' }}>⚙ Columns</button>
+        <button onClick={expandAll}   style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Expand All</button>
+        <button onClick={collapseAll} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>Collapse All</button>
+        <button onClick={() => setShowColPanel(true)} style={{ ...selStyle, borderColor: 'var(--color-line-strong)', color: 'var(--color-info)' }}>⚙ Columns</button>
 
         <span style={{ fontSize: 10, color: C.muted, marginLeft: 'auto' }}>
           {loading ? 'Loading…' : `${visible.length} item${visible.length !== 1 ? 's' : ''}`}
         </span>
         <button onClick={handleExport} title="Export current view to CSV"
-          style={{ ...selStyle, borderColor: '#166534', color: '#4ade80' }}>↓ Export CSV (current view)</button>
+          style={{ ...selStyle, borderColor: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', color: 'var(--color-ok)' }}>↓ Export CSV (current view)</button>
       </div>
 
       {/* Content */}
@@ -531,16 +511,16 @@ export default function ItemSchedulePage() {
                   {/* Custom head: expand-toggle prefix + SharedTableHead cols */}
                   <thead>
                     <tr>
-                      <th style={{ width: 20, padding: '7px 8px', background: '#080d17',
+                      <th style={{ width: 20, padding: '7px 8px', background: 'var(--color-ground)',
                         borderBottom: `1px solid ${C.border}` }} />
                       {visibleCols.map(col => (
                         <th key={col.key} style={{
                           position: 'relative', padding: '7px 10px',
                           textAlign: col.align ?? 'center',
-                          fontSize: 9, fontWeight: 700, color: '#7b90b0',
+                          fontSize: 9, fontWeight: 700, color: 'var(--color-muted)',
                           letterSpacing: '0.07em', textTransform: 'uppercase',
                           whiteSpace: 'nowrap', width: col.width, minWidth: col.minWidth ?? 40,
-                          borderBottom: `1px solid ${C.border}`, background: '#080d17', userSelect: 'none',
+                          borderBottom: `1px solid ${C.border}`, background: 'var(--color-ground)', userSelect: 'none',
                         }}>
                           {col.label}
                           <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); startResize(e, col.key); }}
@@ -580,7 +560,7 @@ export default function ItemSchedulePage() {
 
             if (noGrouping) {
               return (
-                <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                <div key={key} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 0, overflow: 'hidden' }}>
                   {table}
                 </div>
               );
@@ -589,8 +569,7 @@ export default function ItemSchedulePage() {
             return (
               <div key={key} style={{
                 background: C.bgCard, border: `1px solid ${C.border}`,
-                borderLeft: `3px solid ${projColor}`, borderRadius: 10, overflow: 'hidden',
-                boxShadow: `0 2px 12px ${hexToRgba(projColor, 0.12)}`,
+                borderLeft: `3px solid ${projColor}`, borderRadius: 0, overflow: 'hidden',
               }}>
                 <div onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))}
                   style={{ padding: '10px 16px', background: C.bgPanel,
@@ -617,6 +596,6 @@ export default function ItemSchedulePage() {
           onChange={cfg => { setColConfig(cfg); persistColConfig(cfg, COL_LS_KEY); }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

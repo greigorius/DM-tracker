@@ -42,8 +42,14 @@ Pages: AxiomHome (replaced by Cockpit), Production / Team / Trackers / Hardware 
 
 Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `quick-log` endpoints, and replace the "+" with a link to the Cockpit. Decide whether To Do List entries are still wanted, or whether Actions with BIC DT replace them.
 
+## Hub-wide UI (29 Oct, afternoon)
+- Every page now renders in `PageShell`: same header, nav row (replaces the old AppNav), 1440px width and gutters.
+- **RFIs** and **Variations** rebuilt on the snapshot + UI kit (`TrackerPage.jsx`): search, project / status / grouping filters, sortable tables, CSV export. Old RFISchedulePage / VariationSchedulePage deleted.
+- Tasks, Items, Finishes, Drawings, Timeline, Client and Project pages: old colour constants replaced with the tokens, rounded corners and shadows removed, and a scoped compatibility layer (`.legacy` in `tokens.css`) sizes their controls and tables like the kit. They still fetch through the legacy endpoints until rebuilt.
+- AppNav and QuickEntryModal removed (the nav "+" went with AppNav). QuickLogBar remains on the Client and Project pages pending the consolidation decision.
+
 ## Still to do
-- Migrate legacy pages (Tasks, Item schedule, RFIs, Variations, Finishes, Drawings, Timeline, Client/Project home) from `usePageCache` + legacy endpoints to `useSnapshot`, and restyle each with the UI kit. Then delete `AppNav`, `AppDataContext`, `usePageCache`, `server/notionHelpers.js` and the legacy functions.
+- Rebuild the remaining legacy pages (Tasks, Items, Finishes, Drawings, Timeline, Client/Project home) on `TrackerPage` / the UI kit from `usePageCache` + legacy endpoints to `useSnapshot`, and restyle each with the UI kit. Then delete `AppNav`, `AppDataContext`, `usePageCache`, `server/notionHelpers.js` and the legacy functions.
 - Triage is read-only; add multi-field editing.
 - Port Daily Brief, Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`). The Triage tile opens the Daily Triage artifact; the count cards open the Hub's read-only `/triage` lists.
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).

@@ -6,12 +6,12 @@
 import { useState } from 'react';
 
 const TC = {
-  bgPanel: '#0d1830',
-  border:  '#1e2d45',
-  text:    '#e2e8f0',
-  sec:     '#94a3b8',
-  muted:   '#7b90b0',
-  grid:    '#1a2540',
+  bgPanel: 'var(--color-surface)',
+  border:  'var(--color-line)',
+  text:    'var(--color-text)',
+  sec:     'var(--color-text-2)',
+  muted:   'var(--color-muted)',
+  grid:    'var(--color-line)',
 };
 
 // ── initColConfig ─────────────────────────────────────────────────────────────
@@ -96,9 +96,9 @@ export function ColumnConfigPanel({ colConfig, defaults, onClose, onChange }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: TC.bgPanel, border: `1px solid ${TC.border}`, borderRadius: 10,
+      <div style={{ background: TC.bgPanel, border: `1px solid ${TC.border}`, borderRadius: 0,
         padding: 24, width: 320, maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 12,
-        fontFamily: "'DM Mono','ui-monospace',monospace" }}>
+        fontFamily: 'var(--font-mono)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: TC.text }}>Configure Columns</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: TC.muted,
@@ -110,17 +110,17 @@ export function ColumnConfigPanel({ colConfig, defaults, onClose, onChange }) {
             <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8,
               padding: '6px 0', borderBottom: `1px solid ${TC.grid}` }}>
               <input type="checkbox" checked={col.visible} onChange={() => toggle(col.key)}
-                style={{ cursor: 'pointer', accentColor: '#3b82f6', flexShrink: 0 }} />
+                style={{ cursor: 'pointer', accentColor: 'var(--color-info)', flexShrink: 0 }} />
               <span style={{ flex: 1, fontSize: 11, color: col.visible ? TC.text : TC.muted }}>
                 {defMap.get(col.key)?.label ?? col.key}
               </span>
               <button onClick={() => move(col.key, -1)} disabled={idx === 0}
-                style={{ background: 'none', border: `1px solid ${TC.border}`, borderRadius: 3,
+                style={{ background: 'none', border: `1px solid ${TC.border}`, borderRadius: 0,
                   color: TC.muted, cursor: idx === 0 ? 'default' : 'pointer',
                   fontSize: 9, padding: '2px 5px', opacity: idx === 0 ? 0.3 : 1,
                   fontFamily: 'inherit' }}>▲</button>
               <button onClick={() => move(col.key, 1)} disabled={idx === local.length - 1}
-                style={{ background: 'none', border: `1px solid ${TC.border}`, borderRadius: 3,
+                style={{ background: 'none', border: `1px solid ${TC.border}`, borderRadius: 0,
                   color: TC.muted, cursor: idx === local.length - 1 ? 'default' : 'pointer',
                   fontSize: 9, padding: '2px 5px', opacity: idx === local.length - 1 ? 0.3 : 1,
                   fontFamily: 'inherit' }}>▼</button>
@@ -130,12 +130,12 @@ export function ColumnConfigPanel({ colConfig, defaults, onClose, onChange }) {
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={reset}
-            style={{ padding: '5px 12px', borderRadius: 5, border: `1px solid ${TC.border}`,
+            style={{ padding: '5px 12px', borderRadius: 0, border: `1px solid ${TC.border}`,
               background: 'transparent', color: TC.sec, fontSize: 11, cursor: 'pointer',
               fontFamily: 'inherit' }}>Reset</button>
           <button onClick={apply}
-            style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: '#1d4ed8',
-              color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            style={{ padding: '5px 14px', borderRadius: 0, border: 'none', background: 'var(--color-info)',
+              color: 'var(--color-text)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
               fontFamily: 'inherit' }}>Apply</button>
         </div>
       </div>
@@ -160,7 +160,7 @@ export function SharedTableHead({ visibleCols, onResizeStart }) {
             width: col.width,
             minWidth: col.minWidth ?? 40,
             borderBottom: `1px solid ${TC.border}`,
-            background: '#080d17',
+            background: 'var(--color-ground)',
             userSelect: 'none',
           }}>
             {col.label}

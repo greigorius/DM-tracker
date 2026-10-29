@@ -2,15 +2,15 @@
 
 // ── DM Phase config ───────────────────────────────────────────────────────────
 export const DM_PHASES = [
-  { key: 'DT1',  label: 'DT1',  bg: '#1e3a5f', text: '#60a5fa' },
-  { key: 'P01',  label: 'P01',  bg: '#2e1f5e', text: '#818cf8' },
-  { key: 'S4',   label: 'S4',   bg: '#78350f', text: '#fbbf24' },
-  { key: 'DT2',  label: 'DT2',  bg: '#1e3a5f', text: '#60a5fa' },
-  { key: 'P02',  label: 'P02',  bg: '#2e1f5e', text: '#818cf8' },
-  { key: 'S5',   label: 'S5',   bg: '#2e1065', text: '#a78bfa' },
-  { key: 'DTC',  label: 'DTC',  bg: '#3b1a3b', text: '#e879f9' },
-  { key: 'C01',  label: 'C01',  bg: '#1a3a2a', text: '#34d399' },
-  { key: 'PROD', label: 'PROD', bg: '#1a3a2a', text: '#34d399' },
+  { key: 'DT1',  label: 'DT1',  bg: 'var(--color-surface-hi)', text: 'var(--color-info)' },
+  { key: 'P01',  label: 'P01',  bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  { key: 'S4',   label: 'S4',   bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  { key: 'DT2',  label: 'DT2',  bg: 'var(--color-surface-hi)', text: 'var(--color-info)' },
+  { key: 'P02',  label: 'P02',  bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  { key: 'S5',   label: 'S5',   bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  { key: 'DTC',  label: 'DTC',  bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  { key: 'C01',  label: 'C01',  bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  { key: 'PROD', label: 'PROD', bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
 ];
 
 export const PHASE_ORDER = ['DT1','P01','S4','DT2','P02','S5','DTC','C01','PROD'];

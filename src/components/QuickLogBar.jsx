@@ -8,27 +8,26 @@ import { useQueue } from '../hooks/useQueue.js';
 import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 
 const C = {
-  bg:     '#0a0f1a',
-  card:   '#0d1525',
-  panel:  '#0d1830',
-  border: '#1e2d45',
-  text:   '#e2e8f0',
-  sec:    '#94a3b8',
-  muted:  '#7b90b0',
-  grid:   '#1a2540',
-  input:  '#0b1020',
+  bg:     'var(--color-ground)',
+  card:   'var(--color-surface)',
+  panel:  'var(--color-surface)',
+  border: 'var(--color-line)',
+  text:   'var(--color-text)',
+  sec:    'var(--color-text-2)',
+  muted:  'var(--color-muted)',
+  grid:   'var(--color-line)',
+  input:  'var(--color-ground)',
 };
 
 // Distinct from PROJECT_COLORS — these identify entry *type*, not project
 const PANEL_CONFIG = [
-  { type: 'todo',           label: 'To Dos',          endpoint: '/api/quick-log/todo',           accentColor: '#94a3b8' },
-  { type: 'rfi',            label: 'RFIs',            endpoint: '/api/quick-log/rfi',            accentColor: '#fb923c' },
-  { type: 'production',     label: 'Production',      endpoint: '/api/quick-log/production',     accentColor: '#a3e635' },
+  { type: 'todo',           label: 'To Dos',          endpoint: '/api/quick-log/todo',           accentColor: 'var(--color-text-2)' },
+  { type: 'rfi',            label: 'RFIs',            endpoint: '/api/quick-log/rfi',            accentColor: 'var(--color-accent)' },
+  { type: 'production',     label: 'Production',      endpoint: '/api/quick-log/production',     accentColor: 'var(--color-ok)' },
 ];
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+function hexToRgba(color, alpha) {
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
 function QueuePanel({ getByType, updateItem, removeItem }) {
@@ -82,7 +81,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
         const err        = errors[cfg.type];
 
         return (
-          <div key={cfg.type} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', opacity: isEmpty ? 0.5 : 1 }}>
+          <div key={cfg.type} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 0, overflow: 'hidden', opacity: isEmpty ? 0.5 : 1 }}>
 
             {/* Panel header */}
             <div
@@ -93,7 +92,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.accentColor }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{cfg.label}</span>
                 {items.length > 0 && (
-                  <span style={{ fontSize: 9, background: '#1e293b', color: cfg.accentColor, padding: '1px 6px', borderRadius: 999, fontWeight: 800 }}>
+                  <span style={{ fontSize: 9, background: 'var(--color-surface)', color: cfg.accentColor, padding: '1px 6px', borderRadius: 0, fontWeight: 600 }}>
                     {items.length}
                   </span>
                 )}
@@ -103,7 +102,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                   <button
                     onClick={e => { e.stopPropagation(); submitPanel(cfg); }}
                     disabled={isSubmitting}
-                    style={{ fontSize: 10, fontWeight: 700, background: isSubmitting ? '#1e293b' : '#14532d', color: isSubmitting ? C.muted : '#4ade80', border: 'none', borderRadius: 4, padding: '3px 10px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                    style={{ fontSize: 10, fontWeight: 700, background: isSubmitting ? 'var(--color-surface)' : 'color-mix(in srgb, var(--color-ok) 16%, transparent)', color: isSubmitting ? C.muted : 'var(--color-ok)', border: 'none', borderRadius: 0, padding: '3px 10px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
                   >
                     {isSubmitting ? 'Submitting…' : `Submit ${items.length} to Notion`}
                   </button>
@@ -118,7 +117,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                   <div style={{ fontSize: 10, color: C.muted, fontStyle: 'italic' }}>No items queued</div>
                 )}
                 {err && (
-                  <div style={{ padding: '6px 10px', background: 'rgba(239,68,68,0.08)', border: `1px solid rgba(239,68,68,0.2)`, borderRadius: 6, fontSize: 10, color: '#f87171' }}>
+                  <div style={{ padding: '6px 10px', background: 'rgba(239,68,68,0.08)', border: `1px solid rgba(239,68,68,0.2)`, borderRadius: 0, fontSize: 10, color: 'var(--color-danger)' }}>
                     Error: {err}
                   </div>
                 )}
@@ -134,7 +133,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                         background:    C.bg,
                         border:        `1px solid ${C.border}`,
                         borderLeft:    projColor ? `3px solid ${projColor}` : `1px solid ${C.border}`,
-                        borderRadius:  7,
+                        borderRadius: 0,
                         padding:       '8px 12px',
                         boxShadow:     projColor ? `0 2px 10px ${hexToRgba(projColor, 0.18)}` : 'none',
                         display:       'flex',
@@ -148,7 +147,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                         type="checkbox"
                         checked={isDone}
                         onChange={e => updateItem(item.id, { taskDone: e.target.checked })}
-                        style={{ cursor: 'pointer', accentColor: '#4ade80', flexShrink: 0 }}
+                        style={{ cursor: 'pointer', accentColor: 'var(--color-ok)', flexShrink: 0 }}
                         title="Mark done"
                       />
 
@@ -165,9 +164,9 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                       {/* Assigned / Unassigned badge */}
                       <span style={{
                         fontSize: 9, fontWeight: 700, flexShrink: 0,
-                        padding: '2px 7px', borderRadius: 999,
+                        padding: '2px 7px', borderRadius: 0,
                         background: isAssigned ? 'rgba(96,165,250,0.12)' : 'rgba(123,144,176,0.1)',
-                        color: isAssigned ? '#60a5fa' : C.muted,
+                        color: isAssigned ? 'var(--color-info)' : C.muted,
                         border: `1px solid ${isAssigned ? 'rgba(96,165,250,0.25)' : 'rgba(123,144,176,0.2)'}`,
                       }}>
                         {isAssigned ? item.assignee : 'Unassigned'}
@@ -177,7 +176,7 @@ function QueuePanel({ getByType, updateItem, removeItem }) {
                       {item.date && (
                         <span style={{
                           fontSize: 9, fontWeight: 600, flexShrink: 0,
-                          padding: '2px 7px', borderRadius: 999,
+                          padding: '2px 7px', borderRadius: 0,
                           background: 'rgba(30,45,69,0.8)',
                           color: C.muted,
                           border: `1px solid ${C.border}`,

@@ -24,40 +24,40 @@ const DWG_ROW_H = 42    // px drawing sub-row
 
 // ── Accessible colour palette ─────────────────────────────────────────────────
 const C = {
-  bg:       '#0a0f1a',
-  bgAlt:    '#0d1525',
-  bgHover:  '#182035',
-  bgSub:    '#080e1a',
-  bgHeader: '#0d1830',
+  bg:       'var(--color-ground)',
+  bgAlt:    'var(--color-surface)',
+  bgHover:  'var(--color-surface)',
+  bgSub:    'var(--color-ground)',
+  bgHeader: 'var(--color-surface)',
 
-  border:    '#1e2d45',
-  borderSub: '#131e30',
+  border:    'var(--color-line)',
+  borderSub: 'var(--color-surface)',
 
-  text:      '#e2e8f0',
-  textSec:   '#94a3b8',
-  textMuted: '#7b90b0',
-  textWeek:  '#8899b4',
-  textBlue:  '#60a5fa',
+  text:      'var(--color-text)',
+  textSec:   'var(--color-text-2)',
+  textMuted: 'var(--color-muted)',
+  textWeek:  'var(--color-muted)',
+  textBlue:  'var(--color-info)',
 
   todayLine: 'rgba(74,222,128,0.75)',
-  gridLine:  '#1a2540',
-  gridMonth: '#1e2d45',
+  gridLine:  'var(--color-line)',
+  gridMonth: 'var(--color-line)',
 };
 
 // ── Milestone colours ─────────────────────────────────────────────────────────
 const MC = {
-  dt1:    { bg: '#1e3a5f', text: '#60a5fa' },
-  p01:    { bg: '#2e1f5e', text: '#818cf8' },
-  s4:     { bg: '#78350f', text: '#fbbf24' },
-  dt2:    { bg: '#1e3a5f', text: '#60a5fa' },
-  p02:    { bg: '#2e1f5e', text: '#818cf8' },
-  s5:     { bg: '#2e1065', text: '#a78bfa' },
-  dtc:    { bg: '#3b1a3b', text: '#e879f9' },
-  c01:    { bg: '#1a3a2a', text: '#34d399' },
-  prod:   { bg: '#1a3a2a', text: '#34d399' },
-  s4dwg:  { bg: '#78350f', text: '#fbbf24' },
-  s5dwg:  { bg: '#2e1065', text: '#a78bfa' },
-  c01dwg: { bg: '#1a3a2a', text: '#34d399' },
+  dt1:    { bg: 'var(--color-surface-hi)', text: 'var(--color-info)' },
+  p01:    { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  s4:     { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  dt2:    { bg: 'var(--color-surface-hi)', text: 'var(--color-info)' },
+  p02:    { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  s5:     { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  dtc:    { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  c01:    { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  prod:   { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  s4dwg:  { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  s5dwg:  { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  c01dwg: { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
 };
 
 const ITEM_MILESTONES = [
@@ -97,25 +97,25 @@ const LEGEND_ITEMS = [
 ];
 
 const STATUS_COLORS = {
-  'Backlog':                  { bg: '#37352f', text: '#c9c8c2' },
-  'In Review':                { bg: '#2e2459', text: '#c5bcf0' },
-  'On Hold - Supplier Info':  { bg: '#3b2f14', text: '#e8c06a' },
-  'On Hold - RFIs':           { bg: '#3b1a1a', text: '#f09090' },
-  'In Progress':              { bg: '#3b2714', text: '#f0a030' },
-  'Pre-Submittal Check':      { bg: '#3b3214', text: '#e0c840' },
-  '1st Issue - Approval':     { bg: '#0f2a4a', text: '#80b8e8' },
-  '1st Comments Received':    { bg: '#3b1f2e', text: '#d898b8' },
-  'Revisions Approval':       { bg: '#3b1f2e', text: '#d898b8' },
-  '2nd Issue - Approval':     { bg: '#3b1f2e', text: '#d898b8' },
-  '2nd Comments Received':    { bg: '#2e2318', text: '#c0a888' },
-  'Revisions Construction':   { bg: '#2e2318', text: '#c0a888' },
-  '2nd Issue - Construction': { bg: '#2e2318', text: '#c0a888' },
-  'Pre-Production':           { bg: '#3b3214', text: '#e0c840' },
-  'PC Approved':              { bg: '#14532d', text: '#6ee7a0' },
-  'In Manufacture':           { bg: '#14532d', text: '#6ee7a0' },
-  'Construction Sign Off':    { bg: '#3b2714', text: '#f0a030' },
-  'Complete':                 { bg: '#14532d', text: '#6ee7a0' },
-  'Omitted':                  { bg: '#252525', text: '#909090' },
+  'Backlog':                  { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  'In Review':                { bg: 'var(--color-surface-hi)', text: 'var(--color-text-2)' },
+  'On Hold - Supplier Info':  { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  'On Hold - RFIs':           { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-danger)' },
+  'In Progress':              { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  'Pre-Submittal Check':      { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  '1st Issue - Approval':     { bg: 'color-mix(in srgb, var(--color-info) 16%, transparent)', text: 'var(--color-info)' },
+  '1st Comments Received':    { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-text-2)' },
+  'Revisions Approval':       { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-text-2)' },
+  '2nd Issue - Approval':     { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', text: 'var(--color-text-2)' },
+  '2nd Comments Received':    { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-text-2)' },
+  'Revisions Construction':   { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-text-2)' },
+  '2nd Issue - Construction': { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-text-2)' },
+  'Pre-Production':           { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  'PC Approved':              { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  'In Manufacture':           { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  'Construction Sign Off':    { bg: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', text: 'var(--color-accent)' },
+  'Complete':                 { bg: 'color-mix(in srgb, var(--color-ok) 16%, transparent)', text: 'var(--color-ok)' },
+  'Omitted':                  { bg: 'var(--color-surface-hi)', text: 'var(--color-muted)' },
 };
 
 const COMPLETED = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted']);
@@ -410,7 +410,7 @@ export default function ProjectTimeline({
           background:    colors.bg,
           color:         colors.text,
           border:        `1px solid ${colors.text}50`,
-          borderRadius:  3,
+          borderRadius: 0,
           padding:       '2px 6px',
           fontSize:      10,
           fontWeight:    700,
@@ -447,7 +447,7 @@ export default function ProjectTimeline({
         top: '50%', transform: 'translateY(-50%)',
         height: 2,
         background: `linear-gradient(90deg, ${MC.dt1.text}25, ${MC.prod.text}25)`,
-        borderRadius: 1, zIndex: 1, pointerEvents: 'none',
+        borderRadius: 0, zIndex: 1, pointerEvents: 'none',
       }} />
     );
   };
@@ -472,7 +472,7 @@ export default function ProjectTimeline({
   const renderDrawingRows = item => {
     if (!expanded[item.id] || !item.drawings?.length) return null;
     return item.drawings.map((dwg, di) => {
-      const bg = di % 2 === 0 ? C.bgSub : '#0b1020';
+      const bg = di % 2 === 0 ? C.bgSub : 'var(--color-ground)';
       return (
         <div key={dwg.id} style={{ display: 'flex', height: DWG_ROW_H, borderBottom: `1px solid ${C.borderSub}`, background: bg }}>
           <div style={{
@@ -482,12 +482,12 @@ export default function ProjectTimeline({
             display: 'flex', flexDirection: 'column', justifyContent: 'center',
             gap: 2,
           }}>
-            <div style={{ fontSize: 10, color: '#818cf8', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 10, color: 'var(--color-text-2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {dwg.drawingNumber || '—'}
             </div>
             <div style={{ display: 'flex', gap: 3 }}>
               {dwg.rev && (
-                <span style={{ fontSize: 8, background: '#1e293b', border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 4px', color: C.textMuted }}>
+                <span style={{ fontSize: 8, background: 'var(--color-surface)', border: `1px solid ${C.border}`, borderRadius: 0, padding: '0 4px', color: C.textMuted }}>
                   Rev {dwg.rev}
                 </span>
               )}
@@ -537,9 +537,9 @@ export default function ProjectTimeline({
     const good = val === 'A', warn = val === 'B';
     return (
       <span key={prefix} style={{
-        fontSize: 8, borderRadius: 3, padding: '0 4px', fontWeight: 700,
-        background: good ? '#14532d' : warn ? '#78350f' : '#7f1d1d',
-        color:      good ? '#6ee7a0' : warn ? '#fbbf24' : '#f87171',
+        fontSize: 8, borderRadius: 0, padding: '0 4px', fontWeight: 700,
+        background: good ? 'color-mix(in srgb, var(--color-ok) 16%, transparent)' : warn ? 'color-mix(in srgb, var(--color-accent) 16%, transparent)' : 'color-mix(in srgb, var(--color-danger) 16%, transparent)',
+        color:      good ? 'var(--color-ok)' : warn ? 'var(--color-accent)' : 'var(--color-danger)',
       }}>{prefix}:{val}</span>
     );
   }
@@ -547,12 +547,12 @@ export default function ProjectTimeline({
   // Aggregated S4/S5 badge — shows unique sorted status letters from all drawings
   function aggStatusBadge(prefix, letters) {
     if (!letters.length) return null;
-    const stColor = v => v === 'A' ? '#6ee7a0' : v === 'B' ? '#fbbf24' : '#f87171';
+    const stColor = v => v === 'A' ? 'var(--color-ok)' : v === 'B' ? 'var(--color-accent)' : 'var(--color-danger)';
     return (
       <span key={prefix} style={{
         display: 'inline-flex', alignItems: 'center', gap: 2,
-        background: '#0f172a', border: `1px solid ${C.border}`,
-        borderRadius: 3, padding: '1px 4px', fontSize: 8, fontWeight: 700,
+        background: 'var(--color-surface)', border: `1px solid ${C.border}`,
+        borderRadius: 0, padding: '1px 4px', fontSize: 8, fontWeight: 700,
         fontFamily: 'monospace', flexShrink: 0,
       }}>
         <span style={{ color: C.textMuted }}>{prefix}</span>
@@ -568,7 +568,7 @@ export default function ProjectTimeline({
     </div>
   );
   if (error) return (
-    <div style={{ padding: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 8, color: '#fca5a5', fontSize: 12 }}>
+    <div style={{ padding: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 0, color: 'var(--color-danger)', fontSize: 12 }}>
       Failed to load: {error}
     </div>
   );
@@ -578,7 +578,7 @@ export default function ProjectTimeline({
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: C.bg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', fontFamily: "'DM Mono', 'ui-monospace', monospace" }}>
+    <div style={{ background: C.bg, borderRadius: 0, border: `1px solid ${C.border}`, overflow: 'hidden', fontFamily: "'DM Mono', 'ui-monospace', monospace" }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px', gap: 12, flexWrap: 'wrap', borderBottom: `1px solid ${C.border}`, background: C.bgHeader }}>
@@ -598,17 +598,17 @@ export default function ProjectTimeline({
           {/* Today reset */}
           <button onClick={scrollToToday} style={{
             padding: '5px 11px', fontSize: 10, fontWeight: 700, border: `1px solid ${C.todayLine}60`,
-            borderRadius: 6, cursor: 'pointer', background: 'rgba(74,222,128,0.08)',
-            color: '#4ade80', fontFamily: 'inherit', letterSpacing: '0.05em',
+            borderRadius: 0, cursor: 'pointer', background: 'rgba(74,222,128,0.08)',
+            color: 'var(--color-ok)', fontFamily: 'inherit', letterSpacing: '0.05em',
           }}>↺ Today</button>
 
           {/* View mode */}
-          <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 0, overflow: 'hidden' }}>
             {[['plan','Plan'],['adj','Adjusted'],['actual','Actual']].map(([v,l]) => (
               <button key={v} onClick={() => setViewMode(v)} style={{
                 padding: '5px 11px', fontSize: 10, fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: viewMode === v ? '#3b82f6' : '#131c2e',
-                color:      viewMode === v ? '#fff'    : C.textSec,
+                background: viewMode === v ? 'var(--color-info)' : 'var(--color-surface)',
+                color:      viewMode === v ? 'var(--color-text)'    : C.textSec,
                 fontFamily: 'inherit', letterSpacing: '0.05em',
               }}>{l}</button>
             ))}
@@ -616,7 +616,7 @@ export default function ProjectTimeline({
 
           {/* Category */}
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{
-            background: '#131c2e', border: `1px solid ${C.border}`, borderRadius: 6,
+            background: 'var(--color-surface)', border: `1px solid ${C.border}`, borderRadius: 0,
             color: C.textSec, fontSize: 10, padding: '5px 8px', cursor: 'pointer', outline: 'none',
           }}>
             <option value="all">All categories</option>
@@ -626,7 +626,7 @@ export default function ProjectTimeline({
 
           {/* Status */}
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{
-            background: '#131c2e', border: `1px solid ${C.border}`, borderRadius: 6,
+            background: 'var(--color-surface)', border: `1px solid ${C.border}`, borderRadius: 0,
             color: C.textSec, fontSize: 10, padding: '5px 8px', cursor: 'pointer', outline: 'none',
           }}>
             <option value="active">Active items</option>
@@ -644,7 +644,7 @@ export default function ProjectTimeline({
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <div style={{
                 background: colors.bg, color: colors.text,
-                border: `1px solid ${colors.text}50`, borderRadius: 3,
+                border: `1px solid ${colors.text}50`, borderRadius: 0,
                 padding: '2px 6px', fontSize: 9, fontWeight: 700,
                 letterSpacing: '0.05em', fontFamily: 'monospace', textTransform: 'uppercase',
                 whiteSpace: 'nowrap', flexShrink: 0, minWidth: 34, textAlign: 'center',
@@ -654,7 +654,7 @@ export default function ProjectTimeline({
           );
         })}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ width: 34, height: 2, background: C.todayLine, borderRadius: 1, flexShrink: 0 }} />
+          <div style={{ width: 34, height: 2, background: C.todayLine, borderRadius: 0, flexShrink: 0 }} />
           <span style={{ fontSize: 9, color: C.textMuted }}>Today</span>
         </div>
       </div>
@@ -678,7 +678,7 @@ export default function ProjectTimeline({
               {weekHeaders.map((w, i) => (
                 <div key={i} style={{ position: 'absolute', left: w.x, top: 0, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingLeft: 5, paddingTop: 3 }}>
                   {w.isMonth && (
-                    <span style={{ fontSize: 9, color: '#818cf8', fontWeight: 700, letterSpacing: '0.07em', lineHeight: 1.2 }}>
+                    <span style={{ fontSize: 9, color: 'var(--color-text-2)', fontWeight: 700, letterSpacing: '0.07em', lineHeight: 1.2 }}>
                       {w.month.toUpperCase()}
                     </span>
                   )}
@@ -701,7 +701,7 @@ export default function ProjectTimeline({
           {visibleItems.map((item, rowIndex) => {
             const rowBg  = rowIndex % 2 === 0 ? C.bg : C.bgAlt;
             const bg     = hoveredItem === item.id ? C.bgHover : rowBg;
-            const sc     = STATUS_COLORS[item.status] || { bg: '#252525', text: '#909090' };
+            const sc     = STATUS_COLORS[item.status] || { bg: 'var(--color-surface-hi)', text: 'var(--color-muted)' };
             const hasExp = item.drawings?.length > 0;
             const isExp  = !!expanded[item.id];
 
@@ -759,14 +759,14 @@ export default function ProjectTimeline({
                         return (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
                         {hasExp && (
-                          <span style={{ background: '#1a2540', border: `1px solid ${C.border}`, borderRadius: 8, padding: '0 5px', color: C.textSec, fontSize: 8, flexShrink: 0 }}>
+                          <span style={{ background: 'var(--color-line)', border: `1px solid ${C.border}`, borderRadius: 0, padding: '0 5px', color: C.textSec, fontSize: 8, flexShrink: 0 }}>
                             {item.drawings.length} dwg{item.drawings.length !== 1 ? 's' : ''}
                           </span>
                         )}
                         {aggStatusBadge('S4', s4L)}
                         {aggStatusBadge('S5', s5L)}
                         {item.contractCategory === 'PCSA' && (
-                          <span style={{ background: 'rgba(139,92,246,0.18)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 8, padding: '0 5px', color: '#c4b5fd', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 }}>
+                          <span style={{ background: 'rgba(139,92,246,0.18)', border: '1px solid rgba(139,92,246,0.4)', borderRadius: 0, padding: '0 5px', color: 'var(--color-text-2)', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 }}>
                             PCSA
                           </span>
                         )}
@@ -797,9 +797,8 @@ export default function ProjectTimeline({
       {tooltip && (
         <div style={{
           position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 32, pointerEvents: 'none', zIndex: 200,
-          background: '#1e293b', border: `1px solid ${MC[tooltip.ck]?.text ?? C.border}60`,
-          borderRadius: 6, padding: '6px 12px', fontSize: 11, color: C.text,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+          background: 'var(--color-surface)', border: `1px solid ${MC[tooltip.ck]?.text ?? C.border}60`,
+          borderRadius: 0, padding: '6px 12px', fontSize: 11, color: C.text,
         }}>
           <span style={{ color: MC[tooltip.ck]?.text, marginRight: 6 }}>●</span>
           <strong>{tooltip.label}</strong>: {tooltip.date}
