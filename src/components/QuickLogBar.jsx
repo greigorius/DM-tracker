@@ -22,8 +22,6 @@ const C = {
 // Distinct from PROJECT_COLORS — these identify entry *type*, not project
 const PANEL_CONFIG = [
   { type: 'todo',           label: 'To Dos',          endpoint: '/api/quick-log/todo',           accentColor: '#94a3b8' },
-  { type: 'drawing-check',  label: 'Drawing Checks',  endpoint: '/api/quick-log/drawing-check',  accentColor: '#2dd4bf' },
-  { type: 'comment-review', label: 'Comment Reviews', endpoint: '/api/quick-log/comment-review', accentColor: '#e879f9' },
   { type: 'rfi',            label: 'RFIs',            endpoint: '/api/quick-log/rfi',            accentColor: '#fb923c' },
   { type: 'production',     label: 'Production',      endpoint: '/api/quick-log/production',     accentColor: '#a3e635' },
 ];

@@ -1,60 +1,44 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import AxiomHome from './pages/AxiomHome.jsx';
-import ClientHome from './pages/ClientHome.jsx';
-import ProjectHome from './pages/ProjectHome.jsx';
-import TimelinePage from './pages/TimelinePage.jsx';
-import TasksPage from './pages/TasksPage.jsx';
-import ProductionPage from './pages/ProductionPage.jsx';
-import ItemSchedulePage from './pages/ItemSchedulePage.jsx';
-import RFISchedulePage from './pages/RFISchedulePage.jsx';
-import VariationSchedulePage from './pages/VariationSchedulePage.jsx';
-import DrawingsPage from './pages/DrawingsPage.jsx';
-import ClientCommentReviewPage from './pages/ClientCommentReviewPage.jsx';
-import TeamPage from './pages/TeamPage.jsx';
-import ItemDateMatrixPage from './pages/ItemDateMatrixPage.jsx';
-import FinishesSchedulePage from './pages/FinishesSchedulePage.jsx';
-import HardwareSchedulePage from './pages/HardwareSchedulePage.jsx';
+import { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { ROUTES } from './routes.jsx';
+import Cockpit from './pages/Cockpit.jsx';
+import { AppDataProvider } from './context/AppDataContext.jsx';
+import { SkeletonRows } from './components/ui/index.js';
+
+function PageFallback() {
+  return (
+    <div className="hub">
+      <div className="bg-bar border-b border-line h-16" />
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6"><SkeletonRows rows={8} /></div>
+    </div>
+  );
+}
+
+// Legacy pages still fetch through AppDataContext / usePageCache until they are
+// ported to the snapshot hooks. Scoped here so the Cockpit never triggers them.
+function LegacyShell() {
+  return <AppDataProvider><Outlet /></AppDataProvider>;
+}
 
 export default function App() {
+  const v2 = ROUTES.filter(([, , o]) => !o?.legacy);
+  const legacy = ROUTES.filter(([, , o]) => o?.legacy);
   return (
     <BrowserRouter>
-      <Routes>
-        {/* ── Home ──────────────────────────────────────────────────────────── */}
-        <Route path="/" element={<AxiomHome />} />
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/" element={<Cockpit />} />
+          {v2.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
+          <Route element={<LegacyShell />}>
+            {legacy.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
+          </Route>
 
-        {/* ── Projects ──────────────────────────────────────────────────────── */}
-        <Route path="/client/:clientId" element={<ClientHome />} />
-        <Route path="/project/:projectId" element={<ProjectHome />} />
-
-        {/* ── Timeline ──────────────────────────────────────────────────────── */}
-        <Route path="/timeline" element={<TimelinePage />} />
-        <Route path="/timeline/item-date-matrix" element={<ItemDateMatrixPage />} />
-        <Route path="/timeline/:projectId" element={<TimelinePage />} />
-
-        {/* ── Old /tasks routes → redirect to new Trackers paths ────────────── */}
-        <Route path="/tasks" element={<Navigate to="/trackers/task-schedule" replace />} />
-        <Route path="/tasks/production" element={<Navigate to="/trackers/production-schedule" replace />} />
-
-        {/* ── Trackers ──────────────────────────────────────────────────────── */}
-        <Route path="/trackers" element={<Navigate to="/trackers/task-schedule" replace />} />
-        <Route path="/trackers/task-schedule" element={<TasksPage />} />
-        <Route path="/trackers/production-schedule" element={<ProductionPage />} />
-        <Route path="/trackers/item-schedule" element={<ItemSchedulePage />} />
-        <Route path="/trackers/rfis" element={<RFISchedulePage />} />
-        <Route path="/trackers/variations" element={<VariationSchedulePage />} />
-        <Route path="/trackers/finishes-schedule" element={<FinishesSchedulePage />} />
-        <Route path="/trackers/hardware-schedule" element={<HardwareSchedulePage />} />
-
-        {/* ── Drawings ──────────────────────────────────────────────────────── */}
-        <Route path="/drawings" element={<DrawingsPage />} />
-        <Route path="/drawings/comment-review" element={<ClientCommentReviewPage />} />
-
-        {/* ── Team ──────────────────────────────────────────────────────────── */}
-        <Route path="/team" element={<TeamPage />} />
-
-        {/* ── Catch-all → Home ──────────────────────────────────────────────── */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Old paths */}
+          <Route path="/tasks" element={<Navigate to="/trackers/task-schedule" replace />} />
+          <Route path="/trackers" element={<Navigate to="/trackers/task-schedule" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

@@ -3,10 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import {
   getCached, setCached, deleteCached,
-  fetchNotion, notionHeaders, getSchemaIds, queryAll,
+  fetchNotion, notionHeaders, queryAll,
   transformItem, transformTask, transformDrawing,
   fetchTaskPages, fetchDrawingMap, transformRFI,
-  titleVal, statusVal, selectVal, multiSelectVal, personVal, checkVal, dateVal, relCount, relIds,
+  titleVal, statusVal, selectVal, multiSelectVal, dateVal, relIds,
   withNoPcsa,
 } from './notionHelpers.js';
 
@@ -18,6 +18,30 @@ const NOTION_API = 'https://api.notion.com/v1';
 
 app.use(cors());
 app.use(express.json());
+
+// ── Hub v2 snapshot API (registered before every legacy route) ───────────────
+// Same handlers as the Netlify functions api-read / api-write. Locally the
+// snapshot lives in .cache/blobs; it is refreshed every 5 minutes while the
+// server runs, and on demand with `npm run sync`.
+process.env.HUB_STORE ||= 'file';
+const { dispatch } = await import('../hub-core/routes.js');
+const { readRoutes } = await import('../hub-core/routes-read.js');
+const { writeRoutes } = await import('../hub-core/routes-write.js');
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const query = new URL(req.originalUrl, 'http://local').searchParams;
+  const out = await dispatch([...readRoutes, ...writeRoutes], { method: req.method, pathname: req.path, query, body: req.body });
+  if (!out) return next(); // fall through to legacy routes (e.g. GET /api/rfis)
+  res.status(out.status).json(out.json);
+});
+if (process.env.NOTION_TOKEN && process.env.HUB_LOCAL_SYNC !== 'off') {
+  const { runSync } = await import('../hub-core/sync.js');
+  const tick = () => runSync({ budgetMs: 120_000 })
+    .then(r => console.log(`[sync] ${r.results.map(x => `${x.db}:${x.error ? 'ERR' : x.changed}`).join(' ')} (${r.ms} ms)`))
+    .catch(e => console.error('[sync]', e.message));
+  setTimeout(tick, 1000);
+  setInterval(tick, 5 * 60_000);
+}
 
 function notionRequired(res) {
   if (!process.env.NOTION_TOKEN) {
@@ -984,104 +1008,6 @@ app.post('/api/tasks/update', async (req, res) => {
   }
 })
 
-// ── GET /api/schedule-items?projectId=<id> ────────────────────────────────────
-// Returns projects + items for the Item Date Matrix.
-// Only dtStart1Plan and actual dates from Notion — all other dates calculated
-// client-side. Drawings DB queried for s4/s5 status dates + C01 sign-off.
-app.get('/api/schedule-items', async (req, res) => {
-  if (!notionRequired(res)) return;
-  const { projectId } = req.query;
-
-  function dtVal(props, key) { return props[key]?.date?.start ?? null; }
-
-  function transformScheduleItem(page, pid) {
-    const p    = page.properties ?? {};
-    const name = p['Item Name']?.title?.[0]?.plain_text ?? '';
-    return {
-      id:               page.id,
-      name,
-      status:           p['Drawing Progress']?.status?.name    ?? null,
-      projectId:        pid,
-      noClientApproval: p['No Client Approval']?.checkbox      ?? false,
-      dmPhase:          p['DM Phase']?.select?.name            ?? null,
-      contractCategory: p['Contract Category']?.formula?.string
-                     ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
-
-      // Only the 1st DT Start plan date — everything else calculated client-side
-      dtStart1Plan:  dtVal(p, '1st DT Start (Plan)'),
-
-      // Actual dates only (inputs to calcRow)
-      dtStart1Act:   dtVal(p, '1st DT Start (Actual)'),
-      del1ActDate:   dtVal(p, '1st DT Delivery (Actual)'),
-      sub1ActDate:   dtVal(p, '1st Submission Date (Actual)'),
-      dtStart2Act:   dtVal(p, '2nd DT Start (Actual)'),
-      del2ActDate:   dtVal(p, '2nd DT Delivery (Actual)'),
-      sub2ActDate:   dtVal(p, '2nd Submission Date (Actual)'),
-      stCActDate:    dtVal(p, 'Constr. DT Start (Actual)'),
-      delCActDate:   dtVal(p, 'Constr. DT Delivery (Actual)'),
-      subCActDate:   dtVal(p, 'Constr. Submission Date (Actual)'),
-
-      // Draw-day values (Notion-sourced, editable from matrix)
-      dd1:            p['Draw Days - DD1']?.number   ?? null,
-      constrDrawDays: p['Draw Days - DD-C']?.number ?? null,
-    };
-  }
-
-  try {
-    const [projectPages, taskPages] = await Promise.all([
-      queryAll(DB.projects,
-        { property: 'Status', status: { does_not_equal: 'Done' } },
-        { sorts: [{ property: 'Start Date', direction: 'descending' }] },
-      ),
-      queryAll(DB.tasks,
-        projectId
-          ? { and: [
-              { property: 'Projects', relation: { contains: projectId } },
-              { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
-            ]}
-          : { property: 'Item Name', title: { does_not_contain: 'PCSA' } },
-        { sorts: [{ property: 'Item Name', direction: 'ascending' }] },
-      ),
-    ]);
-
-    const projects = projectPages.map(p => ({
-      id:                   p.id,
-      name:                 p.properties['Project Name']?.title?.[0]?.plain_text ?? p.id,
-      approvalDays:         p.properties['Approval Days']?.number          ?? null,
-      revisionDays:         p.properties['Revision Days']?.number          ?? null,
-      productionPrepPeriod: p.properties['Production Prep Period']?.number ?? null,
-      qaDefault:            p.properties['QA Default Days']?.number        ?? null,
-    }));
-
-    const items = taskPages.map(page => {
-      const pid = projectId ?? page.properties['Projects']?.relation?.[0]?.id ?? null;
-      return transformScheduleItem(page, pid);
-    });
-
-    // Fetch drawing data for s4/s5 dates, statuses, and C01 sign-off
-    const taskIds    = items.map(i => i.id);
-    const drawingMap = await fetchDrawingMap(taskIds);
-
-    for (const item of items) {
-      const drawings = drawingMap.get(item.id) ?? [];
-      const s4Dates  = drawings.map(drw => drw.s4StatusDate).filter(Boolean);
-      const s5Dates  = drawings.map(drw => drw.s5StatusDate).filter(Boolean);
-      const c01Dates = drawings.map(drw => drw.c01SignOff?.actual ?? drw.c01Submit?.actual).filter(Boolean);
-      item.s4Date           = s4Dates.length  ? [...s4Dates].sort()[0]  : null;
-      item.s5Date           = s5Dates.length  ? [...s5Dates].sort()[0]  : null;
-      item.c01SignOffActDate = c01Dates.length ? [...c01Dates].sort()[0] : null;
-      item.s4Statuses       = [...new Set(drawings.map(drw => drw.s4Status).filter(Boolean))];
-      item.s5Statuses       = [...new Set(drawings.map(drw => drw.s5Status).filter(Boolean))];
-    }
-
-    res.json({ projects, items });
-  } catch (err) {
-    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again' });
-    console.error('[schedule-items]', err.message);
-    res.status(err.status ?? 500).json({ error: err.message });
-  }
-});
-
 // ── GET /api/finishes-schedule ────────────────────────────────────────────────
 // Schema (confirmed): CAD Ref=title, APPROVED=select, Spec Ref=multi_select,
 // Items=relation, Suffix=rollup, Submitted on=date (lowercase o),
@@ -1201,232 +1127,6 @@ app.get('/api/finishes-schedule', async (req, res) => {
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  DT DRAWING CHECKER ROUTES
-//  These mirror the Netlify functions so local dev (proxy → Express) works.
-// ═════════════════════════════════════════════════════════════════════════════
-
-// Shared property extractor (same logic as Netlify functions)
-function dtGetVal(prop) {
-  if (!prop) return null;
-  switch (prop.type) {
-    case 'title':     return prop.title?.map(t => t.plain_text).join('') || null;
-    case 'rich_text': return prop.rich_text?.map(t => t.plain_text).join('') || null;
-    case 'select':    return prop.select?.name || null;
-    case 'checkbox':  return String(prop.checkbox);
-    case 'date':      return prop.date?.start || null;
-    case 'people':    return prop.people?.map(p => p.name).filter(Boolean).join(', ') || null;
-    case 'formula':
-      if (prop.formula?.type === 'string') return prop.formula.string || null;
-      if (prop.formula?.type === 'number') return prop.formula.number != null ? String(prop.formula.number) : null;
-      if (prop.formula?.type === 'date')   return prop.formula.date?.start || null;
-      return null;
-    case 'rollup':
-      if (prop.rollup?.type === 'array')
-        return prop.rollup.array?.map(i => dtGetVal(i)).filter(Boolean).join(', ') || null;
-      if (prop.rollup?.type === 'date') return prop.rollup.date?.start || null;
-      return null;
-    default: return null;
-  }
-}
-
-// ── GET /api/dt-checker-projects ─────────────────────────────────────────────
-app.get('/api/dt-checker-projects', async (_req, res) => {
-  if (!notionRequired(res)) return;
-  try {
-    let allResults = [], cursor;
-    do {
-      const body = { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) };
-      const r = await fetchNotion(
-        `https://api.notion.com/v1/databases/${DB.projects}/query`,
-        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
-      );
-      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
-      const data = await r.json();
-      allResults = allResults.concat(data.results || []);
-      cursor = data.has_more ? data.next_cursor : undefined;
-    } while (cursor);
-
-    const projects = allResults.map(row => ({
-      pageId:         row.id,
-      projectName:    dtGetVal(row.properties['Project Name']),
-      projectNumber:  dtGetVal(row.properties['Project #']),
-      projectAddress: dtGetVal(row.properties['Project Address']),
-      mainContractor: dtGetVal(row.properties['Main Contractor']),
-      architect:      dtGetVal(row.properties['Architect']),
-    })).filter(p => p.projectName);
-
-    res.json({ projects, error: null });
-  } catch (err) {
-    console.error('[dt-checker-projects]', err.message);
-    res.status(err.status ?? 500).json({ projects: [], error: err.message });
-  }
-});
-
-// ── POST /api/dt-checker-suffixes ────────────────────────────────────────────
-app.post('/api/dt-checker-suffixes', async (req, res) => {
-  if (!notionRequired(res)) return;
-  const { projectPageId } = req.body || {};
-  if (!projectPageId) return res.status(400).json({ suffixes: [], error: 'projectPageId is required' });
-
-  try {
-    const suffixes = [];
-    let cursor;
-    do {
-      const body = {
-        page_size: 100,
-        filter: { property: 'Projects', relation: { contains: projectPageId } },
-        sorts: [{ property: 'Item Name', direction: 'ascending' }],
-        ...(cursor ? { start_cursor: cursor } : {}),
-      };
-      const r = await fetchNotion(
-        `https://api.notion.com/v1/databases/${DB.tasks}/query`,
-        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
-      );
-      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
-      const data = await r.json();
-      for (const row of data.results || []) {
-        const itemName = row.properties['Item Name']?.title?.[0]?.plain_text ?? null;
-        suffixes.push({ suffixNumber: itemName, itemPageId: row.id });
-      }
-      cursor = data.has_more ? data.next_cursor : undefined;
-    } while (cursor);
-
-    res.json({ suffixes, error: null });
-  } catch (err) {
-    console.error('[dt-checker-suffixes]', err.message);
-    res.status(err.status ?? 500).json({ suffixes: [], error: err.message });
-  }
-});
-
-// ── POST /api/dt-checker-drawings ────────────────────────────────────────────
-app.post('/api/dt-checker-drawings', async (req, res) => {
-  if (!notionRequired(res)) return;
-  const { itemPageId } = req.body || {};
-  if (!itemPageId) return res.status(400).json({ rows: [], error: 'itemPageId is required' });
-
-  function mapDrawingRow(row) {
-    const p = row.properties;
-    return {
-      id:                     row.id,
-      project:                dtGetVal(p['Project']),
-      item:                   dtGetVal(p['Item']),
-      assignedTo:             dtGetVal(p['Person']),
-      suffixNumber:           dtGetVal(p['Suffix #']),
-      drawingNumber:          dtGetVal(p['Drawing Number']),
-      pageDescription:        dtGetVal(p['Page Description']),
-      drawingTitle1:          dtGetVal(p['Drawing Title 1']),
-      drawingTitle2:          dtGetVal(p['Drawing Title 2']),
-      drawingTitle3:          dtGetVal(p['Drawing Title 3']),
-      revision:               dtGetVal(p['Rev']),
-      s4Status:               dtGetVal(p['S4 Status (LOR)']),
-      s4StatusDate:           dtGetVal(p['S4 Status Date (LOR)']) ?? dtGetVal(p['S4 Status Date (Actual)']),
-      s4DtDeliveryDateActual: dtGetVal(p['S4 DT Delivery Date (Actual)']),
-      s5Status:               dtGetVal(p['S5 Status (F&P)']),
-      s5StatusDate:           dtGetVal(p['S5 Status Date (F&P)']) ?? dtGetVal(p['S5 Status Date (Actual)']),
-      s5DtDeliveryDateActual: dtGetVal(p['S5 DT Delivery Date (Actual)']),
-      designStage:            dtGetVal(p['Design Stage']),
-    };
-  }
-
-  try {
-    let allRows = [], cursor;
-    do {
-      const body = {
-        page_size: 100,
-        filter: { property: 'Item', relation: { contains: itemPageId } },
-        sorts: [{ property: 'Drawing Number', direction: 'ascending' }],
-        ...(cursor ? { start_cursor: cursor } : {}),
-      };
-      const r = await fetchNotion(
-        `https://api.notion.com/v1/databases/${DB.drawings}/query`,
-        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
-      );
-      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
-      const data = await r.json();
-      allRows = allRows.concat((data.results || []).map(mapDrawingRow));
-      cursor = data.has_more ? data.next_cursor : undefined;
-    } while (cursor);
-
-    res.json({ rows: allRows, error: null });
-  } catch (err) {
-    console.error('[dt-checker-drawings]', err.message);
-    res.status(err.status ?? 500).json({ rows: [], error: err.message });
-  }
-});
-
-// ── POST /api/dt-checker-finishes ────────────────────────────────────────────
-app.post('/api/dt-checker-finishes', async (req, res) => {
-  if (!notionRequired(res)) return;
-  const DB_FINISHES = process.env.NOTION_DB_FINISHES;
-  if (!DB_FINISHES) return res.json({ rows: [], error: 'Finishes database not configured' });
-
-  const { suffixNumber, projectPageId } = req.body || {};
-  if (!suffixNumber) return res.status(400).json({ rows: [], error: 'suffixNumber is required' });
-
-  const suffixFilter = { property: 'Suffix', rollup: { any: { rich_text: { equals: suffixNumber } } } };
-  const filter = projectPageId
-    ? { and: [suffixFilter, { property: 'Project', relation: { contains: projectPageId } }] }
-    : suffixFilter;
-
-  try {
-    const r = await fetchNotion(
-      `https://api.notion.com/v1/databases/${DB_FINISHES}/query`,
-      { method: 'POST', headers: notionHeaders(), body: JSON.stringify({ filter, page_size: 100 }) },
-    );
-    if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
-    const data = await r.json();
-    const rows = (data.results || []).map(page => {
-      const p = page.properties;
-      return {
-        specRef:           dtGetVal(p['Spec Ref']),
-        cadRef:            dtGetVal(p['CAD Ref']),
-        finishDescription: dtGetVal(p['Finish Description']),
-        sampleRef:         dtGetVal(p['Sample Ref']),
-        approved:          dtGetVal(p['APPROVED']),
-        pageId:            page.id,
-      };
-    });
-    res.json({ rows, error: null });
-  } catch (err) {
-    console.error('[dt-checker-finishes]', err.message);
-    res.status(err.status ?? 500).json({ rows: [], error: err.message });
-  }
-});
-
-// ── POST /api/dt-checker-update-phase ────────────────────────────────────────
-// Updates "DM Phase" select property on a Notion item page.
-// Body: { itemPageId: string, phase: 'Submit' | 'Assign' }
-app.post('/api/dt-checker-update-phase', async (req, res) => {
-  if (!notionRequired(res)) return;
-  const { itemPageId, phase } = req.body || {};
-  if (!itemPageId) return res.status(400).json({ error: 'itemPageId is required' });
-  if (!phase)      return res.status(400).json({ error: 'phase is required' });
-  const ALLOWED = ['Submit', 'Assign'];
-  if (!ALLOWED.includes(phase)) return res.status(400).json({ error: `phase must be one of: ${ALLOWED.join(', ')}` });
-
-  try {
-    const r = await fetchNotion(
-      `https://api.notion.com/v1/pages/${itemPageId}`,
-      {
-        method: 'PATCH',
-        headers: notionHeaders(),
-        body: JSON.stringify({ properties: { 'DM Phase': { select: { name: phase } } } }),
-      },
-    );
-    if (!r.ok) {
-      const txt = await r.text().catch(() => '');
-      throw Object.assign(new Error(`Notion update failed: ${r.status} ${txt.slice(0, 200)}`), { status: r.status });
-    }
-    const data = await r.json();
-    const updatedPhase = data.properties?.['DM Phase']?.select?.name ?? phase;
-    res.json({ ok: true, phase: updatedPhase, error: null });
-  } catch (err) {
-    console.error('[dt-checker-update-phase]', err.message);
-    res.status(err.status ?? 500).json({ error: err.message });
-  }
 });
 
 app.listen(PORT, () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQueue } from '../hooks/useQueue.js';
-import { PHASE_ORDER } from '../data/mockData.js';
+import { PHASE_ORDER } from '../data/constants.js';
 
 const C = {
   bg:     '#0a0f1a',
@@ -16,8 +16,6 @@ const C = {
 const TABS = [
   { id: 'todo',           label: 'To Do',         color: '#6366f1', endpoint: '/api/quick-log/todo'          },
   { id: 'rfi',            label: 'RFI',           color: '#dc2626', endpoint: '/api/quick-log/rfi'           },
-  { id: 'drawing-check',  label: 'Drawing Check', color: '#7c3aed', endpoint: '/api/quick-log/drawing-check' },
-  { id: 'comment-review', label: 'Comment Review',color: '#0e7490', endpoint: '/api/quick-log/comment-review'},
   { id: 'production',     label: 'Production',    color: '#059669', endpoint: '/api/quick-log/production'    },
 ];
 

@@ -7,7 +7,7 @@ import { useAppData } from '../context/AppDataContext.jsx';
 // Plain items have `to`; items with sub-menus have `children` and `match`.
 // Items with type: 'projects' use a dynamic dropdown populated from context.
 const NAV = [
-  { to: '/', label: 'HOME', end: true },
+  { to: '/', label: 'COCKPIT', end: true },
   // PROJECTS is handled dynamically via ProjectsDropdown
   { type: 'projects', label: 'PROJECTS', match: '/project' },
   {
@@ -15,7 +15,6 @@ const NAV = [
     match: '/timeline',
     children: [
       { to: '/timeline',                  label: 'DT Schedule',      end: true },
-      { to: '/timeline/item-date-matrix', label: 'Item Date Matrix'             },
     ],
   },
   {
@@ -26,9 +25,7 @@ const NAV = [
       { to: '/trackers/item-schedule',       label: 'Item Schedule'      },
       { to: '/trackers/rfis',               label: 'RFI Schedule'        },
       { to: '/trackers/variations',         label: 'Variation Schedule'  },
-      { to: '/trackers/production-schedule', label: 'Production Schedule' },
       { to: '/trackers/finishes-schedule',  label: 'Finishes Schedule'   },
-      { to: '/trackers/hardware-schedule',  label: 'Hardware Schedule'   },
     ],
   },
   {
@@ -36,10 +33,8 @@ const NAV = [
     match: '/drawings',
     children: [
       { to: '/drawings',                label: 'Register',             end: true },
-      { to: '/drawings/comment-review', label: 'Client Comment Review'           },
     ],
   },
-  { to: '/team', label: 'TEAM' },
 ];
 
 // ── Colours ───────────────────────────────────────────────────────────────────

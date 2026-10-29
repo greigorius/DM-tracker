@@ -5,6 +5,14 @@
 [functions]
   node_bundler = "esbuild"
 
+# Hub v2 functions declare their own paths (config.path) and need no redirects:
+#   api-read            GET  /api/snapshot, /api/bootstrap
+#   api-write           POST /api/actions, /api/rfis, /api/variations, /api/sync-now
+#                       PATCH /api/items/:id
+#   sync-snapshots      scheduled, every 5 minutes
+#   sync-full-background  nightly / first-run full rebuild
+# GET /api/rfis and /api/variations below still serve the legacy tracker pages.
+
 # ── API rewrites → Netlify Functions ─────────────────────────────────────────
 [[redirects]]
   from   = "/api/finishes-schedule"
@@ -32,16 +40,6 @@
   status = 200
 
 [[redirects]]
-  from   = "/api/stats"
-  to     = "/.netlify/functions/stats"
-  status = 200
-
-[[redirects]]
-  from   = "/api/rfis"
-  to     = "/.netlify/functions/rfis"
-  status = 200
-
-[[redirects]]
   from   = "/api/all-items"
   to     = "/.netlify/functions/all-items"
   status = 200
@@ -57,11 +55,6 @@
   status = 200
 
 [[redirects]]
-  from   = "/api/variations"
-  to     = "/.netlify/functions/variations"
-  status = 200
-
-[[redirects]]
   from   = "/api/tdl"
   to     = "/.netlify/functions/tdl"
   status = 200
@@ -74,16 +67,6 @@
 [[redirects]]
   from   = "/api/quick-log/rfi"
   to     = "/.netlify/functions/quick-log-rfi"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/drawing-check"
-  to     = "/.netlify/functions/quick-log-drawing-check"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/comment-review"
-  to     = "/.netlify/functions/quick-log-comment-review"
   status = 200
 
 [[redirects]]
@@ -131,42 +114,6 @@
   to     = "/.netlify/functions/drawings-register"
   status = 200
 
-[[redirects]]
-  from   = "/api/dt-checker-projects"
-  to     = "/.netlify/functions/dt-checker-projects"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-suffixes"
-  to     = "/.netlify/functions/dt-checker-suffixes"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-drawings"
-  to     = "/.netlify/functions/dt-checker-drawings"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-finishes"
-  to     = "/.netlify/functions/dt-checker-finishes"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-export-pdf"
-  to     = "/.netlify/functions/dt-checker-export-pdf"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-update-phase"
-  to     = "/.netlify/functions/dt-checker-update-phase"
-  status = 200
-
-[[redirects]]
-  from   = "/api/schedule-items"
-  to     = "/.netlify/functions/schedule-items"
-  status = 200
-
-# ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

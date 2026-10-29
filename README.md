@@ -1,16 +1,27 @@
-# React + Vite
+# Axiom DL Hub
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Cockpit and tools over the Notion project DBs. React 19 + Vite + Tailwind v4, TanStack Query (persisted to IndexedDB), Netlify Functions + Netlify Blobs, Notion SDK v5 (data sources).
 
-Currently, two official plugins are available:
+## How data flows
+- **Reads never hit Notion.** Pages read cached snapshots (`/api/snapshot`, `/api/bootstrap`) served from Netlify Blobs (`snap/<db>`).
+- **Sync:** `sync-snapshots` runs every 5 minutes (incremental, `last_edited_time` filter, 350 ms between queries, 429 backoff). A nightly full rebuild (and first-run build) runs in `sync-full-background`. `POST /api/sync-now` is the header's Sync now button.
+- **Writes** (`POST /api/actions|rfis|variations`, `PATCH /api/items/:id`) go to Notion, then patch the snapshot and the Just logged event list, so counts are right straight away.
+- Shared logic lives in `hub-core/` (used by the Netlify functions, the local Express server and — for `derive.js` — the browser).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local dev
+```
+npm install
+npm run server   # Express on :3001 — hub API + legacy routes; syncs to .cache/blobs every 5 min
+npm run dev      # Vite on :5173, proxies /api → :3001
+npm run sync     # one-off incremental sync   (npm run sync -- --full for a rebuild)
+```
 
-## React Compiler
+## Env
+See `.env.example`. `NOTION_TOKEN` is required; the integration needs access to Tasks, RFIs, Variations, Submissions, Master Drawing Schedule, Actions & Info, To Do, Projects, Clients and Team. Tool tiles that aren't in the Hub yet link to `VITE_URL_*`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Rules
+- "Axiom" never appears as a BIC / raised-by / owner value — the DM's value is **DM**. Mappers rewrite it and writes reject it.
+- Programme and delivery dates are only set in the Scheduling Tool. Nothing in the Hub writes them.
+- UI: tokens in `src/styles/tokens.css`, components in `src/components/ui/`. Pages don't define their own colours.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Build notes and open items: `HUB-V2.md`.

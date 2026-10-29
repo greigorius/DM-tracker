@@ -23,7 +23,6 @@ const PREFETCH_ENDPOINTS = [
   ['task-categories', '/api/task-categories'],
   ['rfi-schedule',   '/api/rfi-schedule'],
   ['variations-v4',  '/api/variations'],
-  ['schedule-items', '/api/schedule-items'],
 ];
 
 export function AppDataProvider({ children }) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
+import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/constants.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 import QuickLogBar from '../components/QuickLogBar.jsx';
 import MiniTimeline from '../components/MiniTimeline.jsx';
