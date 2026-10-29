@@ -43,6 +43,7 @@ export function TrackerPage({
       projects,
       team,
       itemOf: r => items.get(r.itemIds?.[0]),
+      vcs: new Map((data.variations || []).map(v => [v.id, v])),
     };
     c.projectOf = projectOf ? r => projectOf(r, c) : r => items.get(r.itemIds?.[0])?.projectId ?? null;
     return c;

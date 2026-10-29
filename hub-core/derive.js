@@ -181,6 +181,9 @@ export function eventForNewRow(db, row, itemsById, source) {
     case 'submissions':
       return makeEvent({ kind: 'submission', row, at, itemId, projectId, source: 'via Drawing Flow',
         summary: [row.stage, row.revision, row.title].filter(Boolean).join(' · '), blocking: !!row.blocked });
+    case 'todo':
+      return makeEvent({ kind: 'task', row, at, itemId, projectId, source: source || 'Notion',
+        summary: `${row.number != null ? `TD-${String(row.number).padStart(3, '0')} ` : ''}${row.title || ''}`.trim() });
     default:
       return null;
   }

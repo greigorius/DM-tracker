@@ -66,7 +66,14 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 - The To Do mapper now also reads ID, Task Hours (Est), Design Stage, Change Task, Related RFI and Related Variation. `MAPPER_VERSION` 3 makes the next sync rebuild the snapshots.
 - **Daily Brief** has a View toggle: *By section* (as before) or *By item*. By item shows one collapsible card per item, most urgent first. Each card holds that item's DM actions, chase actions, RFIs, VCs, drawings back with DTs, programme dates in the window, and recent activity. The view choice is remembered.
 
+## Actions → Tasks (29 Oct, 15:45)
+- New two-way relation: **Actions & Info "Task" ↔ To Do "From Action"**.
+- Triage action strip has a **Add to Tasks** tick. It opens task fields: description, person, start/end, est hours, change task + variation, RFI. **Save & move to Tasks** creates the To Do row linked to the action, then ticks the action Checked and logs "moved to Tasks (TD-n)" in its Response Log (`POST /api/actions/:id/to-task`). An action already in Tasks is refused (409) and shows a link instead. The action must be linked to an item.
+- Tasks page uses Task Done as the only open/done flag, drops design stage, and shows the linked variation and a "From action" tag. To Do rows are editable through `PATCH /api/records/todo/:id` (no UI yet).
+- `npm run audit:todo` (run locally) backs up every To Do row to `_archive/` and writes `docs/todo-audit.md`. That file lists each property's formula, what reads it, and which Items formulas depend on To Do. It's the input for the strip-back.
+
 ## Still to do
+- Strip the To Do DB back (option A) once `docs/todo-audit.md` has been reviewed.
 - Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
 - Lighthouse check on the deployed site.

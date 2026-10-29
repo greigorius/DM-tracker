@@ -187,6 +187,7 @@ export const mappers = {
     from: v(page, 'From'),
     received: day(v(page, 'Received')),
     log: v(page, 'Response Log'),
+    taskIds: ids(page, 'Task'),
   }),
 
   todo: page => ({
@@ -204,6 +205,7 @@ export const mappers = {
     changeTask: v(page, 'Change Task'),
     rfiIds: ids(page, 'Related RFI'),
     vcIds: ids(page, 'Related Variation'),
+    actionIds: ids(page, 'From Action'),
   }),
 
   projects: page => ({

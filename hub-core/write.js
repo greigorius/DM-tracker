@@ -147,6 +147,11 @@ const FIELD_MAP = {
     pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'],
   },
   submissions: { dtId: ['DT', 'rel1'] },
+  todo: {
+    title: ['Item Description', 'title'], done: ['Task Done', 'check'], personIds: ['Person', 'rel'], itemIds: ['Item', 'rel'],
+    start: ['Start Date', 'date'], end: ['End Date (Manual)', 'date'], hours: ['Task Hours (Est)', 'number'],
+    changeTask: ['Change Task', 'check'], vcIds: ['Related Variation', 'rel'], rfiIds: ['Related RFI', 'rel'],
+  },
   meetings: { itemIds: ['Items', 'rel'] },
 };
 const PARTY_FIELDS = new Set(['bic', 'tbcBy', 'raisedBy']);
@@ -162,6 +167,7 @@ function toProp(kind, value) {
     case 'text': return { rich_text: value ? text(value) : [] };
     case 'rel': return rel(value || []);
     case 'rel1': return rel(value ? [value] : []);
+    case 'title': return { title: text(value || '') };
     default: throw bad(`Unknown field kind ${kind}`);
   }
 }
@@ -204,4 +210,52 @@ export async function trashRecord(db, id, restore = false) {
   const row = { ...mapPage(db, page), archived: !restore };
   await patchSnapshot(db, row);
   return { row };
+}
+
+// ── Action → To Do task ─────────────────────────────────────────────────────
+// POST /api/actions/:id/to-task  { title?, personId?, start?, end?, hours?, changeTask?, vcId?, rfiId? }
+// Creates the To Do row (linked back through "From Action"), then closes the
+// action and logs the move in its Response Log. Refuses if already moved.
+export async function actionToTask(id, body = {}) {
+  const store = await getHubStore();
+  const action = (await readSnapshot(store, 'actions')).rows.find(r => r.id === id);
+  if (!action) throw bad('Action not found', 404);
+  if (action.taskIds?.length) throw bad('This action is already in Tasks', 409);
+  const itemId = body.itemId || action.itemIds?.[0];
+  if (!itemId) throw bad('Link the action to an item first');
+  const title = (body.title || action.title || '').trim();
+  if (!title) throw bad('Task description is required');
+  const hours = body.hours === '' || body.hours == null ? null : Number(body.hours);
+  if (hours != null && (!Number.isFinite(hours) || hours < 0)) throw bad('Hours must be a positive number');
+
+  const props = {
+    'Item Description': { title: text(title) },
+    Item: rel([itemId]),
+    Person: rel([body.personId || action.personIds?.[0]]),
+    'Start Date': date(body.start || londonToday()),
+    'End Date (Manual)': date(body.end || action.due || null),
+    'Task Hours (Est)': { number: hours },
+    'Change Task': { checkbox: !!body.changeTask },
+    'Related Variation': rel([body.vcId]),
+    'Related RFI': rel([body.rfiId]),
+    'Task Done': { checkbox: false },
+    'From Action': rel([id]),
+  };
+  const page = await withRetry(() => notion().pages.create({ parent: { type: 'data_source_id', data_source_id: DATA_SOURCES.todo }, properties: props }));
+  const task = mapPage('todo', page);
+  await patchSnapshot('todo', task);
+
+  const ref = task.number != null ? `TD-${String(task.number).padStart(3, '0')}` : 'Tasks';
+  const line = `${londonToday()} — moved to Tasks (${ref})`;
+  const aPage = await withRetry(() => notion().pages.update({ page_id: id, properties: {
+    Checked: { checkbox: true },
+    Task: rel([task.id]),
+    'Response Log': { rich_text: text(action.log ? `${line}\n${action.log}` : line) },
+  } }));
+  const actionRow = mapPage('actions', aPage);
+  await patchSnapshot('actions', actionRow);
+
+  const event = eventForNewRow('todo', task, await itemsIndex(), 'Triage');
+  if (event) await appendEvents(store, [event]);
+  return { row: task, action: actionRow, event };
 }

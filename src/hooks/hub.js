@@ -206,6 +206,26 @@ export function useTrashRecord(db) {
   });
 }
 
+// Move an action into the To Do list: creates the task, closes the action.
+export function useActionToTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, task }) => api(`/api/actions/${id}/to-task`, { method: 'POST', body: task }),
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: keys.snapshot('actions') });
+      const prev = qc.getQueryData(keys.snapshot('actions'));
+      qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === id ? { ...r, done: true } : r)) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot('actions'), ctx.prev); },
+    onSuccess: ({ row, action }) => {
+      qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === action.id ? action : r)) }));
+      qc.setQueryData(keys.snapshot('todo'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] }));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
+
 // Friendly field names → snapshot row shape, for the optimistic patch.
 function applyLocal(db, row, set) {
   const r = { ...row, dates: row.dates && { ...row.dates }, dt: row.dt && { ...row.dt } };

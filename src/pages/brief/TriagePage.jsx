@@ -6,7 +6,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, Badge, Button, Tabs, SkeletonRows, useToast, cx } from '../../components/ui/index.js';
 import { SearchBox } from '../../components/ui/table.jsx';
-import { useUpdateRecord, useTrashRecord, useBootstrap } from '../../hooks/hub.js';
+import { useUpdateRecord, useTrashRecord, useBootstrap, useActionToTask } from '../../hooks/hub.js';
 import { addDays, OPEN_RFI_STATUSES } from '../../../hub-core/derive.js';
 import { groupOf, ageDays, fmtDay, bicTone, extendDue, BICS, ACTIVE_ITEM_STATUSES, latestSubmissions } from './shared.jsx';
 
@@ -69,6 +69,50 @@ function ItemPicker({ d, value, onChange }) {
   );
 }
 
+// ── Add to Tasks: the To Do fields an action needs when it becomes a task ──
+const notionUrl = id => `https://www.notion.so/${String(id).replace(/-/g, '')}`;
+function TaskFields({ row, d, itemIds, value, onChange }) {
+  const itemId = itemIds?.[0];
+  if (row.taskIds?.length) {
+    return <Field label="Tasks"><a href={notionUrl(row.taskIds[0])} target="_blank" rel="noreferrer" className="text-[14px] text-info no-underline hover:underline">Already in Tasks ↗</a></Field>;
+  }
+  const vcs = d.all.variations.filter(v => !v.archived && v.itemIds.includes(itemId));
+  const rfis = d.all.rfis.filter(r => !r.archived && r.itemIds.includes(itemId));
+  const people = [...d.all.team].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(p => ({ value: p.id, label: p.title }));
+  const tick = on => {
+    if (!on) return onChange(undefined);
+    const openVcs = vcs.filter(v => !['Declined', 'Withdrawn'].includes(v.status));
+    onChange({ title: row.title || '', personId: row.personIds[0] || '', start: d.today, end: row.due && row.due >= d.today ? row.due : d.today, hours: '', changeTask: openVcs.length > 0, vcId: openVcs.length === 1 ? openVcs[0].id : '', rfiId: '' });
+  };
+  const put = k => v => onChange({ ...value, [k]: v });
+  return (
+    <>
+      <Field label="Tasks" changed={!!value}>
+        <Check label="Add to Tasks (closes this action)" checked={!!value} onChange={tick} />
+        {value && !itemId && <Badge tone="danger">Link an item first</Badge>}
+      </Field>
+      {value && (
+        <div className="flex flex-col gap-2 ml-0 sm:ml-4 pl-3 border-l-2 border-accent">
+          <Field label="Task"><input type="text" aria-label="Task description" value={value.title} onChange={e => put('title')(e.target.value)} className={cx(ctl, 'flex-1 min-w-[220px]')} /></Field>
+          <Field label="Person"><Sel label="Person" value={value.personId} onChange={put('personId')} blank="Unassigned" options={people} /></Field>
+          <Field label="Start / end">
+            <DateIn label="Start" value={value.start} onChange={put('start')} />
+            <span className="text-muted">→</span>
+            <DateIn label="End" value={value.end} onChange={put('end')} />
+          </Field>
+          <Field label="Est hours"><input type="number" min="0" step="0.5" inputMode="decimal" aria-label="Estimated hours" value={value.hours} onChange={e => put('hours')(e.target.value)} className={cx(ctl, 'w-28')} /></Field>
+          <Field label="Change task">
+            <Check label="Variation work" checked={value.changeTask} onChange={put('changeTask')} />
+            {value.changeTask && <Sel label="Variation" value={value.vcId} onChange={put('vcId')} blank={vcs.length ? 'Pick a variation…' : 'No variations on this item'} options={vcs.map(v => ({ value: v.id, label: `${v.code || 'VC'} ${v.title || ''}`.trim() }))} />}
+            {value.changeTask && !value.vcId && <Badge tone="danger">Link the variation so the hours can be traced</Badge>}
+          </Field>
+          {rfis.length > 0 && <Field label="RFI"><Sel label="Related RFI" value={value.rfiId} onChange={put('rfiId')} blank="None" options={rfis.map(r => ({ value: r.id, label: `RFI-${String(r.number ?? '?').padStart(3, '0')} ${r.title || ''}`.trim() }))} /></Field>}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Row with draft + edit strip ─────────────────────────────────────────────
 function useDrafts() {
   const [drafts, setDrafts] = useState({});
@@ -89,6 +133,7 @@ function useDrafts() {
 function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
   const db = DB_OF[kind];
   const update = useUpdateRecord(db);
+  const toTask = useActionToTask();
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
   const draft = drafts.get(row.id);
@@ -97,15 +142,24 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
   const n = Object.keys(draft).length;
   const t = d.today;
 
-  const save = () => {
-    const { chase, ...set_ } = draft;
+  const save = async () => {
+    const { chase, task, ...set_ } = draft;
     if (kind === 'action' && 'dtId' in set_ && set_.dtId) set_.bic = 'DT';
     if (kind === 'item' && 'dtId' in set_ && set_.dtId && !('bic' in set_)) set_.bic = 'DT';
-    update.mutate({ id: row.id, set: set_, chase }, {
-      onSuccess: () => { drafts.clear(row.id); toast.show('Saved to Notion'); onSaved?.(); },
-      onError: e => toast.show(`Not saved: ${e.message}`, { tone: 'danger', ms: 8000 }),
-    });
+    if (task) delete set_.done; // moving closes the action anyway
+    try {
+      if (Object.keys(set_).length || chase) await update.mutateAsync({ id: row.id, set: set_, chase });
+      if (task) {
+        const res = await toTask.mutateAsync({ id: row.id, task: { ...task, itemId: (set_.itemIds || row.itemIds)?.[0] } });
+        const n = res.row.number != null ? `TD-${String(res.row.number).padStart(3, '0')}` : 'Tasks';
+        toast.show(`Moved to Tasks as ${n}; action closed`);
+      } else toast.show('Saved to Notion');
+      drafts.clear(row.id); onSaved?.();
+    } catch (e) {
+      toast.show(`Not saved: ${e.message}`, { tone: 'danger', ms: 8000 });
+    }
   };
+  const busy = update.isPending || toTask.isPending;
 
   let fields;
   if (kind === 'action') {
@@ -123,6 +177,7 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
         <Field label="Chase note" changed={!!draft.chase}>
           <input type="text" value={draft.chase || ''} onChange={e => drafts.set(row.id, 'chase', e.target.value)} placeholder="Optional: who you chased, how. Logged on save" className={cx(ctl, 'flex-1 min-w-[220px]')} />
         </Field>
+        <TaskFields row={row} d={d} itemIds={val('itemIds', row.itemIds)} value={draft.task} onChange={v => drafts.set(row.id, 'task', v, undefined)} />
         {row.log && <Field label="History"><pre className="m-0 flex-1 min-w-0 max-h-28 overflow-auto font-mono text-[12px] text-muted whitespace-pre-wrap border-l-2 border-line pl-3">{row.log}</pre></Field>}
       </>
     );
@@ -181,7 +236,7 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
     <div className="px-4 pb-4 pt-1 sm:pl-14 flex flex-col gap-2 bg-ground/40">
       {fields}
       <div className="flex flex-wrap items-center gap-2 pt-3 mt-1 border-t border-line">
-        <Button onClick={save} disabled={!n || update.isPending}>{update.isPending ? 'Saving…' : n ? `Save ${n} change${n === 1 ? '' : 's'}` : 'Save'}</Button>
+        <Button onClick={save} disabled={!n || busy}>{busy ? 'Saving…' : draft.task ? 'Save & move to Tasks' : n ? `Save ${n} change${n === 1 ? '' : 's'}` : 'Save'}</Button>
         {n > 0 && <Button variant="secondary" onClick={() => drafts.clear(row.id)}>Discard</Button>}
         {n > 0 && <span className="font-mono text-[12px] text-accent">Not saved yet</span>}
         <span className="ml-auto">

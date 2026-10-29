@@ -43,8 +43,8 @@ export function Badge({ tone = 'muted', className, children }) {
   return <span className={cx('inline-flex items-center px-1.5 py-0.5 border font-mono text-[11px] leading-none tabular-nums whitespace-nowrap', TONES[tone], className)}>{children}</span>;
 }
 
-const TYPE_TONE = { item: 'muted', action: 'accent', note: 'muted', rfi: 'info', vc: 'accent', submission: 'ok', status: 'muted', bic: 'muted', date: 'info' };
-const TYPE_LABEL = { item: 'Item', action: 'Action', note: 'Note', rfi: 'RFI', vc: 'VC', submission: 'Sub', status: 'Status', bic: 'BIC', date: 'Date' };
+const TYPE_TONE = { item: 'muted', action: 'accent', note: 'muted', rfi: 'info', vc: 'accent', submission: 'ok', status: 'muted', bic: 'muted', date: 'info', task: 'ok' };
+const TYPE_LABEL = { item: 'Item', action: 'Action', note: 'Note', rfi: 'RFI', vc: 'VC', submission: 'Sub', status: 'Status', bic: 'BIC', date: 'Date', task: 'Task' };
 
 export function TypeTag({ kind, blocking }) {
   return (
