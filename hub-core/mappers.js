@@ -71,6 +71,8 @@ export const mappers = {
     blockerNote: v(page, 'Blocker Note'),
     lockStatus: v(page, 'Lock Status'),
     drawingRef: v(page, 'Drawing Ref'),
+    holdDays: v(page, 'Hold Days'),
+    noClientApproval: v(page, 'No Client Approval'),
     dates: {
       instruction: day(v(page, 'Date of Instruction')),
       dt1Start: day(v(page, '1st DT Start (Plan)')),
@@ -80,6 +82,17 @@ export const mappers = {
       production: day(v(page, 'Production Date (Actual)')) || day(v(page, 'Production Date (Plan)')),
       install: day(v(page, 'Install Date (Actual)')) || day(v(page, 'Install Date (Plan)')),
       woRaised: day(v(page, 'WO Raised')),
+    },
+    // DT milestones: planned/adjusted vs actual (read by Brief, Triage and Timeline; never written by the Hub's Cockpit)
+    dt: {
+      s4Start: day(v(page, '1st DT Start (Plan)')), s4StartAct: day(v(page, '1st DT Start (Actual)')),
+      s4Del: day(v(page, '1st DT Delivery (Adj)')) || day(v(page, '1st DT Delivery (Plan)')), s4DelAct: day(v(page, '1st DT Delivery (Actual)')),
+      s5Start: day(v(page, '2nd DT Start (Adj)')) || day(v(page, '2nd DT Start (Plan)')), s5StartAct: day(v(page, '2nd DT Start (Actual)')),
+      s5Del: day(v(page, '2nd DT Delivery (Adj)')) || day(v(page, '2nd DT Delivery (Plan)')), s5DelAct: day(v(page, '2nd DT Delivery (Actual)')),
+      cStart: day(v(page, 'Constr. DT Start (Adj)')) || day(v(page, 'Constr. DT Start (Plan)')), cStartAct: day(v(page, 'Constr. DT Start (Actual)')),
+      cDel: day(v(page, 'Constr. DT Delivery (Adj)')) || day(v(page, 'Constr. DT Delivery (Plan)')), cDelAct: day(v(page, 'Constr. DT Delivery (Actual)')),
+      productionAct: day(v(page, 'Production Date (Actual)')),
+      installAct: day(v(page, 'Install Date (Actual)')),
     },
   }),
 
@@ -97,6 +110,7 @@ export const mappers = {
     due: day(v(page, 'Response Due')),
     responded: day(v(page, 'Date Responded')),
     closed: day(v(page, 'Date Closed')),
+    answered: !!v(page, 'Response'),
   }),
 
   variations: page => {
@@ -115,6 +129,8 @@ export const mappers = {
       itemIds: ids(page, 'Items'),
       requested: day(v(page, 'Change Request Date')),
       decision: day(v(page, 'Decision Date')),
+      addedDays: v(page, 'Added Days'),
+      pauseOverride: v(page, 'Pause Override'),
     };
   },
 
@@ -134,17 +150,26 @@ export const mappers = {
     submitted: day(v(page, 'Submitted')),
     reviewed: day(v(page, 'Reviewed')),
     issued: day(v(page, 'Issued')),
+    qaRound: v(page, 'QA Round'),
+    bicSince: day(v(page, 'BIC Since')),
   }),
 
   drawings: page => ({
     ...base(page),
     title: v(page, 'Drawing Number'),
-    name: v(page, 'Drawing Title 1'),
+    name: [v(page, 'Drawing Title 1'), v(page, 'Drawing Title 2'), v(page, 'Drawing Title 3')].filter(Boolean).join(' · ') || null,
     status: v(page, 'Drawing Status'),
     stage: v(page, 'Submission Stage'),
     rev: v(page, 'Rev'),
+    type: v(page, 'Dwg No. Assigned'),
     itemIds: ids(page, 'Item'),
     lockStatus: v(page, 'Lock Status'),
+    noClientApproval: v(page, 'No Client Approval'),
+    s4: { submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')) },
+    s5: { submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')) },
+    c01: { submitted: day(v(page, 'C01 Submit Date (Actual)')), signOff: day(v(page, 'C01 Sign Off')) },
+    prd: { status: v(page, 'PRD Status'), statusDate: day(v(page, 'PRD Status Date')), scheduled: day(v(page, 'Schedule Production (Actual)')) },
+    holdNotes: v(page, 'Hold Notes'),
   }),
 
   actions: page => ({
@@ -161,6 +186,7 @@ export const mappers = {
     source: v(page, 'Source'),
     from: v(page, 'From'),
     received: day(v(page, 'Received')),
+    log: v(page, 'Response Log'),
   }),
 
   todo: page => ({
@@ -187,6 +213,48 @@ export const mappers = {
   clients: page => ({
     ...base(page),
     title: v(page, 'Company'),
+  }),
+
+  activity: page => ({
+    ...base(page),
+    title: v(page, 'Entry'),
+    tag: v(page, 'Tag'),
+    source: v(page, 'Source'),
+    itemIds: ids(page, 'Task'),
+    at: v(page, 'Event Date') || page.created_time,
+  }),
+
+  meetings: page => ({
+    ...base(page),
+    title: v(page, 'Name'),
+    itemIds: ids(page, 'Items'),
+  }),
+
+  finishes: page => ({
+    ...base(page),
+    title: v(page, 'CAD Ref'),
+    specRefs: v(page, 'Spec Ref') || [],
+    approved: v(page, 'APPROVED'),
+    actionRequired: v(page, 'Action Required'),
+    sampleType: v(page, 'Sample Type'),
+    sampleRef: v(page, 'Sample Ref'),
+    brand: v(page, 'Brand'),
+    productCode: v(page, 'Product Code'),
+    supplier: v(page, 'Supplier'),
+    materialType: v(page, 'Material Type'),
+    faceMaterial: v(page, 'Face Material'),
+    finish: v(page, 'Finish'),
+    core: v(page, 'Core'),
+    matchingPattern: v(page, 'Matching Pattern'),
+    sheen: v(page, 'Sheen (%)'),
+    lipping: v(page, 'Lipping'),
+    finishInfo: v(page, 'Finish Info'),
+    fireRating: v(page, 'Fire Rating'),
+    submittedOn: day(v(page, 'Submitted on')),
+    itemIds: ids(page, 'Items'),
+    projectIds: ids(page, 'Project'),
+    notes: v(page, 'Notes'),
+    comments: v(page, 'Comments'),
   }),
 
   team: page => ({

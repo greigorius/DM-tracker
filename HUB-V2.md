@@ -48,10 +48,18 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 - Tasks, Items, Finishes, Drawings, Timeline, Client and Project pages: old colour constants replaced with the tokens, rounded corners and shadows removed, and a scoped compatibility layer (`.legacy` in `tokens.css`) sizes their controls and tables like the kit. They still fetch through the legacy endpoints until rebuilt.
 - AppNav and QuickEntryModal removed (the nav "+" went with AppNav). QuickLogBar remains on the Client and Project pages pending the consolidation decision.
 
+## Brief tab and full page rebuild (29 Oct, 12:30)
+- **Brief** replaces Tasks in the nav, with **Daily Brief** (default) and **Triage** sub-tabs sharing one project filter. Both are ports of the standalone artifacts, now reading the snapshot.
+  - Daily Brief: headline counts, My moves (bucketed), Chase list (External / Internal / DT team, by-person, drawings back with DTs), programme window, open RFIs, recent movement.
+  - Triage: My moves / External / Internal / DT team / Unfiled / All actions, Items, RFIs, Variations, Data fixes. Row edit strips with draft + Save, chase notes logged to Response Log, bulk edit, delete to Notion Trash with Undo. Cockpit count cards land here (`?filter=`).
+  - Triage writes the same fields the artifact did, including Date of Instruction, Hold Days and DT actual dates — inputs the Scheduling Tool reads, not its calculated dates.
+- New snapshot DBs: Item Activity Log, Meetings, Finishes. More fields on tasks, actions, RFIs, VCs, submissions and drawings. `MAPPER_VERSION` makes the next sync rebuild every snapshot so the new fields appear.
+- New write endpoints: `PATCH /api/records/:db/:id` (whitelisted fields per DB) and `POST /api/records/:db/:id/trash|restore`.
+- Items, Drawings, Finishes, Timeline, Project and Client pages rebuilt on the snapshot and UI kit. Every legacy page, endpoint, Netlify function, `server/notionHelpers.js`, AppDataContext, usePageCache, QuickLogBar and the `.legacy` style layer are gone. The Tasks (To Do list) page is retired.
+
 ## Still to do
-- Rebuild the remaining legacy pages (Tasks, Items, Finishes, Drawings, Timeline, Client/Project home) on `TrackerPage` / the UI kit from `usePageCache` + legacy endpoints to `useSnapshot`, and restyle each with the UI kit. Then delete `AppNav`, `AppDataContext`, `usePageCache`, `server/notionHelpers.js` and the legacy functions.
-- Triage is read-only; add multi-field editing.
-- Port Daily Brief, Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`). The Triage tile opens the Daily Triage artifact; the count cards open the Hub's read-only `/triage` lists.
+- Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
+- Decide whether the To Do List DB is still needed (Tasks page retired; still synced as `snap/todo`).
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
 - Lighthouse check on the deployed site.
 

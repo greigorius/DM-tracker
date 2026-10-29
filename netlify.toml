@@ -5,115 +5,15 @@
 [functions]
   node_bundler = "esbuild"
 
-# Hub v2 functions declare their own paths (config.path) and need no redirects:
-#   api-read            GET  /api/snapshot, /api/bootstrap
-#   api-write           POST /api/actions, /api/rfis, /api/variations, /api/sync-now
-#                       PATCH /api/items/:id
-#   sync-snapshots      scheduled, every 5 minutes
+# Hub functions declare their own paths (config.path), so no API redirects:
+#   api-read              GET   /api/snapshot, /api/bootstrap
+#   api-write             POST  /api/actions, /api/rfis, /api/variations, /api/sync-now,
+#                               /api/records/:db/:id/trash|restore
+#                         PATCH /api/items/:id, /api/records/:db/:id
+#   sync-snapshots        scheduled, every 5 minutes
 #   sync-full-background  nightly / first-run full rebuild
-# GET /api/rfis and /api/variations below still serve the legacy tracker pages.
 
-# ── API rewrites → Netlify Functions ─────────────────────────────────────────
-[[redirects]]
-  from   = "/api/finishes-schedule"
-  to     = "/.netlify/functions/finishes-schedule"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects/:id/items"
-  to     = "/.netlify/functions/project-items"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects/:id/timeline"
-  to     = "/.netlify/functions/project-timeline"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects/:id/drawings"
-  to     = "/.netlify/functions/project-drawings"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects"
-  to     = "/.netlify/functions/projects"
-  status = 200
-
-[[redirects]]
-  from   = "/api/all-items"
-  to     = "/.netlify/functions/all-items"
-  status = 200
-
-[[redirects]]
-  from   = "/api/item-drawings"
-  to     = "/.netlify/functions/item-drawings"
-  status = 200
-
-[[redirects]]
-  from   = "/api/rfi-schedule"
-  to     = "/.netlify/functions/rfi-schedule"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tdl"
-  to     = "/.netlify/functions/tdl"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/todo"
-  to     = "/.netlify/functions/quick-log-todo"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/rfi"
-  to     = "/.netlify/functions/quick-log-rfi"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/production"
-  to     = "/.netlify/functions/quick-log-production"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tasks/update"
-  to     = "/.netlify/functions/task-update"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tasks"
-  to     = "/.netlify/functions/tasks"
-  status = 200
-
-[[redirects]]
-  from   = "/api/task-categories"
-  to     = "/.netlify/functions/task-categories"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/update"
-  to     = "/.netlify/functions/drawings-register-update"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/bulk"
-  to     = "/.netlify/functions/drawings-register-bulk"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/items"
-  to     = "/.netlify/functions/drawings-register-items"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/chunk"
-  to     = "/.netlify/functions/drawings-register-chunk"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register"
-  to     = "/.netlify/functions/drawings-register"
-  status = 200
-
+# ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

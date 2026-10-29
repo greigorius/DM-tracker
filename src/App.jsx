@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { ROUTES } from './routes.jsx';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ROUTES, pages } from './routes.jsx';
+
+const { briefLayout: BriefLayout, dailyBrief: DailyBrief, triage: TriagePage } = pages;
 import Cockpit from './pages/Cockpit.jsx';
-import { AppDataProvider } from './context/AppDataContext.jsx';
 import { SkeletonRows } from './components/ui/index.js';
 
 function PageFallback() {
@@ -14,28 +15,28 @@ function PageFallback() {
   );
 }
 
-// Legacy pages still fetch through AppDataContext / usePageCache until they are
-// ported to the snapshot hooks. Scoped here so the Cockpit never triggers them.
-function LegacyShell() {
-  return <AppDataProvider><Outlet /></AppDataProvider>;
+function KeepQuery({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
 }
 
 export default function App() {
-  const v2 = ROUTES.filter(([, , o]) => !o?.legacy);
-  const legacy = ROUTES.filter(([, , o]) => o?.legacy);
   return (
     <BrowserRouter>
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Cockpit />} />
-          {v2.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
-          <Route element={<LegacyShell />}>
-            {legacy.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
+          <Route path="/brief" element={<BriefLayout />}>
+            <Route index element={<DailyBrief />} />
+            <Route path="triage" element={<TriagePage />} />
           </Route>
+          {ROUTES.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
 
           {/* Old paths */}
-          <Route path="/tasks" element={<Navigate to="/trackers/task-schedule" replace />} />
-          <Route path="/trackers" element={<Navigate to="/trackers/task-schedule" replace />} />
+          <Route path="/triage" element={<KeepQuery to="/brief/triage" />} />
+          <Route path="/tasks" element={<Navigate to="/brief" replace />} />
+          <Route path="/trackers/task-schedule" element={<Navigate to="/brief" replace />} />
+          <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

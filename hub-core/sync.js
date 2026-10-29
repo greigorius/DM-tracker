@@ -2,7 +2,7 @@
 // plus a full rebuild nightly to catch deletes and archives. Time-boxed so it
 // fits inside a function timeout; unfinished full rebuilds resume next run.
 
-import { SYNC_ORDER, snapKey, META_KEY, SCHEMA_KEY, EVENTS_KEY, MAX_EVENTS } from './config.js';
+import { SYNC_ORDER, snapKey, META_KEY, SCHEMA_KEY, EVENTS_KEY, MAX_EVENTS, MAPPER_VERSION, SCHEMA_VERSION } from './config.js';
 import { getHubStore } from './store.js';
 import { queryAllPages, retrieveSchemaOptions } from './notion.js';
 import { mapPage } from './mappers.js';
@@ -56,7 +56,7 @@ function merge(db, snap, changedRows, itemsById, { full }) {
 
 async function syncDb(store, db, { full, deadline, itemsById }) {
   const snap = await readSnapshot(store, db);
-  const isFull = full || !snap.syncedAt;
+  const isFull = full || !snap.syncedAt || snap.mapperVersion !== MAPPER_VERSION;
   const startedAt = new Date().toISOString();
   // Notion rounds last_edited_time to the minute, so overlap by 2 minutes.
   const since = snap.syncedAt ? new Date(Date.parse(snap.syncedAt) - 120_000).toISOString() : null;
@@ -65,7 +65,7 @@ async function syncDb(store, db, { full, deadline, itemsById }) {
   const pages = await queryAllPages(db, { filter, deadline });
   const changed = pages.map(p => mapPage(db, p));
   const { rows, events } = merge(db, snap, changed, itemsById, { full: isFull });
-  await store.setJSON(snapKey(db), { syncedAt: startedAt, fullAt: isFull ? startedAt : snap.fullAt || null, rows });
+  await store.setJSON(snapKey(db), { syncedAt: startedAt, fullAt: isFull ? startedAt : snap.fullAt || null, mapperVersion: MAPPER_VERSION, rows });
   return { db, changed: changed.length, total: rows.length, full: isFull, events };
 }
 
@@ -101,7 +101,10 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
   for (const db of dbs) {
     if (Date.now() > deadline) { skipped.push(db); continue; }
     const full = meta.fullQueue.includes(db);
-    if (!allowFull && (full || !(await store.getJSON(snapKey(db)))?.syncedAt)) { needsFull.push(db); continue; }
+    if (!allowFull) {
+      const cur = await store.getJSON(snapKey(db));
+      if (full || !cur?.syncedAt || cur.mapperVersion !== MAPPER_VERSION) { needsFull.push(db); continue; }
+    }
     try {
       const r = await syncDb(store, db, { full, deadline, itemsById });
       results.push({ db: r.db, changed: r.changed, total: r.total, full: r.full });
@@ -121,7 +124,7 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
 
   // Refresh select options daily (or when missing).
   const schema = await store.getJSON(SCHEMA_KEY);
-  if ((!schema || !schema.fetchedAt?.startsWith(today)) && Date.now() < deadline) {
+  if ((!schema || schema.version !== SCHEMA_VERSION || !schema.fetchedAt?.startsWith(today)) && Date.now() < deadline) {
     try { await store.setJSON(SCHEMA_KEY, await retrieveSchemaOptions()); }
     catch (err) { console.error('[sync] schema:', err.message); }
   }

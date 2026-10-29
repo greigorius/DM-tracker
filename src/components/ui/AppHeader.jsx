@@ -84,12 +84,11 @@ export function AppHeader({ title, subtitle }) {
 }
 
 // Every Hub page renders inside this: same header, nav, width and gutters.
-// `legacy` scopes the compatibility styles for pages not yet rebuilt on the UI kit.
-export function PageShell({ title, subtitle, toolbar, legacy, children }) {
+export function PageShell({ title, subtitle, toolbar, children }) {
   return (
     <div className="hub">
       <AppHeader title={title} subtitle={subtitle} />
-      <main className={cx('mx-auto max-w-[1440px] px-4 sm:px-6 py-6 flex flex-col gap-6', legacy && 'legacy')}>
+      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6 flex flex-col gap-6">
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
         {children}
       </main>

@@ -132,6 +132,11 @@ export function buildLookups(s, schema = {}) {
     rfiTbcBy: ['DM', ...cleanOptions(schema.rfiTbcBy)],
     vcRaisedBy: cleanOptions(schema.vcRaisedBy).length ? cleanOptions(schema.vcRaisedBy) : ['DM', 'Architect', 'Client', 'Contractor', 'Consultant', 'Supplier'],
     statuses: cleanOptions(schema.taskStatuses),
+    phases: cleanOptions(schema.taskPhases),
+    blockers: cleanOptions(schema.taskBlockers),
+    rfiStatuses: cleanOptions(schema.rfiStatuses).length ? cleanOptions(schema.rfiStatuses) : ['Raise', 'Open', 'Close Out', 'Closed'],
+    vcStatuses: cleanOptions(schema.vcStatuses).length ? cleanOptions(schema.vcStatuses) : ['Awaiting Design Info', 'Awaiting Instruction', 'Instruction Received', 'Declined', 'Withdrawn'],
+    vcPause: cleanOptions(schema.vcPause),
     nextVc: Math.max(0, ...(s.variations || []).map(v => v.number || 0)) + 1,
     nextRfi: Math.max(0, ...(s.rfis || []).map(r => r.number || 0)) + 1,
   };
@@ -189,7 +194,8 @@ export function eventsForItemChange(prev, next, source) {
   const base = { row: next, at, itemId: next.id, projectId: next.projectId };
   if (prev.status !== next.status) out.push(makeEvent({ ...base, kind: 'status', source: source || 'Notion', summary: `${next.title}: ${prev.status || '—'} → ${next.status || '—'}` }));
   if (prev.bic !== next.bic) out.push(makeEvent({ ...base, kind: 'bic', source: source || 'Notion', summary: `${next.title}: BIC ${prev.bic || '—'} → ${next.bic || '—'}` }));
-  const changed = Object.keys(next.dates || {}).filter(k => (prev.dates || {})[k] !== next.dates[k]);
+  // Only compare keys the previous row already had, so adding a field never floods the log.
+  const changed = Object.keys(next.dates || {}).filter(k => prev.dates && k in prev.dates && prev.dates[k] !== next.dates[k]);
   if (changed.length) out.push(makeEvent({ ...base, kind: 'date', source: source || 'Scheduling', summary: `${next.title}: ${changed.map(k => `${k} ${next.dates[k] || '—'}`).join(', ')}` }));
   return out;
 }

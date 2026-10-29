@@ -5,6 +5,6 @@ import { handle } from '../../hub-core/netlify-adapter.js';
 export default req => handle(writeRoutes, req);
 
 export const config = {
-  path: ['/api/actions', '/api/rfis', '/api/variations', '/api/items/*', '/api/sync-now'],
+  path: ['/api/actions', '/api/rfis', '/api/variations', '/api/items/*', '/api/records/*', '/api/sync-now'],
   method: ['POST', 'PATCH'],
 };

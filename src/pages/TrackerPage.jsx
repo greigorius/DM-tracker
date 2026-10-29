@@ -17,25 +17,36 @@ function useStored(key, initial) {
   return [v, x => { setV(x); store.set(key, x); }];
 }
 
+const DEFAULT_GROUPINGS = [
+  { value: 'item', label: 'Group: Item', key: r => r.itemIds?.[0] ?? null, name: (k, ctx) => ctx.items.get(k)?.title || 'No item',
+    meta: (k, ctx) => ctx.projects.get(ctx.items.get(k)?.projectId) },
+  { value: 'project', label: 'Group: Project', key: (r, ctx) => ctx.projectOf(r), name: (k, ctx) => ctx.projects.get(k) || 'No project' },
+];
+
 export function TrackerPage({
   id, title, subtitle, db, statusOf, statusTone, openStatuses, columns, searchText, initialSort, filename,
+  extraDbs = [], projectOf, groupings = DEFAULT_GROUPINGS, defaultGroup = 'item', openLabel = 'Open only', headerExtra,
 }) {
-  const { data, isPending } = useSnapshots([db, 'tasks', 'projects']);
+  const { data, isPending } = useSnapshots([db, 'tasks', 'projects', 'team', ...extraDbs]);
   const [project, setProject] = useStored(`hub.${id}.project`, 'all');
   const [status, setStatus] = useStored(`hub.${id}.status`, 'open');
-  const [groupKey, setGroupKey] = useStored(`hub.${id}.group`, 'item');
+  const [groupKey, setGroupKey] = useStored(`hub.${id}.group`, defaultGroup);
   const [q, setQ] = useState('');
 
   const ctx = useMemo(() => {
     const items = new Map(data.tasks.map(i => [i.id, i]));
     const projects = new Map(data.projects.map(p => [p.id, p.title]));
-    return {
+    const team = new Map(data.team.map(p => [p.id, p.title]));
+    const c = {
+      data,
       items,
       projects,
+      team,
       itemOf: r => items.get(r.itemIds?.[0]),
-      projectOf: r => items.get(r.itemIds?.[0])?.projectId ?? null,
     };
-  }, [data.tasks, data.projects]);
+    c.projectOf = projectOf ? r => projectOf(r, c) : r => items.get(r.itemIds?.[0])?.projectId ?? null;
+    return c;
+  }, [data, projectOf]);
 
   const all = data[db];
   const statuses = useMemo(() => [...new Set(all.map(statusOf).filter(Boolean))].sort(), [all, statusOf]);
@@ -65,20 +76,19 @@ export function TrackerPage({
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [all, project, ctx, statusOf]);
 
-  const groupBy = groupKey === 'item' ? r => r.itemIds?.[0] ?? null : groupKey === 'project' ? ctx.projectOf : null;
-  const labelOf = useCallback(k => (groupKey === 'item'
-    ? (ctx.items.get(k)?.title || 'No item')
-    : (ctx.projects.get(k) || 'No project')), [groupKey, ctx]);
+  const grouping = groupings.find(g => g.value === groupKey) || null;
+  const groupBy = useMemo(() => (grouping ? r => grouping.key(r, ctx) : null), [grouping, ctx]);
+  const labelOf = useCallback(k => grouping?.name(k, ctx), [grouping, ctx]);
   const { groups, isOpen, toggle, expandAll, collapseAll } = useGroups(rows, groupBy, labelOf);
 
-  const cols = columns(ctx).filter(c => !(c.key === 'item' && groupKey === 'item') && !(c.key === 'project' && groupKey !== 'none'));
+  const cols = columns(ctx).filter(c => c.key !== groupKey && !(c.key === 'project' && groupKey === 'item'));
 
   const toolbar = (
     <>
       <SearchBox value={q} onChange={setQ} />
       <ToolbarSelect label="Project" value={project} onChange={setProject} options={[{ value: 'all', label: 'All projects' }, ...projectOptions]} />
-      <ToolbarSelect label="Status" value={status} onChange={setStatus} options={[{ value: 'open', label: 'Open only' }, { value: 'all', label: 'All statuses' }, ...statuses]} />
-      <ToolbarSelect label="Group by" value={groupKey} onChange={setGroupKey} options={[{ value: 'item', label: 'Group: Item' }, { value: 'project', label: 'Group: Project' }, { value: 'none', label: 'No grouping' }]} />
+      <ToolbarSelect label="Status" value={status} onChange={setStatus} options={[{ value: 'open', label: openLabel }, { value: 'all', label: 'All statuses' }, ...statuses]} />
+      <ToolbarSelect label="Group by" value={groupKey} onChange={setGroupKey} options={[...groupings.map(g => ({ value: g.value, label: g.label })), { value: 'none', label: 'No grouping' }]} />
       {groupKey !== 'none' && <>
         <ToolbarButton onClick={expandAll}>Expand all</ToolbarButton>
         <ToolbarButton onClick={collapseAll}>Collapse all</ToolbarButton>
@@ -90,6 +100,7 @@ export function TrackerPage({
 
   return (
     <PageShell title={title} subtitle={subtitle} toolbar={toolbar}>
+      {headerExtra?.(rows, ctx)}
       {counts.length > 0 && (
         <div className="flex flex-wrap gap-2" aria-label="Status summary">
           {counts.map(([s, n]) => (
@@ -114,7 +125,7 @@ export function TrackerPage({
             open={isOpen(g.key)}
             onToggle={() => toggle(g.key)}
             meta={<>
-              {groupKey === 'item' && <span className="hidden sm:inline font-mono text-[12px] text-muted">{ctx.projects.get(ctx.items.get(g.key)?.projectId)}</span>}
+              {grouping?.meta && <span className="hidden sm:inline font-mono text-[12px] text-muted">{grouping.meta(g.key, ctx)}</span>}
               {open > 0 && <Badge tone="accent">{open} open</Badge>}
             </>}
           >

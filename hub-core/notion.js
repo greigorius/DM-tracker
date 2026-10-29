@@ -1,7 +1,7 @@
 // Notion SDK access for sync and writes. Only api-write and sync import this.
 
 import { Client } from '@notionhq/client';
-import { DATA_SOURCES, GAP_MS } from './config.js';
+import { DATA_SOURCES, GAP_MS, SCHEMA_VERSION } from './config.js';
 
 let client = null;
 export function notion() {
@@ -49,20 +49,27 @@ export async function queryAllPages(db, { filter, deadline } = {}) {
 }
 
 export async function retrieveSchemaOptions() {
+  const cache = new Map();
   const opts = async (db, prop) => {
-    const ds = await withRetry(() => notion().dataSources.retrieve({ data_source_id: DATA_SOURCES[db] }));
-    await sleep(GAP_MS);
-    const p = ds.properties?.[prop];
-    const list = p?.[p.type]?.options || [];
-    return list.map(o => o.name);
+    if (!cache.has(db)) {
+      cache.set(db, await withRetry(() => notion().dataSources.retrieve({ data_source_id: DATA_SOURCES[db] })));
+      await sleep(GAP_MS);
+    }
+    const p = cache.get(db).properties?.[prop];
+    return (p?.[p.type]?.options || []).map(o => o.name);
   };
   return {
+    version: SCHEMA_VERSION,
     taskStatuses: await opts('tasks', 'Item Status'),
     taskBic: await opts('tasks', 'Ball In Court'),
+    taskPhases: await opts('tasks', 'DM Phase'),
+    taskBlockers: await opts('tasks', 'Blocker'),
     actionBic: await opts('actions', 'Ball in Court'),
     rfiTbcBy: await opts('rfis', 'TBC by'),
+    rfiStatuses: await opts('rfis', 'RFI Status'),
     vcRaisedBy: await opts('variations', 'Raised By'),
     vcStatuses: await opts('variations', 'Variation Status'),
+    vcPause: await opts('variations', 'Pause Override'),
     fetchedAt: new Date().toISOString(),
   };
 }

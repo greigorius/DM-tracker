@@ -3,15 +3,14 @@
 import { Sun, ListChecks, CalendarClock, GitPullRequestArrow, PenTool, CircleHelp, FileDiff, ChartColumn } from 'lucide-react';
 
 const env = import.meta.env;
+const BRIEF_DBS = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'activity', 'meetings', 'drawings'];
 
 // Defaults are the live addresses; a VITE_URL_* env var overrides any of them.
 const A = id => `https://claude.ai/artifact/${id}`;
 
 export const TOOLS = [
-  { id: 'brief', name: 'Daily Brief', path: '/brief', icon: Sun, inHub: false, href: env.VITE_URL_BRIEF || A('5sjZs2KgtwHqWZpS5dGgWp'), envVar: 'VITE_URL_BRIEF' },
-  // Opens the existing Daily Triage artifact (it can edit) until /triage is rebuilt in the Hub.
-  // The count cards still open the Hub's read-only /triage lists.
-  { id: 'triage', name: 'Triage', path: '/triage', icon: ListChecks, inHub: false, href: env.VITE_URL_TRIAGE || A('WW1tLtGhUHh4aFcb8Gn612'), envVar: 'VITE_URL_TRIAGE', tone: 'accent', dbs: ['tasks', 'actions', 'rfis', 'variations', 'projects', 'team'] },
+  { id: 'brief', name: 'Daily Brief', path: '/brief', icon: Sun, inHub: true, dbs: BRIEF_DBS },
+  { id: 'triage', name: 'Triage', path: '/brief/triage', icon: ListChecks, inHub: true, tone: 'accent', dbs: BRIEF_DBS },
   { id: 'scheduling', name: 'Scheduling', path: '/scheduling', icon: CalendarClock, inHub: false, href: env.VITE_URL_SCHEDULING || 'https://dm-scheduling-tool.netlify.app/', envVar: 'VITE_URL_SCHEDULING' },
   { id: 'drawing-flow', name: 'Drawing Flow', path: '/drawing-flow', icon: GitPullRequestArrow, inHub: false, href: env.VITE_URL_DRAWING_FLOW || 'https://axiom-drawing-flow.netlify.app', envVar: 'VITE_URL_DRAWING_FLOW', tone: 'accent' },
   { id: 'drawing-studio', name: 'Drawing Studio', path: '/drawing-studio', icon: PenTool, inHub: false, href: env.VITE_URL_DRAWING_STUDIO || A('XpE4W273jbPeiyzeDArokd'), envVar: 'VITE_URL_DRAWING_STUDIO' },
@@ -27,7 +26,7 @@ export const TOOLS = [
 ];
 
 // Snapshot DBs each tool reads, for "Updated x ago" on its tile.
-export const TOOL_SNAPSHOT = { triage: 'tasks', rfis: 'rfis', variations: 'variations', 'drawing-flow': 'submissions', brief: 'actions' };
+export const TOOL_SNAPSHOT = { triage: 'actions', rfis: 'rfis', variations: 'variations', 'drawing-flow': 'submissions', brief: 'actions' };
 
 // Scheduling Tool deep link with the current Project and Item preselected.
 export function schedulingLink(projectId, itemId) {

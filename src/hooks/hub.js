@@ -169,3 +169,51 @@ export function useUpdateItem() {
     },
   });
 }
+
+// ── Generic record edits (Triage) ───────────────────────────────────────────
+// Patches the row in its snapshot straight away; rolls back if Notion refuses.
+export function useUpdateRecord(db) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, set, chase }) => api(`/api/records/${db}/${id}`, { method: 'PATCH', body: { set, chase } }),
+    onMutate: async ({ id, set }) => {
+      await qc.cancelQueries({ queryKey: keys.snapshot(db) });
+      const prev = qc.getQueryData(keys.snapshot(db));
+      qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === id ? applyLocal(db, r, set) : r)) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); },
+    onSuccess: ({ row }) => qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === row.id ? row : r)) })),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
+
+export function useTrashRecord(db) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, restore }) => api(`/api/records/${db}/${id}/${restore ? 'restore' : 'trash'}`, { method: 'POST' }),
+    onMutate: async ({ id, restore }) => {
+      await qc.cancelQueries({ queryKey: keys.snapshot(db) });
+      const prev = qc.getQueryData(keys.snapshot(db));
+      if (!restore) qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.filter(r => r.id !== id) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); },
+    onSuccess: ({ row }, { restore }) => {
+      if (restore) qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] }));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
+
+// Friendly field names → snapshot row shape, for the optimistic patch.
+function applyLocal(db, row, set) {
+  const r = { ...row, dates: row.dates && { ...row.dates }, dt: row.dt && { ...row.dt } };
+  for (const [k, v] of Object.entries(set)) {
+    if (k === 'dtId') { if (db === 'submissions' || db === 'tasks') r.dtIds = v ? [v] : []; else r.personIds = v ? [v] : []; }
+    else if (k === 'instruction') r.dates.instruction = v;
+    else if (/Act$/.test(k) && r.dt) r.dt[k] = v;
+    else r[k] = v;
+  }
+  return r;
+}

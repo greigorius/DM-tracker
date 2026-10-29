@@ -121,3 +121,87 @@ export async function updateItem(id, body) {
   await appendEvents(store, events.filter(Boolean));
   return { row, events };
 }
+
+// ── Generic record edits (Triage) ───────────────────────────────────────────
+// Whitelisted fields per DB: [Notion property, kind]. Anything else is refused.
+const FIELD_MAP = {
+  actions: {
+    bic: ['Ball in Court', 'select'], dtId: ['Person', 'rel1'], due: ['Due', 'date'], itemIds: ['Items', 'rel'],
+    done: ['Checked', 'check'], blocks: ['Blocks Item', 'check'],
+  },
+  tasks: {
+    status: ['Item Status', 'status'], bic: ['Ball In Court', 'select'], dtId: ['Person', 'rel1'], dmPhase: ['DM Phase', 'select'],
+    blocker: ['Blocker', 'multi'], blockerNote: ['Blocker Note', 'text'], lockStatus: ['Lock Status', 'check'],
+    // Inputs the Scheduling Tool reads (never its calculated dates):
+    instruction: ['Date of Instruction', 'date'], holdDays: ['Hold Days', 'number'],
+    s4StartAct: ['1st DT Start (Actual)', 'date'], s4DelAct: ['1st DT Delivery (Actual)', 'date'],
+    s5StartAct: ['2nd DT Start (Actual)', 'date'], s5DelAct: ['2nd DT Delivery (Actual)', 'date'],
+    cStartAct: ['Constr. DT Start (Actual)', 'date'], cDelAct: ['Constr. DT Delivery (Actual)', 'date'],
+  },
+  rfis: {
+    status: ['RFI Status', 'select'], tbcBy: ['TBC by', 'select'], stopsWork: ['Stops Work', 'check'],
+    responded: ['Date Responded', 'date'], due: ['Response Due', 'date'], itemIds: ['Related Item(s)', 'rel'],
+  },
+  variations: {
+    status: ['Variation Status', 'select'], decision: ['Decision Date', 'date'], addedDays: ['Added Days', 'number'],
+    pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'],
+  },
+  submissions: { dtId: ['DT', 'rel1'] },
+  meetings: { itemIds: ['Items', 'rel'] },
+};
+const PARTY_FIELDS = new Set(['bic', 'tbcBy', 'raisedBy']);
+
+function toProp(kind, value) {
+  switch (kind) {
+    case 'select': return sel(value || null);
+    case 'status': return { status: value ? { name: value } : null };
+    case 'multi': return { multi_select: (value || []).map(name => ({ name })) };
+    case 'date': return date(value || null);
+    case 'check': return { checkbox: !!value };
+    case 'number': return { number: value === '' || value == null ? null : Number(value) };
+    case 'text': return { rich_text: value ? text(value) : [] };
+    case 'rel': return rel(value || []);
+    case 'rel1': return rel(value ? [value] : []);
+    default: throw bad(`Unknown field kind ${kind}`);
+  }
+}
+
+/**
+ * PATCH /api/records/:db/:id  { set: { field: value }, chase?: string }
+ * `chase` (actions only) prepends a dated line to Response Log, as Daily Triage did.
+ */
+export async function updateRecord(db, id, body) {
+  const map = FIELD_MAP[db];
+  if (!map) throw bad(`Records in ${db} can't be edited here`);
+  const { set = {}, chase } = body || {};
+  const props = {};
+  for (const [field, value] of Object.entries(set)) {
+    const spec = map[field];
+    if (!spec) throw bad(`Field ${field} can't be edited on ${db}`);
+    if (PARTY_FIELDS.has(field)) noHidden(value, field);
+    props[spec[0]] = toProp(spec[1], value);
+  }
+  const store = await getHubStore();
+  const prev = (await readSnapshot(store, db)).rows.find(r => r.id === id) || null;
+  if (db === 'actions' && (chase || 'due' in set)) {
+    const next = 'due' in set ? set.due : prev?.due;
+    const line = `${londonToday()} — ${chase ? `chased: ${chase}` : 'due moved'}${next ? ` (next ${next})` : ''}`;
+    props['Response Log'] = { rich_text: text(prev?.log ? `${line}\n${prev.log}` : line) };
+  }
+  if (!Object.keys(props).length) throw bad('Nothing to update');
+  const page = await withRetry(() => notion().pages.update({ page_id: id, properties: props }));
+  const row = mapPage(db, page);
+  await patchSnapshot(db, row);
+  const events = db === 'tasks' ? eventsForItemChange(prev, row, 'Triage') : [];
+  if (events.length) await appendEvents(store, events);
+  return { row, events };
+}
+
+// POST /api/records/:db/:id/trash | /restore — Notion Trash keeps pages 30 days.
+export async function trashRecord(db, id, restore = false) {
+  if (!FIELD_MAP[db]) throw bad(`Records in ${db} can't be deleted here`);
+  const page = await withRetry(() => notion().pages.update({ page_id: id, in_trash: !restore }));
+  const row = { ...mapPage(db, page), archived: !restore };
+  await patchSnapshot(db, row);
+  return { row };
+}

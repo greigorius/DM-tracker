@@ -28,7 +28,7 @@ const CARDS = [
 ];
 
 const triageDbs = TOOLS.find(t => t.id === 'triage').dbs;
-const warmTriage = () => { preloadRoute('/triage'); prefetchSnapshots(triageDbs); };
+const warmTriage = () => { preloadRoute('/brief/triage'); prefetchSnapshots(triageDbs); };
 
 function TodayStrip({ counts, loading }) {
   return (
@@ -38,7 +38,7 @@ function TodayStrip({ counts, loading }) {
         {CARDS.map(c => (
           <CountCard
             key={c.key}
-            to={`/triage?filter=${c.key}`}
+            to={`/brief/triage?filter=${c.key}`}
             label={c.label}
             value={counts?.[c.key]?.value}
             sub={counts?.[c.key]?.sub}
