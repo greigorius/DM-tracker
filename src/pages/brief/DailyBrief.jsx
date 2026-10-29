@@ -133,16 +133,16 @@ export default function DailyBrief() {
       <p className="m-0 text-[15px] text-text-2 max-w-[90ch]">
         <b className="text-danger">{m.overdue}</b> of your actions are overdue and <b className="text-info">{m.reviews}</b> drawing reviews are waiting on you.
         To chase: <b className="text-text">{m.tot('ext')}</b> external, <b className="text-text">{m.tot('int')}</b> internal, and <b className="text-text">{m.tot('dt')}</b> with your DTs.
-        {' '}<Link to="/brief/triage" className="text-accent">Act on these in Triage →</Link>
+        {' '}<Link to="/triage" className="text-accent">Act on these in Triage →</Link>
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="My overdue" value={m.overdue} sub="Ball with DM, past due" tone="danger" to="/brief/triage?tab=mine&due=overdue" />
-        <Kpi label="My open actions" value={m.mine.length} sub="All rows with BIC = DM" tone="accent" to="/brief/triage?tab=mine" />
+        <Kpi label="My overdue" value={m.overdue} sub="Ball with DM, past due" tone="danger" to="/triage?tab=mine&due=overdue" />
+        <Kpi label="My open actions" value={m.mine.length} sub="All rows with BIC = DM" tone="accent" to="/triage?tab=mine" />
         <Kpi label="Drawing reviews" value={m.reviews} sub="Submissions awaiting QA" tone="info" />
-        <Kpi label="External" value={m.tot('ext')} sub="Client, architect, contractor, consultant" to="/brief/triage?tab=ext" />
-        <Kpi label="Internal" value={m.tot('int')} sub="Team, production, site, supplier" to="/brief/triage?tab=int" />
-        <Kpi label="With DT team" value={m.tot('dt')} sub="Actions, returned drawings, items" tone="ok" to="/brief/triage?tab=dt" />
+        <Kpi label="External" value={m.tot('ext')} sub="Client, architect, contractor, consultant" to="/triage?tab=ext" />
+        <Kpi label="Internal" value={m.tot('int')} sub="Team, production, site, supplier" to="/triage?tab=int" />
+        <Kpi label="With DT team" value={m.tot('dt')} sub="Actions, returned drawings, items" tone="ok" to="/triage?tab=dt" />
       </div>
 
       <Section id="my-moves" title="My moves" note="Open actions where the ball is with you, most urgent first." right={<span className="font-mono text-[12px] text-muted">{mineRows.length}</span>}>

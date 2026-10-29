@@ -11,7 +11,10 @@ export const queryClient = new QueryClient({
       gcTime: 24 * 60 * 60_000,
       refetchOnWindowFocus: true,
       placeholderData: keepPreviousData,
-      retry: 1,
+      // The API can answer 502/503 for a moment while it starts; keep trying
+      // quietly instead of showing an error. 4xx answers are not retried.
+      retry: (count, err) => count < 6 && !(err?.status >= 400 && err?.status < 500),
+      retryDelay: n => Math.min(500 * 2 ** n, 5000),
     },
   },
 });

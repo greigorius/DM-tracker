@@ -26,14 +26,16 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Cockpit />} />
-          <Route path="/brief" element={<BriefLayout />}>
-            <Route index element={<DailyBrief />} />
-            <Route path="triage" element={<TriagePage />} />
+          <Route element={<BriefLayout title="Brief" subtitle="What’s next, upcoming and past due" />}>
+            <Route path="/brief" element={<DailyBrief />} />
+          </Route>
+          <Route element={<BriefLayout title="Triage" subtitle="Act on anything across the Hub" />}>
+            <Route path="/triage" element={<TriagePage />} />
           </Route>
           {ROUTES.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
 
           {/* Old paths */}
-          <Route path="/triage" element={<KeepQuery to="/brief/triage" />} />
+          <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
           <Route path="/tasks" element={<Navigate to="/brief" replace />} />
           <Route path="/trackers/task-schedule" element={<Navigate to="/brief" replace />} />
           <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />

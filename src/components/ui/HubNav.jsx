@@ -15,6 +15,7 @@ export const NAV = [
   { to: '/trackers/finishes-schedule', label: 'Finishes' },
   { to: '/drawings', label: 'Drawings' },
   { to: '/timeline', label: 'Timeline' },
+  { to: '/triage', label: 'Triage' },
 ];
 
 const linkCls = active => cx(

@@ -10,7 +10,7 @@ const A = id => `https://claude.ai/artifact/${id}`;
 
 export const TOOLS = [
   { id: 'brief', name: 'Daily Brief', path: '/brief', icon: Sun, inHub: true, dbs: BRIEF_DBS },
-  { id: 'triage', name: 'Triage', path: '/brief/triage', icon: ListChecks, inHub: true, tone: 'accent', dbs: BRIEF_DBS },
+  { id: 'triage', name: 'Triage', path: '/triage', icon: ListChecks, inHub: true, tone: 'accent', dbs: BRIEF_DBS },
   { id: 'scheduling', name: 'Scheduling', path: '/scheduling', icon: CalendarClock, inHub: false, href: env.VITE_URL_SCHEDULING || 'https://dm-scheduling-tool.netlify.app/', envVar: 'VITE_URL_SCHEDULING' },
   { id: 'drawing-flow', name: 'Drawing Flow', path: '/drawing-flow', icon: GitPullRequestArrow, inHub: false, href: env.VITE_URL_DRAWING_FLOW || 'https://axiom-drawing-flow.netlify.app', envVar: 'VITE_URL_DRAWING_FLOW', tone: 'accent' },
   { id: 'drawing-studio', name: 'Drawing Studio', path: '/drawing-studio', icon: PenTool, inHub: false, href: env.VITE_URL_DRAWING_STUDIO || A('XpE4W273jbPeiyzeDArokd'), envVar: 'VITE_URL_DRAWING_STUDIO' },

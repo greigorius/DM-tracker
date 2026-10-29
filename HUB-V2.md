@@ -57,6 +57,10 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 - New write endpoints: `PATCH /api/records/:db/:id` (whitelisted fields per DB) and `POST /api/records/:db/:id/trash|restore`.
 - Items, Drawings, Finishes, Timeline, Project and Client pages rebuilt on the snapshot and UI kit. Every legacy page, endpoint, Netlify function, `server/notionHelpers.js`, AppDataContext, usePageCache, QuickLogBar and the `.legacy` style layer are gone. The Tasks (To Do list) page is retired.
 
+## Triage promoted (29 Oct, 14:00)
+- Triage is its own nav tab (`/triage`, after Timeline); Brief (`/brief`) is the Daily Brief alone. Both keep the shared project filter. `/brief/triage` redirects.
+- First-load 502: start.bat now waits for the API before starting the site, and the client quietly retries 5xx/network errors (up to 6 times, backing off) instead of showing an error.
+
 ## Still to do
 - Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
 - Decide whether the To Do List DB is still needed (Tasks page retired; still synced as `snap/todo`).

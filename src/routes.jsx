@@ -34,9 +34,9 @@ export const ROUTES = [
 
 
 export function preloadRoute(path) {
-  if (path.startsWith('/brief')) {
+  if (path === '/brief' || path === '/triage') {
     pages.briefLayout.preload().catch(() => {});
-    (path.startsWith('/brief/triage') ? pages.triage : pages.dailyBrief).preload().catch(() => {});
+    (path === '/triage' ? pages.triage : pages.dailyBrief).preload().catch(() => {});
     return;
   }
   const hit = ROUTES.find(([p]) => p === path);
