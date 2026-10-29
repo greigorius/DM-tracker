@@ -9,6 +9,7 @@ import { cx } from './primitives.jsx';
 export const NAV = [
   { to: '/', label: 'Cockpit', end: true },
   { to: '/brief', label: 'Brief' },
+  { to: '/tasks', label: 'Tasks' },
   { to: '/trackers/item-schedule', label: 'Items' },
   { to: '/trackers/rfis', label: 'RFIs' },
   { to: '/trackers/variations', label: 'Variations' },

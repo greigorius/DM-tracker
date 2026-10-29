@@ -61,9 +61,13 @@ Recommendation: remove `QuickEntryModal`, `QuickLogBar`, `useQueue` and the `qui
 - Triage is its own nav tab (`/triage`, after Timeline); Brief (`/brief`) is the Daily Brief alone. Both keep the shared project filter. `/brief/triage` redirects.
 - First-load 502: start.bat now waits for the API before starting the site, and the client quietly retries 5xx/network errors (up to 6 times, backing off) instead of showing an error.
 
+## Tasks tab and Brief by item (29 Oct, 15:00)
+- **Tasks** (`/tasks`, after Brief) is back, rebuilt on the `snap/todo` snapshot. You can group by project, person, item, open/closed or design stage, or turn grouping off. It also has status chips, search, CSV export, and overdue end dates in red. `/trackers/task-schedule` redirects here.
+- The To Do mapper now also reads ID, Task Hours (Est), Design Stage, Change Task, Related RFI and Related Variation. `MAPPER_VERSION` 3 makes the next sync rebuild the snapshots.
+- **Daily Brief** has a View toggle: *By section* (as before) or *By item*. By item shows one collapsible card per item, most urgent first. Each card holds that item's DM actions, chase actions, RFIs, VCs, drawings back with DTs, programme dates in the window, and recent activity. The view choice is remembered.
+
 ## Still to do
 - Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
-- Decide whether the To Do List DB is still needed (Tasks page retired; still synced as `snap/todo`).
 - Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
 - Lighthouse check on the deployed site.
 

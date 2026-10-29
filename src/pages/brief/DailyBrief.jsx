@@ -2,10 +2,11 @@
 // to chase. Read-only; Triage is where rows are changed.
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Card, SectionLabel, Badge, Tabs, SkeletonRows, cx } from '../../components/ui/index.js';
+import { Card, SectionLabel, Badge, Tabs, SkeletonRows, TypeTag, cx } from '../../components/ui/index.js';
 import { DataTable } from '../../components/ui/table.jsx';
 import { addDays } from '../../../hub-core/derive.js';
-import { groupOf, ageDays, fmtDay, bicTone, CHASE_ITEM_STATUSES, latestSubmissions } from './shared.jsx';
+import { groupOf, ageDays, fmtDay, bicTone, CHASE_ITEM_STATUSES, latestSubmissions, useStored } from './shared.jsx';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 const ext = (url, label) => <a href={url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline">{label || '—'}</a>;
 const muted = v => <span className="text-text-2">{v || '—'}</span>;
@@ -45,7 +46,8 @@ export default function DailyBrief() {
   const t = d.today;
   const [bucket, setBucket] = useState('All');
   const [chaseTab, setChaseTab] = useState('ext');
-  const [pickedDt, setPickedDt] = useState('');
+  const [pickedDt, setPickedDt] = useStored('hub.brief.dt', '');
+  const [view, setView] = useStored('hub.brief.view', 'section');
 
   const m = useMemo(() => {
     const week = addDays(t, 7);
@@ -84,7 +86,7 @@ export default function DailyBrief() {
         ['S4 submission', dd.sub1], ['S5 DT start', !x.s5StartAct && x.s5Start], ['S5 DT delivery', !x.s5DelAct && x.s5Del],
         ['S5 submission', dd.sub2], ['C01 DT start', !x.cStartAct && x.cStart], ['C01 DT delivery', !x.cDelAct && x.cDel], ['C01 submission', dd.constrSub],
       ].filter(([, date]) => date && date >= addDays(t, -21) && date <= addDays(t, 14))
-        .map(([milestone, date]) => ({ id: `${i.id}#${milestone}`, url: i.url, item: i.title, milestone, date, bic: i.bic, days: ageDays(t, date) }));
+        .map(([milestone, date]) => ({ id: `${i.id}#${milestone}`, itemId: i.id, url: i.url, item: i.title, milestone, date, bic: i.bic, days: ageDays(t, date) }));
     }).sort((a, b) => a.date.localeCompare(b.date));
 
     const rfis = d.openRfis.map(r => ({ ...r, days: ageDays(r.raised, t) })).sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
@@ -145,6 +147,17 @@ export default function DailyBrief() {
         <Kpi label="With DT team" value={m.tot('dt')} sub="Actions, returned drawings, items" tone="ok" to="/triage?tab=dt" />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="View">
+        <span className="section-label mr-2">View</span>
+        {[['section', 'By section'], ['item', 'By item']].map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)}
+            className={cx('min-h-11 px-4 border font-mono text-[12px] uppercase tracking-[0.08em] cursor-pointer', view === k ? 'bg-surface-hi border-accent text-accent' : 'bg-transparent border-line-strong text-muted hover:text-text-2')}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {view === 'item' ? <ByItem m={m} d={d} /> : <>
       <Section id="my-moves" title="My moves" note="Open actions where the ball is with you, most urgent first." right={<span className="font-mono text-[12px] text-muted">{mineRows.length}</span>}>
         <div className="flex flex-wrap gap-2 px-4 py-3">
           {['All', ...BUCKETS].map(b => {
@@ -240,6 +253,82 @@ export default function DailyBrief() {
           { key: 'source', label: 'Source', width: 130, render: r => muted(r.source) },
         ]} />
       </Section>
+      </>}
     </>
+  );
+}
+
+// ── By item: everything the Brief knows, gathered under each item ───────────
+function ByItem({ m, d }) {
+  const t = d.today;
+  const groups = useMemo(() => {
+    const by = new Map();
+    const add = (itemId, row) => {
+      const k = itemId || 'none';
+      if (!by.has(k)) by.set(k, { id: k, item: d.items_.get(itemId), rows: [] });
+      by.get(k).rows.push(row);
+    };
+    for (const a of m.mine) add(a.itemIds[0], { key: a.id, kind: a.type === 'Note' ? 'note' : 'action', title: a.title, url: a.url, with: 'DM', due: a.due, late: a.due && a.due < t, sub: a.bucket });
+    for (const a of m.chaseActions) add(a.itemIds[0], { key: a.id, kind: 'action', title: a.title, url: a.url, with: a.bic, due: a.due, late: a.due && a.due < t, sub: [a.who, `${a.age ?? '–'}d waiting`].filter(Boolean).join(' · ') });
+    for (const x of m.dtDrawings) add(x.itemIds[0], { key: x.id, kind: 'submission', title: x.title, url: x.url, with: 'DT', sub: [x.dt, x.grade && `grade ${x.grade}`, `${x.age ?? '–'}d with DT`].filter(Boolean).join(' · ') });
+    for (const r of d.openRfis) add(r.itemIds[0], { key: r.id, kind: 'rfi', title: `RFI-${String(r.number ?? '?').padStart(3, '0')} ${r.title || ''}`, url: r.url, with: r.tbcBy || r.bic, due: r.due, late: r.due && r.due < t, blocking: r.stopsWork, sub: [r.status, r.stopsWork && 'stops work'].filter(Boolean).join(' · ') });
+    for (const v of d.openVcs) add(v.itemIds[0], { key: v.id, kind: 'vc', title: `${v.code || 'VC'} ${v.title || ''}`, url: v.url, with: v.bic, sub: [v.status, v.type].filter(Boolean).join(' · ') });
+    for (const p of m.programme) add(p.itemId, { key: p.id, kind: 'date', title: p.milestone, url: p.url, due: p.date, late: p.date < t });
+    for (const x of m.activity) add(x.itemIds[0], { key: x.id, kind: 'status', title: x.title, url: x.url, sub: [x.source, fmtDay(x.at)].filter(Boolean).join(' · '), recent: true });
+    const score = g => g.rows.filter(r => r.late).length * 10 + g.rows.filter(r => r.blocking).length * 5 + g.rows.filter(r => !r.recent).length;
+    return [...by.values()]
+      .filter(g => g.rows.some(r => !r.recent))
+      .map(g => ({ ...g, late: g.rows.filter(r => r.late).length, score: score(g) }))
+      .sort((a, b) => b.score - a.score || (a.item?.title || '~').localeCompare(b.item?.title || '~', undefined, { numeric: true }));
+  }, [m, d, t]);
+  const [closed, setClosed] = useState(() => new Set());
+  const toggle = id => setClosed(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const order = { action: 0, note: 1, rfi: 2, vc: 3, submission: 4, date: 5, status: 6 };
+
+  if (!groups.length) return <Card className="p-6 text-center text-[14px] text-muted">Nothing open against any item.</Card>;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setClosed(new Set())} className="min-h-11 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] uppercase tracking-[0.08em] cursor-pointer">Expand all</button>
+        <button type="button" onClick={() => setClosed(new Set(groups.map(g => g.id)))} className="min-h-11 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] uppercase tracking-[0.08em] cursor-pointer">Collapse all</button>
+        <span className="ml-auto self-center font-mono text-[12px] text-muted">{groups.length} items · most urgent first</span>
+      </div>
+      {groups.map(g => {
+        const open = !closed.has(g.id);
+        const rows = [...g.rows].sort((a, b) => order[a.kind] - order[b.kind] || (a.due || '9').localeCompare(b.due || '9'));
+        return (
+          <Card key={g.id}>
+            <h2 className="m-0">
+              <button type="button" aria-expanded={open} onClick={() => toggle(g.id)} className="w-full min-h-12 px-4 flex items-center gap-3 bg-transparent border-0 cursor-pointer text-left text-text hover:bg-surface-hi">
+                {open ? <ChevronDown size={16} className="text-muted" /> : <ChevronRight size={16} className="text-muted" />}
+                <span className="text-[15px] font-semibold truncate">{g.item?.title || 'Not linked to an item'}</span>
+                {g.item && <span className="hidden sm:inline font-mono text-[12px] text-muted truncate">{[d.projects.get(g.item.projectId), g.item.status, g.item.bic && `BIC ${g.item.bic}`].filter(Boolean).join(' · ')}</span>}
+                <span className="ml-auto flex gap-2 shrink-0">
+                  {g.late > 0 && <Badge tone="danger">{g.late} overdue</Badge>}
+                  <Badge>{g.rows.filter(r => !r.recent).length} open</Badge>
+                </span>
+              </button>
+            </h2>
+            {open && (
+              <ul className="m-0 p-0 list-none border-t border-line">
+                {rows.map(r => (
+                  <li key={r.key} className="px-4 py-2.5 border-t border-line first:border-t-0 flex items-start gap-3">
+                    <TypeTag kind={r.kind} blocking={r.blocking} />
+                    <div className="min-w-0 flex-1">
+                      <a href={r.url} target="_blank" rel="noreferrer" className={cx('text-[14px] no-underline hover:underline', r.recent ? 'text-text-2' : 'text-text')}>{r.title || 'Untitled'}</a>
+                      {r.sub && <div className="font-mono text-[11px] text-muted">{r.sub}</div>}
+                    </div>
+                    <span className="flex items-center gap-2 shrink-0">
+                      {r.with && <Badge tone={bicTone(r.with)}>{r.with}</Badge>}
+                      {r.due && <Badge tone={r.late ? 'danger' : 'muted'}>{fmtDay(r.due)}</Badge>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        );
+      })}
+    </div>
   );
 }

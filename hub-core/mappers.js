@@ -198,6 +198,12 @@ export const mappers = {
     personIds: ids(page, 'Person'),
     start: day(v(page, 'Start Date')),
     end: day(v(page, 'End Date (Manual)')),
+    number: v(page, 'ID'),
+    hours: v(page, 'Task Hours (Est)'),
+    designStage: v(page, 'Design Stage'),
+    changeTask: v(page, 'Change Task'),
+    rfiIds: ids(page, 'Related RFI'),
+    vcIds: ids(page, 'Related Variation'),
   }),
 
   projects: page => ({

@@ -36,8 +36,7 @@ export default function App() {
 
           {/* Old paths */}
           <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
-          <Route path="/tasks" element={<Navigate to="/brief" replace />} />
-          <Route path="/trackers/task-schedule" element={<Navigate to="/brief" replace />} />
+          <Route path="/trackers/task-schedule" element={<Navigate to="/tasks" replace />} />
           <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -11,6 +11,7 @@ export const pages = {
   triage: lazyPage(() => import('./pages/brief/TriagePage.jsx')),
   clientHome: lazyPage(() => import('./pages/ClientPage.jsx')),
   projectHome: lazyPage(() => import('./pages/ProjectPage.jsx')),
+  tasks: lazyPage(() => import('./pages/TasksPage.jsx')),
   timeline: lazyPage(() => import('./pages/TimelinePage.jsx')),
   itemSchedule: lazyPage(() => import('./pages/ItemsPage.jsx')),
   rfis: lazyPage(() => import('./pages/RFIsPage.jsx')),
@@ -23,6 +24,7 @@ export const pages = {
 export const ROUTES = [
   ['/client/:clientId', pages.clientHome],
   ['/project/:projectId', pages.projectHome],
+  ['/tasks', pages.tasks],
   ['/timeline', pages.timeline],
   ['/timeline/:projectId', pages.timeline],
   ['/trackers/item-schedule', pages.itemSchedule],
