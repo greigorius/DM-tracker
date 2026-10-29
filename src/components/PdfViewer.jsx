@@ -1,4 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import SketchCanvas, { toolCursor } from './SketchCanvas.jsx';
+import DrawingToolbar from './DrawingToolbar.jsx';
+import { useSketchPaste } from '../hooks/useSketchPaste.js';
 
 function PdfViewer({
   pdfDoc,
@@ -9,18 +12,58 @@ function PdfViewer({
   onPinClick,
   onPinDragEnd,
   onPinDelete,
-  onPageClick,   // (fracX, fracY) — fired when canvas is clicked (not on a pin)
+  onPageClick,   // (fracX, fracY) — fired when canvas is clicked (not on a pin), pan tool only
   onScaleChange, // (newScale: number) — fired on scroll-wheel zoom
+  // ── Sketch props ──
+  sketches       = [],   // committed sketch objects for the current page
+  onAddObject,           // (obj) => void
+  onRemoveObject,        // (index) => void
+  onUndoSketch,          // () => void
+  onClearSketches,       // () => void
+  onUpdateObject,        // (index, newObj) => void  — for select/move
 }) {
-  const canvasRef       = useRef(null);
-  const containerRef    = useRef(null);
-  const wrapperRef      = useRef(null);
-  const renderTaskRef   = useRef(null);
-  const effectiveScaleRef = useRef(1);
-  const isPanningRef    = useRef(false);
+  const canvasRef          = useRef(null);
+  const containerRef       = useRef(null);
+  const wrapperRef         = useRef(null);
+  const renderTaskRef      = useRef(null);
+  const effectiveScaleRef  = useRef(1);
+  const isPanningRef       = useRef(false);
   const [loading, setLoading]       = useState(false);
   const [canvasDims, setCanvasDims] = useState({ width: 0, height: 0 });
 
+  // ── Drawing tool state (local to viewer) ──
+  const [activeTool,         setActiveTool]         = useState('pan');
+  const [activeColor,        setActiveColor]        = useState('#ef4444');
+  const [activeWidth,        setActiveWidth]        = useState(2);
+  const [activeFontSizeFrac, setActiveFontSizeFrac] = useState(0.025);
+
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      // Ctrl/Cmd+Z → undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); onUndoSketch?.(); return; }
+      // Escape → pan
+      if (e.key === 'Escape') { setActiveTool('pan'); return; }
+      // Tool shortcuts
+      const map = { s: 'select', p: 'pen', h: 'highlight', a: 'arrow', r: 'rect', e: 'ellipse', l: 'line', t: 'text', x: 'eraser' };
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && map[e.key]) setActiveTool(map[e.key]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onUndoSketch]);
+
+  // ── Paste images from clipboard ──
+  const handlePaste = useCallback((dataUrl, naturalWidth, naturalHeight) => {
+    if (!canvasDims.width || !canvasDims.height) return;
+    const w = 0.45; // 45% of canvas width
+    const h = (w * canvasDims.width * naturalHeight) / (naturalWidth * canvasDims.height);
+    onAddObject?.({ type: 'image', x: 0.05, y: 0.05, w, h: Math.min(h, 0.9), dataUrl });
+  }, [canvasDims, onAddObject]);
+
+  useSketchPaste(handlePaste, !!pdfDoc);
+
+  // ── PDF render ──
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || !containerRef.current) return;
     let cancelled = false;
@@ -101,8 +144,9 @@ function PdfViewer({
     return () => container.removeEventListener('wheel', onWheel);
   }, [onScaleChange]);
 
-  // ── Drag-to-pan ──
+  // ── Drag-to-pan (only when pan tool is active) ──
   const handleContainerMouseDown = useCallback((e) => {
+    if (activeTool !== 'pan') return;
     if (e.button !== 0) return;
     const container = containerRef.current;
     if (!container) return;
@@ -128,12 +172,11 @@ function PdfViewer({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup',   onUp);
       container.style.cursor = '';
-      // defer reset so the wrapper onClick can check isPanningRef first
       setTimeout(() => { isPanningRef.current = false; }, 0);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup',   onUp);
-  }, []);
+  }, [activeTool]);
 
   // ── Pin drag ──
   const handlePinDragStart = useCallback((e, pin) => {
@@ -177,53 +220,89 @@ function PdfViewer({
     window.addEventListener('mouseup',   onUp);
   }, [onPinDragEnd]);
 
+  const containerCursor = activeTool === 'pan' ? (onPageClick ? 'crosshair' : 'grab') : toolCursor(activeTool);
+
   return (
-    <div
-      className="pdf-container"
-      ref={containerRef}
-      onMouseDown={handleContainerMouseDown}
-      style={{ overflow: 'auto', cursor: onPageClick ? 'crosshair' : 'grab' }}
-    >
-      <div className="pdf-center-wrapper">
-      {loading && <div className="pdf-loading">Loading page...</div>}
+    <div className="pdf-viewer-root">
+      {/* ── Drawing toolbar ── */}
+      <DrawingToolbar
+        activeTool={activeTool}          setActiveTool={setActiveTool}
+        activeColor={activeColor}        setActiveColor={setActiveColor}
+        activeWidth={activeWidth}        setActiveWidth={setActiveWidth}
+        activeFontSizeFrac={activeFontSizeFrac} setActiveFontSizeFrac={setActiveFontSizeFrac}
+        onUndo={onUndoSketch}
+        onClear={onClearSketches}
+        hasObjects={sketches.length > 0}
+        disabled={!pdfDoc}
+      />
+
+      {/* ── Scrollable PDF area ── */}
       <div
-        className="pdf-page-wrapper"
-        ref={wrapperRef}
-        onClick={e => {
-          if (!onPageClick || !wrapperRef.current) return;
-          if (isPanningRef.current) return;
-          const rect = wrapperRef.current.getBoundingClientRect();
-          onPageClick(
-            (e.clientX - rect.left)  / rect.width,
-            (e.clientY - rect.top)   / rect.height,
-          );
-        }}
-        style={{
-          position:    'relative',
-          display:     'inline-block',
-          width:       canvasDims.width  || undefined,
-          height:      canvasDims.height || undefined,
-          cursor:      'inherit',
-        }}
+        className="pdf-container"
+        ref={containerRef}
+        onMouseDown={handleContainerMouseDown}
+        style={{ overflow: 'auto', cursor: containerCursor, flex: 1, minHeight: 0 }}
       >
-        <canvas ref={canvasRef} className="pdf-canvas" />
-        {canvasDims.width > 0 && (
-          <div className="pdf-pin-overlay">
-            {pins.map(pin => (
-              <div
-                key={pin.field}
-                className={`pdf-pin ${activeField === pin.field ? 'pdf-pin-active' : ''}`}
-                style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
-                onMouseDown={(e) => handlePinDragStart(e, pin)}
-                onClick={(e) => { e.stopPropagation(); onPinClick?.(pin.field); }}
-                onContextMenu={(e) => { e.preventDefault(); onPinDelete?.(pin.field); }}
-              >
-                {pin.number}
+        <div className="pdf-center-wrapper">
+          {loading && <div className="pdf-loading">Loading page…</div>}
+          <div
+            className="pdf-page-wrapper"
+            ref={wrapperRef}
+            onClick={e => {
+              if (activeTool !== 'pan') return; // only fire in pan mode
+              if (!onPageClick || !wrapperRef.current) return;
+              if (isPanningRef.current) return;
+              const rect = wrapperRef.current.getBoundingClientRect();
+              onPageClick(
+                (e.clientX - rect.left) / rect.width,
+                (e.clientY - rect.top)  / rect.height,
+              );
+            }}
+            style={{
+              position:    'relative',
+              display:     'inline-block',
+              width:       canvasDims.width  || undefined,
+              height:      canvasDims.height || undefined,
+              cursor:      'inherit',
+            }}
+          >
+            {/* Layer 1: PDF */}
+            <canvas ref={canvasRef} className="pdf-canvas" />
+
+            {/* Layer 2: Sketch overlay */}
+            {canvasDims.width > 0 && (
+              <SketchCanvas
+                sketches={sketches}
+                onAddObject={onAddObject}
+                onRemoveObject={onRemoveObject}
+                onUpdateObject={onUpdateObject}
+                activeTool={activeTool}
+                activeColor={activeColor}
+                activeWidth={activeWidth}
+                activeFontSizeFrac={activeFontSizeFrac}
+                canvasDims={canvasDims}
+              />
+            )}
+
+            {/* Layer 3: Pins (always on top) */}
+            {canvasDims.width > 0 && (
+              <div className="pdf-pin-overlay">
+                {pins.map(pin => (
+                  <div
+                    key={pin.field}
+                    className={`pdf-pin ${activeField === pin.field ? 'pdf-pin-active' : ''}`}
+                    style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+                    onMouseDown={(e) => handlePinDragStart(e, pin)}
+                    onClick={(e) => { e.stopPropagation(); onPinClick?.(pin.field); }}
+                    onContextMenu={(e) => { e.preventDefault(); onPinDelete?.(pin.field); }}
+                  >
+                    {pin.number}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+        </div>
       </div>
     </div>
   );

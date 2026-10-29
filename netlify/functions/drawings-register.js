@@ -48,7 +48,7 @@ export const handler = async (event) => {
       const projectPageId = p['Projects']?.relation?.[0]?.id ?? null
       itemMap[page.id] = {
         name:           p['Item Name']?.title?.[0]?.plain_text ?? null,
-        status:         p['Status']?.status?.name              ?? null,
+        status:         p['Drawing Progress']?.status?.name    ?? null,
         projectPageId,
       }
       if (projectPageId) projIdSet.add(projectPageId)

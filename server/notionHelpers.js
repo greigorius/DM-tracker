@@ -60,14 +60,19 @@ export async function getSchemaIds(dbId) {
 }
 
 // ── Field extractors ──────────────────────────────────────────────────────────
-export const titleVal  = (p, k) => p[k]?.title?.[0]?.plain_text   ?? null
-export const statusVal = (p, k) => p[k]?.status?.name             ?? null
-export const selectVal = (p, k) => p[k]?.select?.name             ?? null
-export const personVal = (p, k) => p[k]?.people?.[0]?.name        ?? null
-export const checkVal  = (p, k) => p[k]?.checkbox                 ?? false
-export const dateVal   = (p, k) => p[k]?.date?.start              ?? null
-export const relCount  = (p, k) => (p[k]?.relation || []).length
-export const relIds    = (p, k) => (p[k]?.relation || []).map(r => r.id)
+export const titleVal        = (p, k) => p[k]?.title?.[0]?.plain_text         ?? null
+export const statusVal       = (p, k) => p[k]?.status?.name                   ?? null
+export const selectVal       = (p, k) => p[k]?.select?.name                   ?? null
+export const multiSelectVal  = (p, k) => (p[k]?.multi_select ?? []).map(o => o.name)
+export const personVal       = (p, k) => p[k]?.people?.[0]?.name              ?? null
+export const checkVal        = (p, k) => p[k]?.checkbox                       ?? false
+export const dateVal         = (p, k) => p[k]?.date?.start                    ?? null
+export const relCount        = (p, k) => (p[k]?.relation || []).length
+export const relIds          = (p, k) => (p[k]?.relation || []).map(r => r.id)
+
+const NO_PCSA = { property: 'Item Name', title: { does_not_contain: 'PCSA' } }
+export const withNoPcsa = (filter) =>
+  !filter ? NO_PCSA : { and: [filter, NO_PCSA] }
 
 /** Plain date field → ISO string or null */
 export function d(props, field) {
@@ -117,7 +122,7 @@ export function transformTask(page, drawings = []) {
   return {
     id:   page.id,
     name,
-    status:           props['Status']?.status?.name                   ?? null,
+    status:           props['Drawing Progress']?.status?.name         ?? null,
     assignee:         props['Assigned To']?.people?.[0]?.name         ?? null,
     contractCategory: props['Contract Category']?.formula?.string
                    ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
@@ -201,7 +206,7 @@ export function transformItem(page) {
   return {
     id,
     name,
-    status:           statusVal(p, 'Status'),
+    status:           statusVal(p, 'Drawing Progress'),
     dmPhase:          selectVal(p, 'DM Phase'),
     assignee:         personVal(p, 'Assigned To'),
     contractCategory: contractCat(name),

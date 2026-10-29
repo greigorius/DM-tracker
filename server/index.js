@@ -6,7 +6,8 @@ import {
   fetchNotion, notionHeaders, getSchemaIds, queryAll,
   transformItem, transformTask, transformDrawing,
   fetchTaskPages, fetchDrawingMap, transformRFI,
-  titleVal, statusVal, selectVal, personVal, checkVal, dateVal, relCount, relIds,
+  titleVal, statusVal, selectVal, multiSelectVal, personVal, checkVal, dateVal, relCount, relIds,
+  withNoPcsa,
 } from './notionHelpers.js';
 
 dotenv.config();
@@ -27,11 +28,12 @@ function notionRequired(res) {
 }
 
 const DB = {
-  todo:     process.env.NOTION_DB_TODO,
-  rfis:     process.env.NOTION_DB_RFIS,
-  tasks:    process.env.NOTION_DB_TASKS,
-  projects: process.env.NOTION_DB_PROJECTS,
-  drawings: process.env.NOTION_DB_DRAWINGS,
+  todo:       process.env.NOTION_DB_TODO,
+  rfis:       process.env.NOTION_DB_RFIS,
+  tasks:      process.env.NOTION_DB_TASKS,
+  projects:   process.env.NOTION_DB_PROJECTS,
+  drawings:   process.env.NOTION_DB_DRAWINGS,
+  variations: process.env.NOTION_DB_VARIATIONS,
 };
 
 // ── GET /api/projects ─────────────────────────────────────────────────────────
@@ -183,7 +185,7 @@ app.get('/api/stats', async (req, res) => {
     const pages = await queryAll(DB.tasks, filter);
     const COMPLETE = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted']);
     const items = pages.map(p => ({
-      status:  p.properties['Status']?.status?.name   ?? null,
+      status:  p.properties['Drawing Progress']?.status?.name   ?? null,
       dmPhase: p.properties['DM Phase']?.select?.name ?? null,
     }));
 
@@ -225,6 +227,394 @@ app.get('/api/rfis', async (req, res) => {
     res.json(pages.map(transformRFI));
   } catch (err) {
     console.error('[rfis]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/rfi-schedule ─────────────────────────────────────────────────────
+// Returns all RFIs enriched with project + item names, sorted by project → RFI#
+app.get('/api/rfi-schedule', async (req, res) => {
+  if (!notionRequired(res)) return;
+
+  const cacheKey = 'rfi-schedule';
+  const cached   = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
+  async function fetchPage(id) {
+    try {
+      const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+
+  try {
+    const pages = await queryAll(DB.rfis, null);
+    const rfis  = pages.map(transformRFI);
+
+    // Collect every unique item ID referenced by any RFI
+    const itemIdSet = new Set();
+    for (const rfi of rfis) {
+      for (const id of rfi.relatedItemIds) itemIdSet.add(id);
+    }
+
+    // Batch-fetch item pages (25 at a time) to resolve item names + project IDs
+    const itemInfoMap = {};
+    const projIdSet   = new Set();
+    const itemIds     = [...itemIdSet];
+
+    for (let i = 0; i < itemIds.length; i += 25) {
+      const chunk     = itemIds.slice(i, i + 25);
+      const itemPages = await Promise.all(chunk.map(fetchPage));
+      for (let j = 0; j < chunk.length; j++) {
+        const page = itemPages[j];
+        if (!page) continue;
+        const p      = page.properties ?? {};
+        const projId = p['Projects']?.relation?.[0]?.id ?? null;
+        const name   = p['Item Name']?.title?.[0]?.plain_text ?? null;
+        itemInfoMap[chunk[j]] = { name, projectId: projId };
+        if (projId) projIdSet.add(projId);
+      }
+    }
+
+    // Resolve project names — query the full DB so we don't do N page fetches
+    const projMap = {};
+    try {
+      const projectPages = await queryAll(DB.projects, null);
+      for (const p of projectPages) {
+        projMap[p.id] = { id: p.id, name: p.properties?.['Project Name']?.title?.[0]?.plain_text ?? p.id };
+      }
+    } catch {
+      await Promise.all([...projIdSet].map(async id => {
+        const page = await fetchPage(id);
+        if (page) projMap[id] = { id, name: page.properties?.['Project Name']?.title?.[0]?.plain_text ?? id };
+      }));
+    }
+
+    // Enrich each RFI
+    const enriched = rfis.map(rfi => {
+      const firstItem = rfi.relatedItemIds[0] ? (itemInfoMap[rfi.relatedItemIds[0]] ?? null) : null;
+      const projectId = firstItem?.projectId ?? null;
+      return {
+        ...rfi,
+        projectId,
+        projectName:      projectId ? (projMap[projectId]?.name ?? null) : null,
+        relatedItemNames: rfi.relatedItemIds.map(id => itemInfoMap[id]?.name).filter(Boolean),
+      };
+    });
+
+    enriched.sort((a, b) => {
+      const p = (a.projectName ?? '').localeCompare(b.projectName ?? '');
+      return p !== 0 ? p : (a.rfiNumber ?? 0) - (b.rfiNumber ?? 0);
+    });
+
+    setCached(cacheKey, enriched, 5 * 60 * 1000);
+    res.json(enriched);
+  } catch (err) {
+    console.error('[rfi-schedule]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/task-categories ──────────────────────────────────────────────────
+// Returns the select options for 'Task Category' from the TODO database schema.
+app.get('/api/task-categories', async (req, res) => {
+  if (!notionRequired(res)) return;
+  if (!DB.todo) return res.status(503).json({ error: 'NOTION_DB_TODO not configured' });
+
+  const cacheKey = 'task-categories';
+  const cached   = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
+  try {
+    const r = await fetchNotion(`${NOTION_API}/databases/${DB.todo}`, { headers: notionHeaders() });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`Notion DB fetch failed: ${r.status} ${txt.slice(0, 200)}`);
+    }
+    const db         = await r.json();
+    const options    = db.properties?.['Task Category']?.select?.options ?? [];
+    const categories = options.map(o => o.name).filter(Boolean).sort();
+    setCached(cacheKey, categories, 60 * 60 * 1000);
+    res.json(categories);
+  } catch (err) {
+    console.error('[task-categories]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/tasks ────────────────────────────────────────────────────────────
+// Returns tasks with project & item names resolved.
+// Query params: ?showDone=true to include done tasks (7-day retention window)
+app.get('/api/tasks', async (req, res) => {
+  if (!notionRequired(res)) return;
+
+  const showDone     = req.query.showDone === 'true';
+  const cacheKey     = `tasks:showDone=${showDone}`;
+  const cached       = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  async function fetchPage(id) {
+    try {
+      const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+
+  async function resolveRelations(itemIds, batchSize = 25) {
+    const itemMap      = {};
+    const projPromises = {};
+
+    for (let i = 0; i < itemIds.length; i += batchSize) {
+      const chunk = itemIds.slice(i, i + batchSize);
+      const pages = await Promise.all(chunk.map(fetchPage));
+      for (let j = 0; j < chunk.length; j++) {
+        const id   = chunk[j];
+        const page = pages[j];
+        if (!page) continue;
+        const props         = page.properties ?? {};
+        const name          = props['Item Name']?.title?.[0]?.plain_text ?? null;
+        const projectPageId = props['Projects']?.relation?.[0]?.id       ?? null;
+        itemMap[id] = { name, projectPageId };
+        if (projectPageId && !projPromises[projectPageId]) {
+          projPromises[projectPageId] = fetchPage(projectPageId);
+        }
+      }
+    }
+
+    const projMap = {};
+    await Promise.all(
+      Object.entries(projPromises).map(async ([id, promise]) => {
+        const page = await promise;
+        if (!page) return;
+        const name = page.properties?.['Project Name']?.title?.[0]?.plain_text ?? null;
+        projMap[id] = { id, name };
+      }),
+    );
+
+    return { itemMap, projMap };
+  }
+
+  try {
+    const filter = showDone
+      ? { or: [
+          { property: 'Task Done', checkbox: { equals: false } },
+          { and: [
+            { property: 'Task Done', checkbox: { equals: true } },
+            { timestamp: 'created_time', created_time: { after: sevenDaysAgo } },
+          ]},
+        ]}
+      : { or: [
+          { property: 'Task Done', checkbox: { equals: false } },
+          { property: 'Task Done', checkbox: { does_not_equal: true } },
+        ]};
+
+    const pages = await queryAll(DB.todo, filter, {
+      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+    });
+
+    const itemIdSet = new Set();
+    for (const p of pages) {
+      for (const r of (p.properties?.['Item']?.relation ?? [])) itemIdSet.add(r.id);
+    }
+
+    const { itemMap, projMap } = await resolveRelations([...itemIdSet]);
+
+    const tasks = pages.map(p => {
+      const props      = p.properties ?? {};
+      const itemPageId = props['Item']?.relation?.[0]?.id ?? null;
+      const item       = itemMap[itemPageId] ?? {};
+      const proj       = item.projectPageId ? projMap[item.projectPageId] : null;
+      return {
+        id:           p.id,
+        tdlId:        props['ID']?.unique_id?.number != null ? `TDL-${props['ID'].unique_id.number}` : null,
+        itemId:       itemPageId,
+        itemName:     item.name ?? null,
+        projectId:    proj?.id   ?? null,
+        projectName:  proj?.name ?? null,
+        description:  props['Item Description']?.title?.[0]?.plain_text ?? null,
+        assignedTo:   props['Assigned To']?.select?.name ?? props['Assigned To']?.people?.[0]?.name ?? null,
+        subTaskHours: props['Sub Task Hours']?.number    ?? null,
+        taskCategory: props['Task Category']?.select?.name ?? null,
+        changeTask:   props['Change Task']?.checkbox    ?? false,
+        taskDone:     props['Task Done']?.checkbox      ?? false,
+        startDate:    props['Start Date']?.date?.start  ?? null,
+        endDate:      props['End Date']?.date?.start    ?? null,
+        createdAt:    p.created_time,
+      };
+    });
+
+    setCached(cacheKey, tasks, 5 * 60 * 1000);
+    res.json(tasks);
+  } catch (err) {
+    console.error('[tasks]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/variations ───────────────────────────────────────────────────────
+// Returns all variations enriched with project + item names.
+app.get('/api/variations', async (req, res) => {
+  if (!notionRequired(res)) return;
+
+  if (!DB.variations) return res.json({ items: [], configured: false });
+
+  const cacheKey = 'variations';
+  const cached   = getCached(cacheKey);
+  if (cached) return res.json(cached);
+
+  async function fetchPage(id) {
+    try {
+      const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+
+  function transformVariation(page) {
+    const p = page.properties ?? {};
+    const varNumber =
+      p['No ID']?.unique_id?.number  ?? p['Variation Number']?.number ??
+      p['Var No.']?.number           ?? p['Var No']?.number            ??
+      p['ID']?.unique_id?.number     ?? null;
+    const title =
+      titleVal(p, 'Variation Description') ?? titleVal(p, 'Variation Title') ??
+      titleVal(p, 'Variation Name')        ?? titleVal(p, 'Name')             ?? null;
+    const statusValues = (() => {
+      const multi =
+        multiSelectVal(p, 'Variation Status').length ? multiSelectVal(p, 'Variation Status') :
+        multiSelectVal(p, 'Status').length           ? multiSelectVal(p, 'Status')           : [];
+      if (multi.length) return multi;
+      const single = statusVal(p, 'Variation Status') ?? selectVal(p, 'Variation Status') ??
+                     statusVal(p, 'Status')           ?? selectVal(p, 'Status')           ?? null;
+      return single ? [single] : [];
+    })();
+    const type      = selectVal(p, 'Variation Type') ?? selectVal(p, 'Type') ?? null;
+    const typeColor = p['Variation Type']?.select?.color ?? p['Type']?.select?.color ?? null;
+    const dateIssued =
+      p['Change Request Date']?.date?.start ?? p['Date Issued']?.date?.start ??
+      p['Issue Date']?.date?.start          ?? null;
+    const projectId =
+      p['Projects']?.relation?.[0]?.id          ?? p['Project']?.relation?.[0]?.id ??
+      p['Related Projects']?.relation?.[0]?.id  ?? p['Related Project']?.relation?.[0]?.id ?? null;
+    const relatedTaskIds = (p['Related Task']?.relation ?? p['Related Tasks']?.relation ?? []).map(r => r.id);
+    const legacyItemId   =
+      p['Item']?.relation?.[0]?.id         ?? p['Related Item']?.relation?.[0]?.id  ??
+      p['Related Items']?.relation?.[0]?.id ?? p['Items']?.relation?.[0]?.id        ?? null;
+    return { id: page.id, varNumber, title, statusValues, projectId, relatedTaskIds, legacyItemId, dateIssued, type, typeColor };
+  }
+
+  try {
+    const startedAt = Date.now();
+    const pages      = await queryAll(DB.variations, null);
+    const variations = pages.map(transformVariation);
+
+    const statusColorMap = {};
+    for (const page of pages) {
+      const opts = page.properties?.['Variation Status']?.multi_select ?? page.properties?.['Status']?.multi_select ?? [];
+      for (const o of opts) { if (o.name && o.color && !statusColorMap[o.name]) statusColorMap[o.name] = o.color; }
+    }
+
+    const allTaskIds         = [...new Set(variations.flatMap(v => v.relatedTaskIds))];
+    const allLegacyIds       = [...new Set(variations.map(v => v.legacyItemId).filter(Boolean))];
+    const taskToVariationIds = {};
+    for (const v of variations) {
+      for (const tid of v.relatedTaskIds) {
+        if (!taskToVariationIds[tid]) taskToVariationIds[tid] = [];
+        taskToVariationIds[tid].push(v.id);
+      }
+    }
+
+    const variationToItemIds = {};
+    const itemInfoMap        = {};
+    const projIdSet          = new Set(variations.map(v => v.projectId).filter(Boolean));
+
+    if (DB.tasks && allTaskIds.length > 0) {
+      const CHUNK = 100;
+      for (let i = 0; i < allTaskIds.length; i += CHUNK) {
+        const chunk      = allTaskIds.slice(i, i + CHUNK);
+        const taskFilter = chunk.length === 1
+          ? { property: 'To Do List', relation: { contains: chunk[0] } }
+          : { or: chunk.map(tid => ({ property: 'To Do List', relation: { contains: tid } })) };
+        const itemPages  = await queryAll(DB.tasks, withNoPcsa(taskFilter));
+        for (const page of itemPages) {
+          const itemId = page.id;
+          const p      = page.properties ?? {};
+          const name   = p['Item Name']?.title?.[0]?.plain_text ?? null;
+          const projId = p['Projects']?.relation?.[0]?.id       ?? null;
+          itemInfoMap[itemId] = { name, projectId: projId };
+          if (projId) projIdSet.add(projId);
+          const tdlIds = (p['To Do List']?.relation ?? []).map(r => r.id);
+          for (const tid of tdlIds) {
+            for (const vid of (taskToVariationIds[tid] ?? [])) {
+              if (!variationToItemIds[vid]) variationToItemIds[vid] = new Set();
+              variationToItemIds[vid].add(itemId);
+            }
+          }
+        }
+        if (i + CHUNK < allTaskIds.length) await new Promise(r => setTimeout(r, 300));
+      }
+    }
+
+    const unresolvedLegacy = allLegacyIds.filter(id => !itemInfoMap[id]);
+    for (let i = 0; i < unresolvedLegacy.length; i += 5) {
+      const chunk = unresolvedLegacy.slice(i, i + 5);
+      const fetched = await Promise.all(chunk.map(fetchPage));
+      for (let j = 0; j < chunk.length; j++) {
+        const page = fetched[j];
+        if (!page) continue;
+        const p      = page.properties ?? {};
+        const projId = p['Projects']?.relation?.[0]?.id ?? null;
+        const name   = p['Item Name']?.title?.[0]?.plain_text ?? p['Name']?.title?.[0]?.plain_text ?? null;
+        itemInfoMap[chunk[j]] = { projectId: projId, name };
+        if (projId) projIdSet.add(projId);
+      }
+      if (i + 5 < unresolvedLegacy.length) await new Promise(r => setTimeout(r, 300));
+    }
+
+    const projMap = {};
+    try {
+      const projectPages = await queryAll(DB.projects, null);
+      for (const p of projectPages) {
+        projMap[p.id] = { id: p.id, name: p.properties?.['Project Name']?.title?.[0]?.plain_text ?? p.id };
+      }
+    } catch {
+      await Promise.all([...projIdSet].map(async id => {
+        const page = await fetchPage(id);
+        if (page) projMap[id] = { id, name: page.properties?.['Project Name']?.title?.[0]?.plain_text ?? id };
+      }));
+    }
+
+    const enriched = variations.map(v => {
+      const fromTasks     = [...(variationToItemIds[v.id] ?? new Set())];
+      const uniqueItemIds = fromTasks.length > 0 ? fromTasks : (v.legacyItemId ? [v.legacyItemId] : []);
+      const items         = uniqueItemIds.map(iid => itemInfoMap[iid]).filter(Boolean);
+      const itemNames     = items.map(i => i.name).filter(Boolean);
+      const itemIds       = uniqueItemIds.filter(id => itemInfoMap[id]);
+      const resolvedProjId = v.projectId ?? items[0]?.projectId ?? null;
+      const allProjectIds  = [...new Set(items.map(i => i.projectId).filter(Boolean))];
+      if (resolvedProjId && !allProjectIds.includes(resolvedProjId)) allProjectIds.unshift(resolvedProjId);
+      return {
+        id: v.id, varNumber: v.varNumber, title: v.title,
+        statusValues: v.statusValues, status: v.statusValues[0] ?? null,
+        type: v.type, typeColor: v.typeColor, dateIssued: v.dateIssued,
+        projectId:   resolvedProjId,
+        projectName: resolvedProjId ? (projMap[resolvedProjId]?.name ?? null) : null,
+        itemIds, itemNames, itemId: itemIds[0] ?? null, itemName: itemNames[0] ?? null,
+      };
+    });
+
+    enriched.sort((a, b) => {
+      const p = (a.projectName ?? '').localeCompare(b.projectName ?? '');
+      return p !== 0 ? p : (a.varNumber ?? 0) - (b.varNumber ?? 0);
+    });
+
+    console.log(`[variations] done in ${Date.now() - startedAt}ms — ${enriched.length} items`);
+    const result = { items: enriched, configured: true, statusColorMap };
+    setCached(cacheKey, result, 5 * 60 * 1000);
+    res.json(result);
+  } catch (err) {
+    console.error('[variations]', err.message);
     res.status(err.status ?? 500).json({ error: err.message });
   }
 });
@@ -339,7 +729,7 @@ app.post('/api/quick-log/production', async (req, res) => {
         headers: notionHeaders(),
         body: JSON.stringify({
           properties: {
-            'Status': { status: { name: 'Pre-Production' } },
+            'Drawing Progress': { status: { name: 'Pre-Production' } },
             ...(targetDate && { 'Production Date': { date: { start: targetDate } } }),
             ...(notes && { 'Notes': { rich_text: [{ text: { content: notes } }] } }),
           },
@@ -387,7 +777,7 @@ app.get('/api/drawings-register/items', async (req, res) => {
     const items  = pages.map(p => ({
       id:        p.id,
       name:      p.properties['Item Name']?.title?.[0]?.plain_text ?? null,
-      status:    p.properties['Status']?.status?.name              ?? null,
+      status:    p.properties['Drawing Progress']?.status?.name    ?? null,
       projectId,
     }));
     res.json(items);
@@ -450,7 +840,7 @@ app.get('/api/drawings-register', async (req, res) => {
         const projectPageId = p2['Projects']?.relation?.[0]?.id ?? null;
         itemMap[id] = {
           name: p2['Item Name']?.title?.[0]?.plain_text ?? null,
-          status: p2['Status']?.status?.name ?? null,
+          status: p2['Drawing Progress']?.status?.name ?? null,
           projectPageId,
         };
         if (projectPageId && !projPromises[projectPageId]) {
@@ -557,7 +947,7 @@ app.post('/api/drawings-register/bulk', async (req, res) => {
 // ── POST /api/tasks/update ────────────────────────────────────────────────────
 app.post('/api/tasks/update', async (req, res) => {
   if (!notionRequired(res)) return
-  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate, noClientApproval } = req.body
+  const { id, description, subTaskHours, taskCategory, changeTask, taskDone, itemId, startDate, endDate, noClientApproval, dd1, constrDrawDays } = req.body
   if (!id) return res.status(400).json({ error: 'id is required' })
   const properties = {}
   if (description  !== undefined && description !== null)
@@ -578,6 +968,10 @@ app.post('/api/tasks/update', async (req, res) => {
     properties['End Date'] = endDate ? { date: { start: endDate } } : { date: null }
   if (noClientApproval !== undefined)
     properties['No Client Approval'] = { checkbox: Boolean(noClientApproval) }
+  if (dd1 !== undefined)
+    properties['Draw Days - DD1']  = { number: dd1 == null ? null : Number(dd1) }
+  if (constrDrawDays !== undefined)
+    properties['Draw Days - DD-C'] = { number: constrDrawDays == null ? null : Number(constrDrawDays) }
   try {
     const r = await fetchNotion(`${NOTION_API}/pages/${id}`, {
       method: 'PATCH', headers: notionHeaders(), body: JSON.stringify({ properties }),
@@ -606,7 +1000,7 @@ app.get('/api/schedule-items', async (req, res) => {
     return {
       id:               page.id,
       name,
-      status:           p['Status']?.status?.name              ?? null,
+      status:           p['Drawing Progress']?.status?.name    ?? null,
       projectId:        pid,
       noClientApproval: p['No Client Approval']?.checkbox      ?? false,
       dmPhase:          p['DM Phase']?.select?.name            ?? null,
@@ -626,6 +1020,10 @@ app.get('/api/schedule-items', async (req, res) => {
       stCActDate:    dtVal(p, 'Constr. DT Start (Actual)'),
       delCActDate:   dtVal(p, 'Constr. DT Delivery (Actual)'),
       subCActDate:   dtVal(p, 'Constr. Submission Date (Actual)'),
+
+      // Draw-day values (Notion-sourced, editable from matrix)
+      dd1:            p['Draw Days - DD1']?.number   ?? null,
+      constrDrawDays: p['Draw Days - DD-C']?.number ?? null,
     };
   }
 
@@ -684,9 +1082,351 @@ app.get('/api/schedule-items', async (req, res) => {
   }
 });
 
+// ── GET /api/finishes-schedule ────────────────────────────────────────────────
+// Schema (confirmed): CAD Ref=title, APPROVED=select, Spec Ref=multi_select,
+// Items=relation, Suffix=rollup, Submitted on=date (lowercase o),
+// Face Material=text, Sheen (%)=text, Lipping=text, Finish Info=text
+app.get('/api/finishes-schedule', async (req, res) => {
+  if (!notionRequired(res)) return;
+
+  const dbId = process.env.NOTION_DB_FINISHES;
+  if (!dbId) return res.json({ configured: false, items: [] });
+
+  // Local helpers
+  const rt = (p, k) => p[k]?.rich_text?.map(t => t.plain_text).join('') || null;
+  const rollupTxt = (p, k) => {
+    const prop = p[k];
+    if (!prop || prop.type !== 'rollup') return null;
+    if (prop.rollup?.type === 'array') {
+      return prop.rollup.array.map(item => {
+        if (item.type === 'rich_text') return item.rich_text?.map(t => t.plain_text).join('');
+        if (item.type === 'title')     return item.title?.map(t => t.plain_text).join('');
+        if (item.type === 'select')    return item.select?.name;
+        return null;
+      }).filter(Boolean).join(', ') || null;
+    }
+    if (prop.rollup?.type === 'number') return String(prop.rollup.number ?? '');
+    return null;
+  };
+  // Spec Ref is now a multi_select property
+  const multiSelect = (p, k) => p[k]?.multi_select?.map(o => o.name) ?? [];
+
+  try {
+    const pages = await queryAll(dbId, null, {
+      sorts: [{ property: 'CAD Ref', direction: 'ascending' }],
+    });
+
+    // ── Resolve Item names from relation ──────────────────────────────────────
+    const allItemIds = [...new Set(
+      pages.flatMap(page => (page.properties['Items']?.relation ?? []).map(r => r.id))
+    )];
+    const itemNameMap = new Map();
+    await Promise.all(allItemIds.slice(0, 150).map(async id => {
+      try {
+        const r = await fetchNotion(`${NOTION_API}/pages/${id}`, { headers: notionHeaders() });
+        if (r.ok) {
+          const pg = await r.json();
+          const titleProp = Object.values(pg.properties || {}).find(p => p.type === 'title');
+          const name = titleProp?.title?.[0]?.plain_text ?? null;
+          if (name) itemNameMap.set(id, name);
+        }
+      } catch { /* skip failed lookups */ }
+    }));
+
+    const items = pages.map(page => {
+      const p = page.properties;
+
+      // Item names from relation
+      const itemIds   = (p['Items']?.relation ?? []).map(r => r.id);
+      const itemNames = itemIds.map(id => itemNameMap.get(id)).filter(Boolean);
+
+      // Finish Description — consolidate confirmed field names with ' | ' separator
+      const materialType    = rt(p, 'Material Type');
+      const faceMaterial    = rt(p, 'Face Material');
+      const fireRating      = rt(p, 'Fire Rating');
+      const core            = rt(p, 'Core');
+      const matchingPattern = rt(p, 'Matching Pattern');
+      const brand           = rt(p, 'Brand');
+      const supplier        = rt(p, 'Supplier');
+      const productCode     = rt(p, 'Product Code');
+      const finish          = rt(p, 'Finish');
+      const sheen           = rt(p, 'Sheen (%)');
+      const lipping         = rt(p, 'Lipping');
+
+      // Default order — frontend may override for display, but this drives CSV
+      const finishDescription = [
+        materialType, supplier, brand, faceMaterial, core,
+        finish, productCode, matchingPattern, fireRating, sheen, lipping,
+      ].filter(Boolean).join(' | ') || null;
+
+      return {
+        id:                  page.id,
+        itemNames,
+        itemIds,
+        projectId:           relIds(p, 'Project')[0] ?? null,
+        cadRef:              titleVal(p, 'CAD Ref'),
+        specRef:             multiSelect(p, 'Spec Ref'),  // multi_select → array of strings
+        finishDescription,
+        materialType,
+        faceMaterial,
+        fireRating,
+        core,
+        matchingPattern,
+        brand,
+        supplier,
+        productCode,
+        finish,
+        sheen,
+        lipping,
+        sampleRef:           rt(p, 'Sample Ref'),
+        sampleType:          selectVal(p, 'Sample Type'),
+        suffix:              rollupTxt(p, 'Suffix'),
+        approved:            selectVal(p, 'APPROVED'),   // "A"|"B"|"C"|"Awaiting Approval"|"Not Submitted"
+        actionRequired:      selectVal(p, 'Action Required'),
+        submittedOn:         dateVal(p, 'Submitted on'), // lowercase 'on'
+        specClass:           rt(p, 'Spec Class'),
+        notes:               rt(p, 'Notes'),
+        cuttingListRequired: false, // property not yet in Notion schema
+      };
+    });
+
+    res.json({ configured: true, items });
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Notion API timed out — try again' });
+    console.error('[finishes-schedule]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
+});
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, notion: !!process.env.NOTION_TOKEN });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  DT DRAWING CHECKER ROUTES
+//  These mirror the Netlify functions so local dev (proxy → Express) works.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Shared property extractor (same logic as Netlify functions)
+function dtGetVal(prop) {
+  if (!prop) return null;
+  switch (prop.type) {
+    case 'title':     return prop.title?.map(t => t.plain_text).join('') || null;
+    case 'rich_text': return prop.rich_text?.map(t => t.plain_text).join('') || null;
+    case 'select':    return prop.select?.name || null;
+    case 'checkbox':  return String(prop.checkbox);
+    case 'date':      return prop.date?.start || null;
+    case 'people':    return prop.people?.map(p => p.name).filter(Boolean).join(', ') || null;
+    case 'formula':
+      if (prop.formula?.type === 'string') return prop.formula.string || null;
+      if (prop.formula?.type === 'number') return prop.formula.number != null ? String(prop.formula.number) : null;
+      if (prop.formula?.type === 'date')   return prop.formula.date?.start || null;
+      return null;
+    case 'rollup':
+      if (prop.rollup?.type === 'array')
+        return prop.rollup.array?.map(i => dtGetVal(i)).filter(Boolean).join(', ') || null;
+      if (prop.rollup?.type === 'date') return prop.rollup.date?.start || null;
+      return null;
+    default: return null;
+  }
+}
+
+// ── GET /api/dt-checker-projects ─────────────────────────────────────────────
+app.get('/api/dt-checker-projects', async (_req, res) => {
+  if (!notionRequired(res)) return;
+  try {
+    let allResults = [], cursor;
+    do {
+      const body = { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) };
+      const r = await fetchNotion(
+        `https://api.notion.com/v1/databases/${DB.projects}/query`,
+        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
+      );
+      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
+      const data = await r.json();
+      allResults = allResults.concat(data.results || []);
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    const projects = allResults.map(row => ({
+      pageId:         row.id,
+      projectName:    dtGetVal(row.properties['Project Name']),
+      projectNumber:  dtGetVal(row.properties['Project #']),
+      projectAddress: dtGetVal(row.properties['Project Address']),
+      mainContractor: dtGetVal(row.properties['Main Contractor']),
+      architect:      dtGetVal(row.properties['Architect']),
+    })).filter(p => p.projectName);
+
+    res.json({ projects, error: null });
+  } catch (err) {
+    console.error('[dt-checker-projects]', err.message);
+    res.status(err.status ?? 500).json({ projects: [], error: err.message });
+  }
+});
+
+// ── POST /api/dt-checker-suffixes ────────────────────────────────────────────
+app.post('/api/dt-checker-suffixes', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { projectPageId } = req.body || {};
+  if (!projectPageId) return res.status(400).json({ suffixes: [], error: 'projectPageId is required' });
+
+  try {
+    const suffixes = [];
+    let cursor;
+    do {
+      const body = {
+        page_size: 100,
+        filter: { property: 'Projects', relation: { contains: projectPageId } },
+        sorts: [{ property: 'Item Name', direction: 'ascending' }],
+        ...(cursor ? { start_cursor: cursor } : {}),
+      };
+      const r = await fetchNotion(
+        `https://api.notion.com/v1/databases/${DB.tasks}/query`,
+        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
+      );
+      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
+      const data = await r.json();
+      for (const row of data.results || []) {
+        const itemName = row.properties['Item Name']?.title?.[0]?.plain_text ?? null;
+        suffixes.push({ suffixNumber: itemName, itemPageId: row.id });
+      }
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    res.json({ suffixes, error: null });
+  } catch (err) {
+    console.error('[dt-checker-suffixes]', err.message);
+    res.status(err.status ?? 500).json({ suffixes: [], error: err.message });
+  }
+});
+
+// ── POST /api/dt-checker-drawings ────────────────────────────────────────────
+app.post('/api/dt-checker-drawings', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { itemPageId } = req.body || {};
+  if (!itemPageId) return res.status(400).json({ rows: [], error: 'itemPageId is required' });
+
+  function mapDrawingRow(row) {
+    const p = row.properties;
+    return {
+      id:                     row.id,
+      project:                dtGetVal(p['Project']),
+      item:                   dtGetVal(p['Item']),
+      assignedTo:             dtGetVal(p['Person']),
+      suffixNumber:           dtGetVal(p['Suffix #']),
+      drawingNumber:          dtGetVal(p['Drawing Number']),
+      pageDescription:        dtGetVal(p['Page Description']),
+      drawingTitle1:          dtGetVal(p['Drawing Title 1']),
+      drawingTitle2:          dtGetVal(p['Drawing Title 2']),
+      drawingTitle3:          dtGetVal(p['Drawing Title 3']),
+      revision:               dtGetVal(p['Rev']),
+      s4Status:               dtGetVal(p['S4 Status (LOR)']),
+      s4StatusDate:           dtGetVal(p['S4 Status Date (LOR)']) ?? dtGetVal(p['S4 Status Date (Actual)']),
+      s4DtDeliveryDateActual: dtGetVal(p['S4 DT Delivery Date (Actual)']),
+      s5Status:               dtGetVal(p['S5 Status (F&P)']),
+      s5StatusDate:           dtGetVal(p['S5 Status Date (F&P)']) ?? dtGetVal(p['S5 Status Date (Actual)']),
+      s5DtDeliveryDateActual: dtGetVal(p['S5 DT Delivery Date (Actual)']),
+      designStage:            dtGetVal(p['Design Stage']),
+    };
+  }
+
+  try {
+    let allRows = [], cursor;
+    do {
+      const body = {
+        page_size: 100,
+        filter: { property: 'Item', relation: { contains: itemPageId } },
+        sorts: [{ property: 'Drawing Number', direction: 'ascending' }],
+        ...(cursor ? { start_cursor: cursor } : {}),
+      };
+      const r = await fetchNotion(
+        `https://api.notion.com/v1/databases/${DB.drawings}/query`,
+        { method: 'POST', headers: notionHeaders(), body: JSON.stringify(body) },
+      );
+      if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
+      const data = await r.json();
+      allRows = allRows.concat((data.results || []).map(mapDrawingRow));
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    res.json({ rows: allRows, error: null });
+  } catch (err) {
+    console.error('[dt-checker-drawings]', err.message);
+    res.status(err.status ?? 500).json({ rows: [], error: err.message });
+  }
+});
+
+// ── POST /api/dt-checker-finishes ────────────────────────────────────────────
+app.post('/api/dt-checker-finishes', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const DB_FINISHES = process.env.NOTION_DB_FINISHES;
+  if (!DB_FINISHES) return res.json({ rows: [], error: 'Finishes database not configured' });
+
+  const { suffixNumber, projectPageId } = req.body || {};
+  if (!suffixNumber) return res.status(400).json({ rows: [], error: 'suffixNumber is required' });
+
+  const suffixFilter = { property: 'Suffix', rollup: { any: { rich_text: { equals: suffixNumber } } } };
+  const filter = projectPageId
+    ? { and: [suffixFilter, { property: 'Project', relation: { contains: projectPageId } }] }
+    : suffixFilter;
+
+  try {
+    const r = await fetchNotion(
+      `https://api.notion.com/v1/databases/${DB_FINISHES}/query`,
+      { method: 'POST', headers: notionHeaders(), body: JSON.stringify({ filter, page_size: 100 }) },
+    );
+    if (!r.ok) { const t = await r.text().catch(() => ''); throw Object.assign(new Error(`Notion ${r.status}: ${t.slice(0,200)}`), { status: r.status }); }
+    const data = await r.json();
+    const rows = (data.results || []).map(page => {
+      const p = page.properties;
+      return {
+        specRef:           dtGetVal(p['Spec Ref']),
+        cadRef:            dtGetVal(p['CAD Ref']),
+        finishDescription: dtGetVal(p['Finish Description']),
+        sampleRef:         dtGetVal(p['Sample Ref']),
+        approved:          dtGetVal(p['APPROVED']),
+        pageId:            page.id,
+      };
+    });
+    res.json({ rows, error: null });
+  } catch (err) {
+    console.error('[dt-checker-finishes]', err.message);
+    res.status(err.status ?? 500).json({ rows: [], error: err.message });
+  }
+});
+
+// ── POST /api/dt-checker-update-phase ────────────────────────────────────────
+// Updates "DM Phase" select property on a Notion item page.
+// Body: { itemPageId: string, phase: 'Submit' | 'Assign' }
+app.post('/api/dt-checker-update-phase', async (req, res) => {
+  if (!notionRequired(res)) return;
+  const { itemPageId, phase } = req.body || {};
+  if (!itemPageId) return res.status(400).json({ error: 'itemPageId is required' });
+  if (!phase)      return res.status(400).json({ error: 'phase is required' });
+  const ALLOWED = ['Submit', 'Assign'];
+  if (!ALLOWED.includes(phase)) return res.status(400).json({ error: `phase must be one of: ${ALLOWED.join(', ')}` });
+
+  try {
+    const r = await fetchNotion(
+      `https://api.notion.com/v1/pages/${itemPageId}`,
+      {
+        method: 'PATCH',
+        headers: notionHeaders(),
+        body: JSON.stringify({ properties: { 'DM Phase': { select: { name: phase } } } }),
+      },
+    );
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw Object.assign(new Error(`Notion update failed: ${r.status} ${txt.slice(0, 200)}`), { status: r.status });
+    }
+    const data = await r.json();
+    const updatedPhase = data.properties?.['DM Phase']?.select?.name ?? phase;
+    res.json({ ok: true, phase: updatedPhase, error: null });
+  } catch (err) {
+    console.error('[dt-checker-update-phase]', err.message);
+    res.status(err.status ?? 500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

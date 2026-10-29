@@ -99,7 +99,7 @@ export function transformTask(page, drawings = []) {
   return {
     id: page.id,
     name,
-    status:           props['Status']?.status?.name                   ?? null,
+    status:           props['Drawing Progress']?.status?.name         ?? null,
     assignee:         props['Assigned To']?.people?.[0]?.name         ?? null,
     contractCategory: props['Contract Category']?.formula?.string
                    ?? (name.toLowerCase().includes('pcsa') ? 'PCSA' : 'Main Works'),
@@ -152,7 +152,7 @@ export function transformItem(page) {
   return {
     id,
     name,
-    status:           statusVal(p, 'Status'),
+    status:           statusVal(p, 'Drawing Progress'),
     dmPhase:          selectVal(p, 'DM Phase'),
     assignee:         personVal(p, 'Assigned To'),
     contractCategory: contractCat(name),

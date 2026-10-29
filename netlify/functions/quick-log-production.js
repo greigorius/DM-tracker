@@ -22,7 +22,7 @@ export const handler = async (event) => {
         headers: notionHeaders(),
         body: JSON.stringify({
           properties: {
-            'Status': { status: { name: 'Pre-Production' } },
+            'Drawing Progress': { status: { name: 'Pre-Production' } },
             ...(targetDate && { 'Production Date': { date: { start: targetDate } } }),
             ...(notes      && { 'Notes':            { rich_text: [{ text: { content: notes } }] } }),
           },

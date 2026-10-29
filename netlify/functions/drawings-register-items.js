@@ -25,7 +25,7 @@ export const handler = async (event) => {
       return {
         id:        p.id,
         name:      props['Item Name']?.title?.[0]?.plain_text ?? null,
-        status:    props['Status']?.status?.name              ?? null,
+        status:    props['Drawing Progress']?.status?.name    ?? null,
         projectId,
       }
     })

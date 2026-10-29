@@ -47,66 +47,91 @@ export const MOCK_ITEMS = [
     id: 'OX-01', projectId: 'proj-1',
     name: 'Curtain Wall Type CW-01',
     status: 'In Progress', dmPhase: 'DT1', assignee: 'JD',
-    rfis: ['RFI-001', 'RFI-003'],
+    rfis: ['RFI-001', 'RFI-003'], tdlCount: 3, drawingCount: 8,
     milestones: { dt1Start: T(-5), dt1Delivery: T(3), sub1: T(14), s4Status: T(28) },
   },
   {
     id: 'OX-02', projectId: 'proj-1',
     name: 'Entrance Canopy Steel',
     status: 'In Review', dmPhase: 'P01', assignee: 'SR',
-    rfis: ['RFI-007'],
+    rfis: ['RFI-007'], tdlCount: 2, drawingCount: 5,
     milestones: { dt1Delivery: T(-10), sub1: T(-3), s4Status: T(18) },
   },
   {
     id: 'OX-03', projectId: 'proj-1',
     name: 'Atrium Roof Glazing',
     status: 'On Hold - RFIs', dmPhase: 'DT1', assignee: 'MK',
-    rfis: ['RFI-012', 'RFI-015'],
+    rfis: ['RFI-012', 'RFI-015'], tdlCount: 4, drawingCount: 6,
     milestones: { dt1Start: T(2), dt1Delivery: T(9), sub1: T(21) },
   },
   {
     id: 'OX-04', projectId: 'proj-1',
     name: 'Ground Floor Facade Panels',
     status: 'Design Complete', dmPhase: 'S4', assignee: 'JD',
-    rfis: [],
+    rfis: [], tdlCount: 0, drawingCount: 4,
     milestones: { dt1Delivery: T(-21), sub1: T(-14), s4Status: T(-5), s5Status: T(25) },
   },
   {
     id: 'OX-05', projectId: 'proj-1',
     name: 'Rooftop Plant Enclosure',
     status: 'Backlog', dmPhase: 'DT2', assignee: 'SR',
-    rfis: [],
+    rfis: [], tdlCount: 1, drawingCount: 3,
     milestones: { dt2Start: T(5), dt2Delivery: T(12) },
   },
   {
     id: 'OX-06', projectId: 'proj-1',
     name: 'Main Lobby Balustrade',
     status: 'In Manufacture', dmPhase: 'PROD', assignee: 'MK',
-    rfis: [],
+    rfis: [], tdlCount: 0, drawingCount: 7,
     milestones: { sub1: T(-60), s4Status: T(-45), sub2: T(-30), s5Status: T(-15), production: T(-7) },
   },
   {
     id: 'PB-01', projectId: 'proj-2',
     name: 'External Cladding System A',
     status: 'In Progress', dmPhase: 'DT1', assignee: 'TW',
-    rfis: ['RFI-B01'],
+    rfis: ['RFI-B01'], tdlCount: 2, drawingCount: 5,
     milestones: { dt1Start: T(-3), dt1Delivery: T(6), sub1: T(20) },
   },
   {
     id: 'PB-02', projectId: 'proj-2',
     name: 'Structural Steel Connections',
     status: 'In Review', dmPhase: 'P01', assignee: 'TW',
-    rfis: [],
+    rfis: [], tdlCount: 1, drawingCount: 4,
     milestones: { dt1Delivery: T(-8), sub1: T(1), s4Status: T(22) },
   },
   {
     id: 'PB-03', projectId: 'proj-2',
     name: 'Roof Drainage System',
     status: 'Design Complete', dmPhase: 'S5', assignee: 'AL',
-    rfis: ['RFI-B04'],
+    rfis: ['RFI-B04'], tdlCount: 0, drawingCount: 3,
     milestones: { sub2: T(-10), s5Status: T(4) },
   },
 ];
+
+// ── RFI mock data ─────────────────────────────────────────────────────────────
+export const RFIS = [
+  { id: 'rfi-001', rfiNumber: '1',   projectId: 'proj-1', projectName: 'EIT Oxford House', status: 'Open',      description: 'Curtain wall thermal performance specification — U-value targets', tbcBy: '28 Apr' },
+  { id: 'rfi-003', rfiNumber: '3',   projectId: 'proj-1', projectName: 'EIT Oxford House', status: 'Open',      description: 'Structural bracket connection details for CW-01 bracket grid', tbcBy: '2 May' },
+  { id: 'rfi-007', rfiNumber: '7',   projectId: 'proj-1', projectName: 'EIT Oxford House', status: 'Open',      description: 'Canopy steel grade confirmation from structural engineer', tbcBy: '30 Apr' },
+  { id: 'rfi-012', rfiNumber: '12',  projectId: 'proj-1', projectName: 'EIT Oxford House', status: 'Open',      description: 'Atrium roof glazing U-value targets and solar gain limits', tbcBy: '5 May' },
+  { id: 'rfi-015', rfiNumber: '15',  projectId: 'proj-1', projectName: 'EIT Oxford House', status: 'Pending',   description: 'Fixing bolt schedule and supplier approval for atrium node', tbcBy: 'TBC' },
+  { id: 'rfi-b01', rfiNumber: 'B01', projectId: 'proj-2', projectName: 'Project B',         status: 'Open',      description: 'External cladding fire rating certification — Class A1 required', tbcBy: '8 May' },
+  { id: 'rfi-b04', rfiNumber: 'B04', projectId: 'proj-2', projectName: 'Project B',         status: 'In Review', description: 'Roof drainage outlet sizes and flow rates per BS EN 12056', tbcBy: '25 Apr' },
+];
+
+// ── Enriched items (mock data + derived fields for page components) ────────────
+export const ITEMS = MOCK_ITEMS.map(item => {
+  const project = PROJECTS.find(p => p.id === item.projectId);
+  return {
+    ...item,
+    rfiCount:     item.rfis.length,
+    projectName:  project?.name  ?? '',
+    projectColor: project?.color ?? '#60a5fa',
+    dates: Object.fromEntries(
+      Object.entries(item.milestones || {}).map(([k, v]) => [k, { plan: v }])
+    ),
+  };
+});
 
 // ── Computed stats (all projects) ────────────────────────────────────────────
 export const STATS = {

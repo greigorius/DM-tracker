@@ -20,7 +20,7 @@ function transformScheduleItem(page, pid) {
   return {
     id:               page.id,
     name,
-    status:           p['Status']?.status?.name              ?? null,
+    status:           p['Drawing Progress']?.status?.name    ?? null,
     projectId:        pid,
     noClientApproval: p['No Client Approval']?.checkbox      ?? false,
     dmPhase:          p['DM Phase']?.select?.name            ?? null,
@@ -40,6 +40,10 @@ function transformScheduleItem(page, pid) {
     stCActDate:    d(p, 'Constr. DT Start (Actual)'),
     delCActDate:   d(p, 'Constr. DT Delivery (Actual)'),
     subCActDate:   d(p, 'Constr. Submission Date (Actual)'),
+
+    // Draw-day values (Notion-sourced, editable from matrix)
+    dd1:            p['Draw Days - DD1']?.number   ?? null,
+    constrDrawDays: p['Draw Days - DD-C']?.number ?? null,
   }
 }
 

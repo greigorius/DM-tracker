@@ -573,7 +573,7 @@ export default function TasksPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>TASKS</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>TASK SCHEDULE</h1>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
             {activeTab === 'assigned'
               ? `To-do list · ${groupBy === 'none' ? 'no grouping' : `grouped by ${groupBy}`}`

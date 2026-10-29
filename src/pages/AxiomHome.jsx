@@ -1,470 +1,386 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import AppNav from '../components/AppNav.jsx';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { DM_PHASES, PHASE_ORDER, STATUS_COLORS } from '../data/mockData.js';
-import QuickLogBar from '../components/QuickLogBar.jsx';
 import MiniTimeline from '../components/MiniTimeline.jsx';
-import { PROJECT_COLORS, CLIENT_COLORS, assignProjectColors } from '../data/colors.js';
+import { DM_PHASES, PHASE_ORDER } from '../data/mockData.js';
+import { assignProjectColors, PROJECT_COLORS } from '../data/colors.js';
 import { getCached, setCached } from '../hooks/usePageCache.js';
 
-// ── Colours ───────────────────────────────────────────────────────────────────
 const C = {
-  bg:       '#0a0f1a',
-  bgCard:   '#0d1525',
-  bgPanel:  '#0d1830',
-  border:   '#1e2d45',
-  text:     '#e2e8f0',
-  textSec:  '#94a3b8',
-  textMut:  '#7b90b0',
-  today:    'rgba(74,222,128,0.75)',
-  grid:     '#1a2540',
+  bg:      '#0a0f1a',
+  bgCard:  '#0d1525',
+  bgPanel: '#0d1830',
+  border:  '#1e2d45',
+  grid:    '#1a2540',
+  text:    '#e2e8f0',
+  textSec: '#94a3b8',
+  textMut: '#7b90b0',
+  blue:    '#60a5fa',
+  green:   '#34d399',
+  red:     '#f87171',
+  amber:   '#fbbf24',
 };
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
+const MONO = "'JetBrains Mono', 'ui-monospace', Consolas, monospace";
+const SANS = "'Inter', system-ui, sans-serif";
+
+function toInitials(name) {
+  if (!name) return '??';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return parts.map(p => p[0]).join('').toUpperCase();
 }
 
-function phaseCfg(key)  { return DM_PHASES.find(p => p.key === key) || { bg: '#1e293b', text: '#94a3b8' }; }
-function statusCfg(key) { return STATUS_COLORS[key] || { bg: '#1e293b', text: '#94a3b8' }; }
-function PhaseBadge({ phase }) {
-  const cfg = phaseCfg(phase);
-  return <span style={{ background: cfg.bg, color: cfg.text, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>{phase}</span>;
-}
-function StatusBadge({ status }) {
-  const cfg = statusCfg(status);
-  return <span style={{ background: cfg.bg, color: cfg.text, fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4 }}>{status}</span>;
-}
-function AssigneeChip({ assignee }) {
-  return <span style={{ background: '#1e2d45', color: '#60a5fa', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, border: '1px solid #2d3f5a' }}>{assignee}</span>;
-}
-
-// ── A: Client Cards ───────────────────────────────────────────────────────────
-function DonutCenter({ children }) {
+function SectionLabel({ children, style }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+    <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.textSec, marginBottom: 10, ...style }}>
       {children}
     </div>
   );
 }
 
-function ClientCard({ client }) {
-  const navigate    = useNavigate();
-  const { projects } = client;
-  const totalItems = projects.reduce((s, p) => s + (p.itemCount ?? 0), 0);
-  const itemsData  = projects.map(p => ({ name: p.name, value: p.itemCount ?? 1, color: p.color }));
-
-  const hoursData = projects.flatMap(p => {
-    const spent     = p.hoursSpent    ?? 0;
-    const remaining = Math.max(0, (p.hoursRequired ?? 0) - spent);
-    return [
-      { value: spent,     color: p.color },
-      { value: remaining, color: hexToRgba(p.color, 0.2) },
-    ];
-  });
-  const totalSpent     = Math.ceil(projects.reduce((s, p) => s + (p.hoursSpent    ?? 0), 0));
-  const totalRemaining = Math.ceil(projects.reduce((s, p) => s + Math.max(0, (p.hoursRequired ?? 0) - (p.hoursSpent ?? 0)), 0));
-
+function AssigneeChip({ name }) {
   return (
-    <div
-      style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 24, cursor: 'pointer', transition: 'border-color 0.15s', minWidth: 500 }}
-      onClick={() => navigate(`/client/${encodeURIComponent(client.name)}`)}
-      onMouseEnter={e => e.currentTarget.style.borderColor = client.color}
-      onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-    >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: client.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 14, fontWeight: 800, color: C.text, letterSpacing: '-0.01em' }}>{client.name}</span>
-            <span style={{ fontSize: 10, color: C.textMut, marginLeft: 2 }}>{projects.length} projects</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {projects.map(p => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-                <Link
-                  to={`/project/${p.id}`}
-                  onClick={e => e.stopPropagation()}
-                  style={{ fontSize: 12, color: C.textSec, textDecoration: 'none', fontWeight: 500, flexShrink: 0 }}
-                  onMouseEnter={e => { e.currentTarget.style.color = p.color; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = C.textSec; }}
-                >
-                  {p.name}
-                </Link>
-                <span style={{ fontSize: 10, color: C.textMut }}>
-                  {p.itemCount ?? '—'} items · {p.hoursSpent ?? 0}h/{p.hoursRequired ?? 0}h
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={itemsData} cx="50%" cy="50%" innerRadius={38} outerRadius={55} dataKey="value" strokeWidth={0}>
-                {itemsData.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <DonutCenter>
-            <span style={{ fontSize: 24, fontWeight: 800, color: C.text, lineHeight: 1 }}>{totalItems || '—'}</span>
-            <span style={{ fontSize: 9, color: C.textMut, marginTop: 1 }}>items</span>
-          </DonutCenter>
-        </div>
-
-        <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={hoursData} cx="50%" cy="50%" innerRadius={38} outerRadius={55} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
-                {hoursData.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <DonutCenter>
-            <span style={{ fontSize: 22, fontWeight: 800, color: client.color, lineHeight: 1 }}>{totalSpent}h</span>
-            <span style={{ fontSize: 9, color: C.textMut, marginTop: 2 }}>{totalRemaining}h left</span>
-          </DonutCenter>
-        </div>
+    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1e2d45', border: '1px solid #2d4060', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: C.blue, flexShrink: 0, fontFamily: MONO }}>
+      {toInitials(name)}
     </div>
   );
 }
 
-// MiniTimeline imported from src/components/MiniTimeline.jsx
-
-// ── C: Stat panels ────────────────────────────────────────────────────────────
-function StatPanel({ label, value, sub, valueColor = C.text }) {
-  return (
-    <div style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 18px', minWidth: 120 }}>
-      <div style={{ fontSize: 32, fontWeight: 800, color: valueColor, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: C.textMut, marginTop: 4, fontWeight: 600 }}>{label}</div>
-      {sub && <div style={{ fontSize: 10, color: C.textSec, marginTop: 3 }}>{sub}</div>}
-    </div>
-  );
+function Skeleton({ w = '100%', h = 20, r = 6 }) {
+  return <div style={{ width: w, height: h, borderRadius: r, background: '#0d1525', border: '1px solid #1e2d45', animation: 'pulse 1.5s ease-in-out infinite' }} />;
 }
 
-// ── D: DM Phase summary table ─────────────────────────────────────────────────
-const COMPLETED_STATUSES = new Set(['PC Approved', 'In Manufacture', 'Complete', 'Omitted', 'Design Complete']);
-
-const GROUP_BY_OPTIONS = [
-  { value: 'dmPhase',  label: 'DM Phase' },
-  { value: 'assignee', label: 'Assignee' },
-  { value: 'none',     label: 'None' },
-];
-
-function PhaseTable({ items }) {
-  const [filterProject,  setFilterProject]  = useState('all');
-  const [filterPhase,    setFilterPhase]    = useState('all');
-  const [filterAssignee, setFilterAssignee] = useState('all');
-  const [activeOnly,     setActiveOnly]     = useState(true);
-  const [groupBy,        setGroupBy]        = useState('dmPhase');
-
-  const projects  = [...new Set(items.map(i => i.projectName).filter(Boolean))].sort();
-  const phases    = [...new Set(items.map(i => i.dmPhase).filter(Boolean))].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b));
-  const assignees = [...new Set(items.map(i => i.assignee).filter(Boolean))].sort();
-
-  const visible = [...items]
-    .filter(i => !activeOnly || !COMPLETED_STATUSES.has(i.status))
-    .filter(i => filterProject  === 'all' || i.projectName === filterProject)
-    .filter(i => filterPhase    === 'all' || i.dmPhase     === filterPhase)
-    .filter(i => filterAssignee === 'all' || i.assignee    === filterAssignee)
-    .sort((a, b) => PHASE_ORDER.indexOf(a.dmPhase) - PHASE_ORDER.indexOf(b.dmPhase));
-
-  const selStyle = { background: '#0b1020', border: `1px solid #1e2d45`, color: '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 6px', cursor: 'pointer' };
-  const btnStyle = (active) => ({ background: active ? '#1e3a5f' : '#0b1020', border: `1px solid ${active ? '#60a5fa' : '#1e2d45'}`, color: active ? '#60a5fa' : '#94a3b8', fontSize: 10, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: active ? 700 : 400 });
-
-  // Build groups based on groupBy selection
-  let groups = [];
-  if (groupBy === 'dmPhase') {
-    groups = PHASE_ORDER
-      .map(ph => ({ key: ph, label: ph, isPhase: true, items: visible.filter(i => i.dmPhase === ph) }))
-      .filter(g => g.items.length > 0);
-    const unphased = visible.filter(i => !PHASE_ORDER.includes(i.dmPhase));
-    if (unphased.length > 0) groups.push({ key: '__none__', label: 'No Phase', isPhase: false, items: unphased });
-  } else if (groupBy === 'assignee') {
-    const seen = [...new Set(visible.map(i => i.assignee).filter(Boolean))].sort();
-    groups = seen.map(a => ({ key: a, label: a, isPhase: false, items: visible.filter(i => i.assignee === a) }));
-    const unassigned = visible.filter(i => !i.assignee);
-    if (unassigned.length > 0) groups.push({ key: '__none__', label: 'Unassigned', isPhase: false, items: unassigned });
-  } else {
-    groups = [{ key: '__all__', label: null, isPhase: false, items: visible }];
-  }
-
-  const COL_HEADERS = ['', 'Item', 'Status', 'RFIs', 'Assignee'];
-
-  const renderTable = (rows) => (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr style={{ background: '#0b1020', borderBottom: `1px solid ${C.border}` }}>
-            {COL_HEADERS.map((h, i) => (
-              <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMut, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((item, idx) => (
-            <tr key={item.id} style={{ background: idx % 2 === 0 ? C.bgCard : '#0b1020', borderBottom: `1px solid ${C.grid}` }}>
-              <td style={{ padding: '8px 12px', width: 18 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.projectColor ?? C.textMut }} />
-              </td>
-              <td style={{ padding: '8px 12px', color: C.text, fontWeight: 500, whiteSpace: 'nowrap' }}>{item.name}</td>
-              <td style={{ padding: '8px 12px' }}><StatusBadge status={item.status} /></td>
-              <td style={{ padding: '8px 12px', color: (item.rfiCount ?? 0) > 0 ? '#f87171' : C.textMut, fontSize: 11 }}>
-                {(item.rfiCount ?? 0) > 0 ? item.rfiCount : '—'}
-              </td>
-              <td style={{ padding: '8px 12px' }}>
-                {item.assignee && <AssigneeChip assignee={item.assignee} />}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  return (
-    <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-      {/* Filter bar */}
-      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.bgPanel, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.text, marginRight: 4 }}>DM Phase Summary</span>
-        <select value={filterProject}  onChange={e => setFilterProject(e.target.value)}  style={selStyle}>
-          <option value="all">All Projects</option>
-          {projects.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={filterPhase}    onChange={e => setFilterPhase(e.target.value)}    style={selStyle}>
-          <option value="all">All Phases</option>
-          {phases.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} style={selStyle}>
-          <option value="all">All Assignees</option>
-          {assignees.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <button style={btnStyle(activeOnly)} onClick={() => setActiveOnly(v => !v)}>
-          {activeOnly ? 'Active only' : 'Show all'}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 8 }}>
-          <span style={{ fontSize: 10, color: C.textMut }}>Group by</span>
-          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
-            {GROUP_BY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-        <span style={{ fontSize: 10, color: C.textMut, marginLeft: 'auto' }}>{visible.length} items</span>
-      </div>
-
-      {/* Grouped sections */}
-      {visible.length === 0 ? (
-        <div style={{ padding: '16px 12px', color: C.textMut, fontSize: 11, textAlign: 'center' }}>No items match filters</div>
-      ) : (
-        <>
-          {groups.map(({ key, label, isPhase, items: groupItems }) => (
-            <div key={key}>
-              {label !== null && (
-                <div style={{ background: '#0b1020', padding: '7px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {isPhase ? <PhaseBadge phase={label} /> : <span style={{ fontSize: 10, fontWeight: 700, color: C.textMut }}>{label}</span>}
-                  <span style={{ fontSize: 10, color: C.textMut }}>{groupItems.length} item{groupItems.length !== 1 ? 's' : ''}</span>
-                </div>
-              )}
-              {renderTable(groupItems)}
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
-
-const REFRESH_MS = 5 * 60 * 1000; // 5 minutes
-
-// ── Main component ────────────────────────────────────────────────────────────
 export default function AxiomHome() {
-  const [projects,      setProjects]      = useState([]);
-  const [allItems,      setAllItems]      = useState([]);
-  const [projLoading,   setProjLoading]   = useState(true);
-  const [itemsLoading,  setItemsLoading]  = useState(false);
-  const [refreshKey,    setRefreshKey]    = useState(0);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
-  const abortRef = useRef(null);
+  const [projects, setProjects] = useState([]);
+  const [allItems, setAllItems] = useState([]);
+  const [allRFIs,  setAllRFIs]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
 
-  // Auto-refresh interval
   useEffect(() => {
-    const id = setInterval(() => setRefreshKey(k => k + 1), REFRESH_MS);
-    return () => clearInterval(id);
+    let cancelled = false;
+
+    async function load() {
+      // ── 1. Projects (cache-first) ─────────────────────────────────────────
+      let projectsRaw = getCached('projects');
+      if (!projectsRaw) {
+        projectsRaw = await fetch('/api/projects').then(r => r.json()).catch(() => []);
+        if (Array.isArray(projectsRaw)) setCached('projects', projectsRaw);
+      }
+      if (!Array.isArray(projectsRaw) || cancelled) return;
+
+      const colorMap = assignProjectColors(projectsRaw);
+      const enrichedProjects = projectsRaw.map(p => ({
+        ...p,
+        color:      colorMap.get(p.id) ?? PROJECT_COLORS[0],
+        hoursTotal: p.hoursRequired ?? p.hoursTotal ?? 0,
+      }));
+      if (!cancelled) setProjects(enrichedProjects);
+
+      // ── 2. Items + RFIs in parallel ────────────────────────────────────────
+      const [itemResults, rfisRaw] = await Promise.all([
+        Promise.all(
+          enrichedProjects.map(proj => {
+            const cached = getCached(`items:${proj.id}`);
+            const req = cached
+              ? Promise.resolve(cached)
+              : fetch(`/api/projects/${proj.id}/items`)
+                  .then(r => r.json())
+                  .then(data => { setCached(`items:${proj.id}`, data); return data; })
+                  .catch(() => ({ items: [] }));
+            return req.then(data => ({
+              proj,
+              items: (data.items ?? []).map(item => ({
+                ...item,
+                projectId:    proj.id,
+                projectName:  proj.name,
+                projectColor: proj.color,
+              })),
+            }));
+          })
+        ),
+        fetch('/api/rfis').then(r => r.json()).catch(() => []),
+      ]);
+
+      if (cancelled) return;
+
+      const items = itemResults.flatMap(r => r.items);
+      setAllItems(items);
+      setAllRFIs(Array.isArray(rfisRaw) ? rfisRaw : []);
+      setLoading(false);
+    }
+
+    load().catch(err => { if (!cancelled) { console.warn('[AxiomHome]', err.message); setLoading(false); } });
+    return () => { cancelled = true; };
   }, []);
 
-  // Fetch projects (cache-first: skip network when cache is fresh)
-  useEffect(() => {
-    const applyList = list => {
-      const colorMap = assignProjectColors(list);
-      setProjects(list.map(p => ({ ...p, color: colorMap.get(p.id) ?? PROJECT_COLORS[0], itemCount: null })));
-    };
-    const cached = getCached('projects');
-    if (cached) { applyList(cached); setProjLoading(false); return; }
-    fetch('/api/projects')
-      .then(r => r.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : [];
-        setCached('projects', list);
-        applyList(list);
-        setLastRefreshed(new Date());
-      })
-      .catch(() => {})
-      .finally(() => setProjLoading(false));
-  }, [refreshKey]);
+  // ── Item → project lookup for RFI enrichment ─────────────────────────────
+  const itemToProject = useMemo(() => {
+    const map = new Map();
+    allItems.forEach(item => map.set(item.id, { projectId: item.projectId, projectName: item.projectName }));
+    return map;
+  }, [allItems]);
 
-  // Fetch items for all projects once project list is ready
-  useEffect(() => {
-    if (!projects.length) return;
-    if (abortRef.current) abortRef.current.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  const rfisOpen = useMemo(() =>
+    allRFIs.filter(r => ['Open', 'Pending', 'In Review'].includes(r.status)).length,
+    [allRFIs]);
 
-    const active = projects.filter(p => p.status !== 'Complete' && p.status !== 'Done');
-    if (!active.length) return;
+  const tdlOpen = useMemo(() =>
+    allItems.reduce((n, i) => n + (i.tdlCount ?? 0), 0),
+    [allItems]);
 
-    setItemsLoading(true);
-    let remaining = active.length;
+  const drawings = useMemo(() =>
+    allItems.reduce((n, i) => n + (i.drawingCount ?? 0), 0),
+    [allItems]);
 
-    active.forEach(proj => {
-      const applyData = data => {
-        const items = (data.items || []).map(item => ({
-          ...item,
-          projectId:    proj.id,
-          projectColor: proj.color,
-          projectName:  proj.name,
-        }));
-        setAllItems(prev => [...prev.filter(i => i.projectId !== proj.id), ...items]);
-        setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, itemCount: data.summary?.total ?? items.length } : p));
-      };
-      const cached = getCached(`items:${proj.id}`);
-      if (cached) {
-        applyData(cached);
-        remaining--;
-        if (remaining === 0) setItemsLoading(false);
-        return;
-      }
-      fetch(`/api/projects/${proj.id}/items`, { signal: ctrl.signal })
-        .then(r => r.json())
-        .then(data => {
-          if (ctrl.signal.aborted) return;
-          setCached(`items:${proj.id}`, data);
-          applyData(data);
-        })
-        .catch(e => { if (e.name !== 'AbortError') console.warn('[items]', proj.name, e.message); })
-        .finally(() => {
-          if (ctrl.signal.aborted) return;
-          remaining--;
-          if (remaining === 0) setItemsLoading(false);
-        });
+  const actionReq = useMemo(() =>
+    allItems.filter(i => ['On Hold', 'Blocked', 'On Hold - RFIs'].includes(i.status)).length,
+    [allItems]);
+
+  const inProduction = useMemo(() =>
+    allItems.filter(i => i.inProduction || ['Pre-Production', 'In Manufacture'].includes(i.status)).length,
+    [allItems]);
+
+  // ── Open RFIs enriched with project name ──────────────────────────────────
+  const openRFIs = useMemo(() =>
+    allRFIs
+      .filter(r => ['Open', 'Pending', 'In Review'].includes(r.status))
+      .slice(0, 5)
+      .map(r => {
+        const info = r.relatedItemIds?.[0] ? itemToProject.get(r.relatedItemIds[0]) : null;
+        return { ...r, projectName: info?.projectName ?? null };
+      }),
+    [allRFIs, itemToProject]);
+
+  // ── Team workload — derive from data, top 7 by item count ─────────────────
+  const byAssignee = useMemo(() => {
+    const map = new Map();
+    allItems.forEach(item => {
+      if (!item.assignee) return;
+      const key = toInitials(item.assignee);
+      if (!map.has(key)) map.set(key, { a: key, fullName: item.assignee, n: 0, rfis: 0 });
+      const e = map.get(key);
+      e.n++;
+      e.rfis += item.rfiCount ?? 0;
     });
+    return [...map.values()].sort((a, b) => b.n - a.n).slice(0, 7);
+  }, [allItems]);
 
-    return () => ctrl.abort();
-  }, [projects.length, refreshKey]);
+  const maxAssigneeN = useMemo(() => Math.max(...byAssignee.map(x => x.n), 1), [byAssignee]);
 
-  // Build client hierarchy from projects
-  const clients = (() => {
-    const map = {};
-    projects.forEach(p => {
-      const name = p.client || 'Unknown';
-      if (!map[name]) {
-        const idx = Object.keys(map).length;
-        map[name] = { id: name, name, color: CLIENT_COLORS[idx % CLIENT_COLORS.length], projects: [] };
-      }
-      map[name].projects.push(p);
-    });
-    return Object.values(map);
-  })();
+  // ── Phase distribution ────────────────────────────────────────────────────
+  const phases = useMemo(() =>
+    PHASE_ORDER
+      .map(ph => ({ ph, n: allItems.filter(i => i.dmPhase === ph).length, cfg: DM_PHASES.find(p => p.key === ph) }))
+      .filter(x => x.n > 0 && x.cfg),
+    [allItems]);
 
-  // Stats derived from items
-  const rfisOpen     = allItems.reduce((n, i) => n + (i.rfiCount ?? 0), 0);
-  const tdlOpen      = allItems.reduce((n, i) => n + (i.tdlCount ?? 0), 0);
-  const inProduction = allItems.filter(i => i.inProduction || i.status === 'Pre-Production').length;
-  const itemsHanging = allItems.filter(i => (i.status ?? '').startsWith('On Hold')).length;
-  const drawingCount = allItems.reduce((n, i) => n + (i.drawingCount ?? 0), 0);
+  const phaseTotal = useMemo(() => phases.reduce((acc, x) => acc + x.n, 0), [phases]);
 
-  const today = new Date();
+  // ── Lookahead items ───────────────────────────────────────────────────────
+  const timelineItems = useMemo(() =>
+    allItems
+      .filter(i => !['Design Complete', 'Complete'].includes(i.status))
+      .slice(0, 5),
+    [allItems]);
+
+  const projectCount = projects.length;
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'DM Mono','ui-monospace', Consolas, monospace", padding: '24px 32px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em' }}>AXIOM Home</h1>
-          <div style={{ fontSize: 12, color: C.textMut, marginTop: 4 }}>All clients overview</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 11, color: C.textMut }}>
-            {today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </div>
-          {lastRefreshed && (
-            <span style={{ fontSize: 10, color: C.textMut }}>
-              updated {lastRefreshed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            title="Refresh data"
-            style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.textMut, fontSize: 11, padding: '3px 8px', cursor: 'pointer', lineHeight: 1 }}
-          >
-            ↻
-          </button>
+    <div style={{ height: '100vh', overflow: 'hidden', background: C.bg, color: C.text, fontFamily: SANS, padding: '24px 32px', display: 'flex', flexDirection: 'column' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: 4, flexShrink: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1 }}>AXIOM Home</h1>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMut, marginTop: 4 }}>
+          v3 · Health pulse — what matters today
+          {!loading && <span style={{ marginLeft: 12, color: '#2d4060' }}>
+            {projectCount} project{projectCount !== 1 ? 's' : ''} · {allItems.length} items
+          </span>}
         </div>
       </div>
 
-      <AppNav />
+      <div style={{ flexShrink: 0 }}>
+        <AppNav />
+      </div>
 
-      {/* A: Clients */}
-      <section style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Clients</div>
-        {projLoading ? (
-          <div style={{ color: C.textMut, fontSize: 12 }}>Loading projects…</div>
-        ) : clients.length === 0 ? (
-          <div style={{ color: C.textMut, fontSize: 12 }}>No projects found</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {clients.map(c => <ClientCard key={c.id} client={c} />)}
-          </div>
-        )}
-      </section>
-
-      {/* B: Tasks + Lookahead side by side */}
-      <section style={{ marginBottom: 28, display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div style={{ flex: '0 0 30%', minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Tasks</div>
-          <QuickLogBar />
+      {/* Activity KPIs */}
+      <div style={{ flexShrink: 0 }}>
+        <SectionLabel style={{ marginBottom: 8 }}>Activity</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 14 }}>
+          {[
+            { label: 'RFIs Open',       value: rfisOpen,     color: C.red,   sub: `across ${projectCount} project${projectCount !== 1 ? 's' : ''}` },
+            { label: 'Open TDL',        value: tdlOpen,      color: C.text,  sub: 'To-Do list items' },
+            { label: 'Drawings',        value: drawings,     color: C.blue,  sub: 'Total assigned' },
+            { label: 'Action Required', value: actionReq,    color: C.amber, sub: 'On Hold / Blocked' },
+            { label: 'In Production',   value: inProduction, color: C.green, sub: 'Pre-Prod / Manufacture' },
+          ].map(k => (
+            <div key={k.label} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              {loading
+                ? <Skeleton w={44} h={38} r={4} />
+                : <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, color: k.color, minWidth: 44 }}>{k.value}</div>
+              }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: MONO, fontSize: 10, color: C.textSec, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>{k.label}</div>
+                <div style={{ fontFamily: MONO, fontSize: 10, color: C.textMut, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.sub}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Lookahead</div>
-          {itemsLoading && allItems.length === 0
-            ? <div style={{ color: C.textMut, fontSize: 12 }}>Loading items…</div>
-            : <MiniTimeline items={allItems} />
+      </div>
+
+      {/* 3-column grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 14, flexShrink: 0 }}>
+
+        {/* Col 1 — Projects */}
+        <div>
+          <SectionLabel>Projects</SectionLabel>
+          {loading
+            ? [1, 2, 3].map(i => <Skeleton key={i} h={82} r={10} style={{ marginBottom: 8 }} />)
+            : projects.slice(0, 3).map(p => {
+                const projItems = allItems.filter(i => i.projectId === p.id);
+                const projRfis  = allRFIs.filter(r => {
+                  const info = r.relatedItemIds?.[0] ? itemToProject.get(r.relatedItemIds[0]) : null;
+                  return info?.projectId === p.id && ['Open', 'Pending', 'In Review'].includes(r.status);
+                }).length;
+                const total = p.hoursTotal ?? 0;
+                const spent = p.hoursSpent ?? 0;
+                const pct   = total > 0 ? Math.round((spent / total) * 100) : 0;
+                return (
+                  <Link key={p.id} to={`/project/${p.id}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 8 }}>
+                    <div
+                      style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderLeft: `3px solid ${p.color}`, borderRadius: 10, padding: '12px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = p.color; e.currentTarget.style.borderLeftColor = p.color; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.borderLeftColor = p.color; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: C.text }}>{p.name}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMut, flexShrink: 0 }}>{projItems.length} items</span>
+                      </div>
+                      <div style={{ height: 6, background: '#121a2e', borderRadius: 3, marginBottom: 8 }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: p.color, borderRadius: 3 }} />
+                      </div>
+                      <div style={{ fontFamily: MONO, fontSize: 10, display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: C.textSec }}>{spent}h / {total}h · {pct}%</span>
+                        <span style={{ color: projRfis > 0 ? C.red : C.textMut }}>{projRfis} open RFIs</span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })
           }
         </div>
-      </section>
 
-      {/* C: Stats */}
-      <section style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Activity</div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatPanel label="RFIs Open"       value={rfisOpen}     valueColor="#f87171" />
-          <StatPanel label="Open TDL Items"  value={tdlOpen}      sub="To-Do List items across all projects" />
-          <StatPanel label="Drawings"        value={drawingCount} sub="Total drawings assigned" valueColor="#60a5fa" />
-          <StatPanel label="Action Required"  value={itemsHanging} sub="On Hold status" valueColor="#fbbf24" />
-          <StatPanel label="In Production"   value={inProduction} sub="Pre-Production or In Manufacture" valueColor="#34d399" />
+        {/* Col 2 — Top open RFIs */}
+        <div>
+          <SectionLabel>Top open RFIs</SectionLabel>
+          <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '4px 0' }}>
+            {loading
+              ? [1, 2, 3, 4, 5].map(i => (
+                  <div key={i} style={{ padding: '11px 16px', borderBottom: `1px solid ${C.grid}` }}>
+                    <Skeleton h={14} r={3} />
+                    <Skeleton w="60%" h={10} r={3} style={{ marginTop: 6 }} />
+                  </div>
+                ))
+              : openRFIs.length === 0
+              ? <div style={{ padding: '16px', fontFamily: MONO, fontSize: 11, color: C.textMut, textAlign: 'center' }}>No open RFIs</div>
+              : openRFIs.map(r => (
+                  <Link key={r.id} to="/trackers/rfis" style={{ textDecoration: 'none', display: 'block' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${C.grid}`, transition: 'background 0.1s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#111c30'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: C.blue, flexShrink: 0, paddingTop: 2 }}>
+                        RFI-{String(r.rfiNumber ?? '?').padStart(3, '0')}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{r.description}</div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 5 }}>
+                          {r.projectName && <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMut }}>{r.projectName}</span>}
+                          {r.tbcBy && <span style={{ fontFamily: MONO, fontSize: 10, color: C.amber }}>TBC: {r.tbcBy}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+            }
+          </div>
         </div>
-      </section>
 
-      {/* D: Phase table */}
-      <section>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMut, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>DM Phase Summary</div>
-        {itemsLoading && allItems.length === 0 ? (
-          <div style={{ color: C.textMut, fontSize: 12 }}>Loading items…</div>
-        ) : (
-          <PhaseTable items={allItems} />
-        )}
-      </section>
+        {/* Col 3 — Team workload */}
+        <div>
+          <SectionLabel>Team workload</SectionLabel>
+          <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px' }}>
+            {loading
+              ? [1, 2, 3, 4, 5].map(i => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <Skeleton w={28} h={28} r={14} />
+                    <Skeleton h={8} r={4} style={{ flex: 1 }} />
+                    <Skeleton w={60} h={12} r={3} />
+                  </div>
+                ))
+              : byAssignee.length === 0
+              ? <div style={{ fontFamily: MONO, fontSize: 11, color: C.textMut }}>No assignee data</div>
+              : byAssignee.map(x => {
+                  const pct = (x.n / maxAssigneeN) * 100;
+                  return (
+                    <div key={x.a} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <AssigneeChip name={x.fullName} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ height: 8, background: '#121a2e', borderRadius: 4 }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: C.blue, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                      <span style={{ fontFamily: MONO, fontSize: 11, color: C.textSec, width: 60, textAlign: 'right' }}>{x.n} items</span>
+                      <span style={{ fontFamily: MONO, fontSize: 11, color: x.rfis ? C.red : C.textMut, width: 52, textAlign: 'right' }}>{x.rfis ? `${x.rfis} RFIs` : '—'}</span>
+                    </div>
+                  );
+                })
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Phase distribution */}
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <SectionLabel style={{ marginBottom: 0 }}>Phase distribution</SectionLabel>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: C.textMut }}>Total · {phaseTotal}</span>
+        </div>
+        <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 14 }}>
+          {loading || phases.length === 0
+            ? <Skeleton h={44} r={6} />
+            : (
+              <div style={{ display: 'flex', gap: 3, height: 44, borderRadius: 6, overflow: 'hidden' }}>
+                {phases.map(x => (
+                  <div
+                    key={x.ph}
+                    title={`${x.ph} · ${x.n} items`}
+                    style={{ flex: x.n, background: x.cfg.text, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#000', padding: '4px 8px' }}
+                  >
+                    <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1 }}>{x.n}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>{x.ph}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      {/* Lookahead */}
+      <div style={{ flexShrink: 0, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <SectionLabel>Lookahead</SectionLabel>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {loading
+            ? <Skeleton h={120} r={12} />
+            : <MiniTimeline items={timelineItems} />
+          }
+        </div>
+      </div>
+
     </div>
   );
 }

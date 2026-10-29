@@ -1114,3 +1114,293 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .btn-export:hover:not(:disabled) { background: #1d4ed8; color: #ffffff; }
 .btn-export:disabled { opacity: 0.35; cursor: default; }
+
+/* ═══════════════════════════════════════════════════════════
+   SKETCH / DRAWING TOOLS
+   ═══════════════════════════════════════════════════════════ */
+
+/* Root wrapper added by PdfViewer so toolbar + canvas stack cleanly */
+.pdf-viewer-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ── Toolbar strip ── */
+.sketch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: #0f1a2e;
+  border-bottom: 1px solid #1e2d45;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  user-select: none;
+}
+
+.sketch-toolbar-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.sketch-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sketch-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: #1e2d45;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Tool buttons ── */
+.sketch-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #7b90b0;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.sketch-tool-btn:hover:not(:disabled) {
+  background: #1a2d4a;
+  color: #c8d6e8;
+}
+
+.sketch-tool-btn-active {
+  background: #1e3a5f !important;
+  border-color: #3b82f6 !important;
+  color: #93c5fd !important;
+}
+
+.sketch-tool-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.sketch-tool-btn-danger:hover:not(:disabled) {
+  background: #3f1212 !important;
+  color: #fca5a5 !important;
+  border-color: #7f1d1d !important;
+}
+
+/* ── Colour swatches ── */
+.sketch-color-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.1s;
+  outline: none;
+  box-shadow: 0 0 0 1px #1e2d45;
+}
+
+.sketch-color-btn:hover:not(:disabled) {
+  transform: scale(1.15);
+}
+
+.sketch-color-btn-active {
+  border-color: #ffffff !important;
+  transform: scale(1.1);
+}
+
+/* ── Width buttons ── */
+.sketch-width-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.sketch-width-btn:hover:not(:disabled) {
+  background: #1a2d4a;
+}
+
+.sketch-width-btn-active {
+  background: #1e3a5f !important;
+  border-color: #3b82f6 !important;
+}
+
+.sketch-width-dot {
+  display: block;
+  border-radius: 50%;
+  background: #93c5fd;
+}
+
+/* ── Font size buttons ── */
+.sketch-fontsize-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #7b90b0;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  font-family: inherit;
+}
+
+.sketch-fontsize-btn:hover {
+  background: #1a2d4a;
+  color: #c8d6e8;
+}
+
+.sketch-fontsize-btn-active {
+  background: #1e3a5f !important;
+  border-color: #3b82f6 !important;
+  color: #93c5fd !important;
+}
+
+/* ── Text input that appears on canvas when text tool is active ── */
+.sketch-text-input {
+  min-width: 140px;
+  min-height: 48px;
+  background: rgba(10, 22, 40, 0.88);
+  border: 1.5px solid #3b82f6;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: both;
+  outline: none;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  line-height: 1.4;
+}
+
+/* ── Paste hint toast (shown briefly after paste) ── */
+.sketch-paste-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 58, 95, 0.92);
+  border: 1px solid #3b82f6;
+  color: #93c5fd;
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 20;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   APPROVE / REJECT BAR
+   ═══════════════════════════════════════════════════════════ */
+
+.phase-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #0a1628;
+  border-bottom: 1px solid #1e2d45;
+  border-top: 1px solid #1e2d45;
+  flex-wrap: wrap;
+}
+
+.phase-action-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.phase-drawing-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: #93c5fd;
+  font-family: 'DM Mono', 'ui-monospace', Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phase-action-title {
+  font-size: 9px;
+  color: #7b90b0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.phase-action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.phase-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  letter-spacing: 0.02em;
+}
+
+.phase-btn-approve {
+  background: #14532d;
+  border-color: #16a34a;
+  color: #4ade80;
+}
+.phase-btn-approve:hover:not(:disabled):not(.phase-btn-disabled) {
+  background: #166534;
+  color: #86efac;
+}
+
+.phase-btn-reject {
+  background: #3f1212;
+  border-color: #dc2626;
+  color: #fca5a5;
+}
+.phase-btn-reject:hover:not(:disabled) {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.phase-btn-disabled,
+.phase-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.phase-result {
+  width: 100%;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.phase-result-ok  { color: #4ade80; background: #14532d; }
+.phase-result-err { color: #fca5a5; background: #7f1d1d; }

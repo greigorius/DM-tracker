@@ -7,6 +7,11 @@
 
 # ── API rewrites → Netlify Functions ─────────────────────────────────────────
 [[redirects]]
+  from   = "/api/finishes-schedule"
+  to     = "/.netlify/functions/finishes-schedule"
+  status = 200
+
+[[redirects]]
   from   = "/api/projects/:id/items"
   to     = "/.netlify/functions/project-items"
   status = 200
@@ -149,6 +154,11 @@
 [[redirects]]
   from   = "/api/dt-checker-export-pdf"
   to     = "/.netlify/functions/dt-checker-export-pdf"
+  status = 200
+
+[[redirects]]
+  from   = "/api/dt-checker-update-phase"
+  to     = "/.netlify/functions/dt-checker-update-phase"
   status = 200
 
 [[redirects]]

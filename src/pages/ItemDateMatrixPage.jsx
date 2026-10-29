@@ -162,10 +162,11 @@ function buildDisplayRow(item, override, projCfg) {
     s4Date:          item.s4Date,
     s5Date:          item.s5Date,
     c01SignOffActDate: item.c01SignOffActDate,
-    dd1:             override?.dd1            ?? 0,
+    // DD1 & DD-C are sourced from Notion; override only holds in-flight edits
+    dd1:             override?.dd1            ?? item.dd1            ?? 0,
     qa1:             override?.qa1            ?? cfg.qaDefault,
     qa2:             override?.qa2            ?? cfg.qaDefault,
-    constrDrawDays:  override?.constrDrawDays ?? 15,
+    constrDrawDays:  override?.constrDrawDays ?? item.constrDrawDays ?? 15,
     qaC:             override?.qaC            ?? cfg.qaDefault,
     noClientApproval: nca,
     productionTime:  null,
@@ -512,11 +513,23 @@ export default function ItemDateMatrixPage() {
   const [showColPanel, setShowColPanel] = useState(false);
   const colPanelRef = useRef(null);
 
-  // Draw-day overrides (per-item, localStorage)
+  // Draw-day overrides (per-item, localStorage). DD1 & DD-C are Notion-sourced
+  // now — strip them from any legacy cache so Notion always wins on load.
   const [rowOverrides, setRowOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_OVERRIDES) ?? '{}'); }
-    catch { return {}; }
+    try {
+      const raw   = JSON.parse(localStorage.getItem(LS_OVERRIDES) ?? '{}');
+      const clean = {};
+      for (const [id, fields] of Object.entries(raw)) {
+        if (!fields || typeof fields !== 'object') continue;
+        const { dd1, constrDrawDays, ...rest } = fields;
+        if (Object.keys(rest).length > 0) clean[id] = rest;
+      }
+      return clean;
+    } catch { return {}; }
   });
+
+  // Debounce timers for per-item Notion DD sync ({ itemId_field: timeoutId })
+  const ddSyncTimers = useRef({});
 
   // Project config overrides (per-project, localStorage)
   const [projConfigs, setProjConfigs] = useState(() => {
@@ -564,7 +577,14 @@ export default function ItemDateMatrixPage() {
   function handleOverrideChange(itemId, field, value) {
     const updated = { ...rowOverrides, [itemId]: { ...(rowOverrides[itemId] ?? {}), [field]: value } };
     setRowOverrides(updated);
-    localStorage.setItem(LS_OVERRIDES, JSON.stringify(updated));
+
+    // DD1 & DD-C are Notion-sourced; keep them out of localStorage
+    const persistable = {};
+    for (const [id, fields] of Object.entries(updated)) {
+      const { dd1, constrDrawDays, ...rest } = fields ?? {};
+      if (Object.keys(rest).length > 0) persistable[id] = rest;
+    }
+    localStorage.setItem(LS_OVERRIDES, JSON.stringify(persistable));
 
     // Sync NCA to Notion on click
     if (field === 'noClientApproval') {
@@ -573,6 +593,34 @@ export default function ItemDateMatrixPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: itemId, noClientApproval: value }),
       }).catch(err => console.warn('[NCA sync]', err.message));
+    }
+
+    // Sync DD1 / DD-C to Notion (debounced per cell)
+    if (field === 'dd1' || field === 'constrDrawDays') {
+      const timerKey = `${itemId}_${field}`;
+      clearTimeout(ddSyncTimers.current[timerKey]);
+      ddSyncTimers.current[timerKey] = setTimeout(() => {
+        fetch('/api/tasks/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: itemId, [field]: value }),
+        })
+          .then(r => {
+            if (!r.ok) throw new Error(`${r.status}`);
+            // Merge into cached item so the override can be cleared
+            setData(d => d ? { ...d, items: d.items.map(it => it.id === itemId ? { ...it, [field]: value } : it) } : d);
+            setRowOverrides(prev => {
+              if (!prev[itemId]) return prev;
+              const row = { ...prev[itemId] };
+              delete row[field];
+              const next = { ...prev };
+              if (Object.keys(row).length === 0) delete next[itemId];
+              else next[itemId] = row;
+              return next;
+            });
+          })
+          .catch(err => console.warn(`[${field} sync]`, err.message));
+      }, 500);
     }
   }
 
