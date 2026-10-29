@@ -24,4 +24,4 @@ See `.env.example`. `NOTION_TOKEN` is required; the integration needs access to 
 - Programme and delivery dates are only set in the Scheduling Tool. Nothing in the Hub writes them.
 - UI: tokens in `src/styles/tokens.css`, components in `src/components/ui/`. Pages don't define their own colours.
 
-Build notes and open items: `HUB-V2.md`.
+Build notes and open items: `HUB-V2.md`. Original brief: `docs/hub-cockpit-build-prompt.md`.
