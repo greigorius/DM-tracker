@@ -9,6 +9,9 @@ Cockpit and tools over the Notion project DBs. React 19 + Vite + Tailwind v4, Ta
 - Shared logic lives in `hub-core/` (used by the Netlify functions, the local Express server and — for `derive.js` — the browser).
 
 ## Local dev
+On Windows, double-click **`start.bat`**. It installs packages if needed, opens the API and the site in two windows, and launches the browser at http://localhost:5173. Close the two windows to stop.
+
+Or by hand:
 ```
 npm install
 npm run server   # Express on :3001 — hub API + legacy routes; syncs to .cache/blobs every 5 min
