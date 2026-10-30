@@ -32,7 +32,7 @@ export const EVENTS_KEY = 'snap/events';
 export const MAX_EVENTS = 200;
 // Bump when a mapper gains fields: every snapshot built with an older version
 // is rebuilt in full on the next sync, so new fields appear on every row.
-export const MAPPER_VERSION = 5;
+export const MAPPER_VERSION = 6;
 export const SCHEMA_VERSION = 2;
 
 // "Axiom" is a hidden company: it must never surface as a BIC / sits-with /

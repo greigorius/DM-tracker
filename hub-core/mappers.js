@@ -165,9 +165,21 @@ export const mappers = {
     itemIds: ids(page, 'Item'),
     lockStatus: v(page, 'Lock Status'),
     noClientApproval: v(page, 'No Client Approval'),
-    s4: { submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')) },
-    s5: { submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')) },
-    c01: { submitted: day(v(page, 'C01 Submit Date (Actual)')), signOff: day(v(page, 'C01 Sign Off')) },
+    // submitted/statusDate = actuals; *Plan = the Scheduling Tool's Adj date (Plan if no Adj), read by the Timeline
+    s4: {
+      submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')),
+      submitPlan: day(v(page, 'S4 Submit Date (Adj)')) || day(v(page, 'S4 Submit Date (Plan)')),
+      statusPlan: day(v(page, 'S4 Status Date (Adj)')) || day(v(page, 'S4 Status Date (Plan)')),
+    },
+    s5: {
+      submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')),
+      submitPlan: day(v(page, 'S5 Submit Date (Adj)')) || day(v(page, 'S5 Submit Date (Plan)')),
+      statusPlan: day(v(page, 'S5 Status Date (Adj)')) || day(v(page, 'S5 Status Date (Plan)')),
+    },
+    c01: {
+      submitted: day(v(page, 'C01 Submit Date (Actual)')), signOff: day(v(page, 'C01 Sign Off')),
+      submitPlan: day(v(page, 'C01 Submit Date (Adj)')) || day(v(page, 'C01 Submit Date (Plan)')),
+    },
     prd: { status: v(page, 'PRD Status'), statusDate: day(v(page, 'PRD Status Date')), scheduled: day(v(page, 'Schedule Production (Actual)')) },
     holdNotes: v(page, 'Hold Notes'),
   }),
