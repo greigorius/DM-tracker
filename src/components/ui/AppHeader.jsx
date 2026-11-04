@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useBootstrap, useSyncNow } from '../../hooks/hub.js';
 import { useToast } from './Toast.jsx';
 import { cx } from './primitives.jsx';
@@ -35,6 +36,7 @@ export function LogoMark({ className }) {
 export function AppHeader({ title, subtitle }) {
   const { data } = useBootstrap();
   const sync = useSyncNow();
+  const qc = useQueryClient();
   const toast = useToast();
   const now = useNow();
   const syncedAt = data?.syncedAt;
@@ -44,7 +46,16 @@ export function AppHeader({ title, subtitle }) {
   const onSync = () => sync.mutate(undefined, {
     onSuccess: r => {
       const changed = (r?.results || []).reduce((n, x) => n + (x.changed || 0), 0);
-      toast.show(`Synced · ${changed} change${changed === 1 ? '' : 's'} pulled from Notion`);
+      const building = r?.needsFull?.length || 0;
+      if (building) {
+        toast.show(r.rebuilding
+          ? `Building ${building} list${building === 1 ? '' : 's'} from Notion. This takes a few minutes; pages fill in as each one finishes.`
+          : `${building} list${building === 1 ? '' : 's'} still need a full build from Notion, which runs every 5 minutes.`, { ms: 10000 });
+        // Pick up the rebuilt snapshots without another click
+        [60, 180, 420].forEach(s => setTimeout(() => qc.invalidateQueries(), s * 1000));
+      } else {
+        toast.show(`Synced · ${changed} change${changed === 1 ? '' : 's'} pulled from Notion`);
+      }
     },
     onError: e => toast.show(`Sync failed: ${e.message}`, { tone: 'danger' }),
   });
