@@ -12,23 +12,24 @@ const GRADE_FONT = { A: T.ok, Approved: T.ok, B: T.accent, C: T.danger, Rejected
 // ISO date → Excel date (UTC midnight so it never shifts a day).
 const xlDate = iso => (iso ? new Date(`${iso}T00:00:00Z`) : null);
 
-function subValue(c) {
+function subValue(c, na) {
+  if (na) return { value: null, note: 'N/A' };
   if (!c) return { value: null };
   return {
     value: xlDate(c.date),
     planned: c.kind === 'plan',
     late: c.late > 0,
-    note: [c.reissue && 'Reissue pending', c.kind === 'act' && c.total > c.issued && `${c.issued}/${c.total} issued`, c.late > 0 && `${c.late} days late`].filter(Boolean).join(' · '),
+    note: [c.reissue && 'Reissue pending', c.total && c.issued < c.total && `${c.issued}/${c.total} issued`, c.late > 0 && `${c.late} days late`, c.kind === 'plan' && !c.date && 'No forecast'].filter(Boolean).join(' · '),
   };
 }
 
-function retValue(c) {
+function retValue(c, na) {
+  if (na) return { value: null, status: 'N/A' };
   if (!c) return { value: null, status: null };
   if (c.kind === 'act') return { value: xlDate(c.date), status: c.grade || 'Returned' };
-  if (c.kind === 'plan') return { value: xlDate(c.date), status: null, planned: true };
   return {
     value: xlDate(c.date), planned: true, late: c.late > 0,
-    status: ['Awaiting', c.total > 1 && `${c.back}/${c.total} back`, c.late > 0 && `${c.late} days late`].filter(Boolean).join(' · '),
+    status: [c.awaiting && 'Awaiting', c.awaiting && c.total > 1 && `${c.back}/${c.total} back`, 'Forecast', c.late > 0 && `${c.late} days late`, !c.date && 'No forecast'].filter(Boolean).join(' · '),
   };
 }
 
@@ -83,9 +84,9 @@ export async function exportTimelineXlsx({ rows, stages, today, team, projects, 
     ];
     const styles = [];
     for (const s of stages) {
-      const sub = subValue(r.stages[s.key].sub);
-      const ret = retValue(r.stages[s.key].ret);
-      vals.push(sub.value, sub.note || null, ret.value, ret.status || (s.key === 'con' && r.stages.con.sub?.kind === 'act' ? (r.prd ? 'PRD' : 'A4.5') : null));
+      const sub = subValue(r.stages[s.key].sub, r.stages[s.key].na);
+      const ret = retValue(r.stages[s.key].ret, r.stages[s.key].na);
+      vals.push(sub.value, sub.note || null, ret.value, ret.status || (s.key === 'con' && r.stages.con.sub ? (r.prd ? 'PRD' : 'A4.5') : null));
       styles.push(sub, null, ret, ret);
     }
     const row = ws.addRow(vals);

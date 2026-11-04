@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
-import { useBootstrap } from '../../hooks/hub.js';
+import { useBootstrap, useSnapshots } from '../../hooks/hub.js';
+import { teamIssues, teamErrorCount } from '../../../hub-core/team.js';
 import { preloadRoute } from '../../routes.jsx';
 import { cx } from './primitives.jsx';
 
@@ -10,6 +11,7 @@ export const NAV = [
   { to: '/', label: 'Cockpit', end: true },
   { to: '/brief', label: 'Brief' },
   { to: '/tasks', label: 'Tasks' },
+  { to: '/team', label: 'Team' },
   { to: '/trackers/item-schedule', label: 'Items' },
   { to: '/trackers/rfis', label: 'RFIs' },
   { to: '/trackers/variations', label: 'Variations' },
@@ -68,13 +70,24 @@ function ProjectsMenu() {
   );
 }
 
+// Triage carries a count of Team errors (to-dos or DTs missing what the Team
+// page and DT emails need). Warnings and info don't count.
+function useTeamErrorCount() {
+  const { data } = useSnapshots(['todo', 'team']);
+  return teamErrorCount(teamIssues(data));
+}
+
 export function HubNav() {
+  const teamErrors = useTeamErrorCount();
   return (
     <nav aria-label="Hub" className="border-t border-line">
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6 flex items-stretch overflow-x-auto sm:overflow-visible">
         {NAV.map(n => (
           <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => linkCls(isActive)} onMouseEnter={() => preloadRoute(n.to)} onFocus={() => preloadRoute(n.to)}>
             {n.label}
+            {n.to === '/triage' && teamErrors > 0 && (
+              <span className="ml-1 px-1 border border-danger/50 text-danger font-mono text-[10px] leading-4 tabular-nums" title={`${teamErrors} Team errors in Triage`}>{teamErrors}</span>
+            )}
           </NavLink>
         ))}
         <ProjectsMenu />

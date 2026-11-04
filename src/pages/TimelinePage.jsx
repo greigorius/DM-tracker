@@ -30,40 +30,52 @@ function Late({ days }) {
   return <span className="font-mono text-[11px] text-danger">{days} day{days === 1 ? '' : 's'} late</span>;
 }
 
-export function SubCell({ c, today }) {
+export function SubCell({ c, today, na }) {
+  if (na) return <span className="font-mono text-[12px] text-muted">N/A</span>;
   if (!c) return <span className="font-mono text-[12px] text-line-strong">—</span>;
-  const date = fmtDay(c.date, today);
+  const partial = c.total && c.issued < c.total;
   return (
     <span className="flex flex-col gap-0.5">
       <span className={cx('font-mono text-[12px] whitespace-nowrap', c.kind === 'plan' ? (c.late ? 'text-danger italic' : 'text-muted italic') : 'text-text')}>
-        {c.reissue && <span className="text-accent not-italic mr-1.5" title="Reissue pending: the planned date is after the last issue">R</span>}
-        {date}
+        {c.reissue && <span className="text-accent not-italic mr-1.5" title={`Reissue pending (last issued ${fmtDay(c.actual, today) || '—'})`}>R</span>}
+        {c.date ? fmtDay(c.date, today) : <span className="text-muted">No forecast</span>}
       </span>
-      {c.kind === 'act' && c.total > c.issued && <span className="font-mono text-[11px] text-muted">{c.issued}/{c.total} issued</span>}
+      {partial && <span className="font-mono text-[11px] text-muted">{c.issued}/{c.total} issued</span>}
       {c.late > 0 && <Late days={c.late} />}
     </span>
   );
 }
 
-export function RetCell({ c, today }) {
+export function RetCell({ c, today, na }) {
+  if (na) return <span className="font-mono text-[12px] text-muted">N/A</span>;
   if (!c) return <span className="font-mono text-[12px] text-line-strong">—</span>;
   if (c.kind === 'act') {
     return (
       <span className="inline-flex items-center gap-2 whitespace-nowrap">
-        {c.grade && <Badge tone={gradeTone(c.grade)}>{c.grade}</Badge>}
+        {c.grade === 'Approved' ? <ApprovedTick /> : c.grade && <Badge tone={gradeTone(c.grade)}>{c.grade}</Badge>}
         <span className="font-mono text-[12px] text-text">{fmtDay(c.date, today)}</span>
       </span>
     );
   }
-  if (c.kind === 'plan') return <span className="font-mono text-[12px] text-muted italic whitespace-nowrap">{fmtDay(c.date, today)}</span>;
+  // Forecast (not stored in Notion): submission + the Scheduling Tool's review / sign-off period
   return (
     <span className="flex flex-col gap-0.5">
-      <span className="font-mono text-[12px] text-text-2 whitespace-nowrap">
-        Awaiting{c.date && !c.late ? <span className="text-muted italic"> · {fmtDay(c.date, today)}</span> : null}
+      <span className={cx('font-mono text-[12px] italic whitespace-nowrap', c.late ? 'text-danger' : 'text-muted')}>
+        {c.date ? fmtDay(c.date, today) : 'No forecast'}
       </span>
-      {c.total > 1 && <span className="font-mono text-[11px] text-muted">{c.back}/{c.total} back{c.grade ? ` · ${c.grade}` : ''}</span>}
+      {c.awaiting && <span className="font-mono text-[11px] text-text-2">Awaiting{c.total > 1 ? ` · ${c.back}/${c.total} back` : ''}{c.grade ? ` · ${c.grade}` : ''}</span>}
       {c.late > 0 && <Late days={c.late} />}
     </span>
+  );
+}
+
+// Approved (A4.5 sign-off / PRD) as a green tick in a box
+function ApprovedTick() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Approved" className="shrink-0 text-ok">
+      <rect x="0.5" y="0.5" width="17" height="17" fill="none" stroke="currentColor" strokeOpacity="0.5" />
+      <path d="M4.5 9.2 7.6 12.2 13.5 5.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
+    </svg>
   );
 }
 
@@ -130,10 +142,10 @@ function TimelineTable({ rows, stages, today, team }) {
                   <td className="px-2.5 py-2.5">{r.bic ? <Badge tone={BIC_TONE[r.bic] || 'muted'}>{r.bic}</Badge> : <span className="text-muted">—</span>}</td>
                   {stages.map(s => (
                     <Fragment key={s.key}>
-                      <td className={cx('px-2.5 py-2.5', edge)}><SubCell c={r.stages[s.key].sub} today={today} /></td>
+                      <td className={cx('px-2.5 py-2.5', edge)}><SubCell c={r.stages[s.key].sub} na={r.stages[s.key].na} today={today} /></td>
                       <td className="px-2.5 py-2.5">
-                        <RetCell c={r.stages[s.key].ret} today={today} />
-                        {s.key === 'con' && r.stages.con.sub?.kind === 'act' && <span className="block mt-0.5 font-mono text-[10px] text-muted">{r.prd ? 'PRD' : 'A4.5'}</span>}
+                        <RetCell c={r.stages[s.key].ret} na={r.stages[s.key].na} today={today} />
+                        {s.key === 'con' && r.stages.con.sub && <span className="block mt-0.5 font-mono text-[10px] text-muted">{r.prd ? 'PRD' : 'A4.5'}</span>}
                       </td>
                     </Fragment>
                   ))}
@@ -148,8 +160,8 @@ function TimelineTable({ rows, stages, today, team }) {
                     <td /><td />
                     {stages.map(s => (
                       <Fragment key={s.key}>
-                        <td className={cx('px-3 py-2', edge)}><SubCell c={d.stages[s.key].sub} today={today} /></td>
-                        <td className="px-3 py-2"><RetCell c={d.stages[s.key].ret} today={today} /></td>
+                        <td className={cx('px-3 py-2', edge)}><SubCell c={d.stages[s.key].sub} na={d.stages[s.key].na} today={today} /></td>
+                        <td className="px-3 py-2"><RetCell c={d.stages[s.key].ret} na={d.stages[s.key].na} today={today} /></td>
                       </Fragment>
                     ))}
                   </tr>
@@ -172,6 +184,7 @@ function Legend() {
       <span className="italic">16 Sep planned</span>
       <span className="text-danger">late</span>
       <span className="inline-flex items-center gap-1"><Badge tone="ok">A</Badge><Badge tone="accent">B</Badge><Badge tone="danger">C</Badge> grade</span>
+      <span className="inline-flex items-center gap-1.5"><ApprovedTick /> approved</span>
       <span><span className="text-accent">R</span> reissue pending</span>
     </div>
   );
@@ -199,10 +212,10 @@ export default function TimelinePage() {
   // Every active item with drawings, built once; filters run on top.
   const all = useMemo(() => {
     const items = data.tasks.filter(i => isActiveItem(i) && (!projectId || i.projectId === projectId));
-    return buildTimeline({ items, drawings: data.drawings, today })
+    return buildTimeline({ items, drawings: data.drawings, projects, today })
       .filter(r => r.count > 0)
       .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
-  }, [data.tasks, data.drawings, projectId, today]);
+  }, [data.tasks, data.drawings, projects, projectId, today]);
 
   const showTest = SHOW.find(s => s.value === show)?.test || SHOW[0].test;
   const rows = useMemo(() => all.filter(r => showTest(r)
@@ -256,7 +269,7 @@ export default function TimelinePage() {
       </>}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 -mt-2">
-        <span className="font-mono text-[12px] text-muted">{rows.length} item{rows.length === 1 ? '' : 's'} · dates are set in the Scheduling Tool</span>
+        <span className="font-mono text-[12px] text-muted">{rows.length} item{rows.length === 1 ? '' : 's'} · forecasts are the Scheduling Tool's Adj dates</span>
         <Legend />
       </div>
 

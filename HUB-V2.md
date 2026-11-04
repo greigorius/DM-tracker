@@ -93,3 +93,26 @@ Backup of all 2,327 rows and the old schemas: `_archive/todo-backup-2026-10-29.j
 ## Verification done
 - Sync, writes, event logging, 429 retry and the Axiom guard were tested against a mock Notion API (this session couldn't reach api.notion.com). **First real check: run `npm run sync` locally, then press Sync now on the deployed site.**
 - Cockpit and Triage rendered with seeded data at desktop and phone widths with no horizontal scroll; a reload rendered content from the IndexedDB cache in ~370 ms; optimistic capture updated counts and Just logged instantly.
+
+## Team page, DT emails, Triage Team (2 Nov 2026)
+Spec: `claude/team-page-staging.md` in the "Axiom Hub" claude.ai Project.
+- **Notion:** Team `Role` converted in place to a select (DT, DM, DC, Outsourced, Client, Supplier); placeholder rows Client Team / By Supplier / Outsourced re-roled so they're no longer DTs. To Do gains `Status` (Not Started / In Progress / Blocked / Done); Task Done hidden from the page layout.
+- **Status replaces Task Done** everywhere in the repo (mapper, `PATCH /api/records/todo`, Add to Tasks, Tasks page). Rows without a Status fall back to Task Done until `npm run backfill:status` has run. Status writes also tick Task Done (`TODO_MIRROR_TASK_DONE=off` once the property is deleted). `MAPPER_VERSION` 9.
+- **Team** (`/team`, after Tasks): open to-dos grouped by DT or item; filters for project, DT, item, status, overdue only, date window (Overdue + 2 wks / all open); inline status edit; DT header shows open / overdue / est hrs vs weekly capacity. Reads the cached snapshots like every other page (no separate `/api/team/todos`).
+- **DT emails:** `POST /api/team/email/preview` and `/send` (`hub-core/team-email.js`, rendering in `hub-core/team.js`). One email per DT, grouped by item, overdue + next 14 days. Preview dialog, untick, then sends one DT per request to `TEAM_EMAIL_WEBHOOK_URL` (Make scenario 8301628 → Gmail gfdc.dt1). Send is disabled when the URL is unset.
+- **Triage → Team** tab: no person / no item / no end date / DT with no email (errors, counted on the Triage nav tab), no role (warning), no hours and blocked-with-no-link (info). Inline fixes write to Notion; Team rows are now editable (`email`, `role`, `capacity`).
+- Tests: `test/team.test.js`.
+
+## Derived item Ball In Court (2 Nov 2026)
+Nothing wrote Tasks `Ball In Court` before: Drawing Flow sets BIC per submission only, and no Make scenario touches the item. It's now derived in `hub-core/item-bic.js`. First match wins:
+1. Lock Status → leave alone
+2. Item closed → clear
+3. Open variation (Awaiting Design Info / Instruction) → its BIC
+4. Open stop-work RFI → its BIC
+5. Open action with Blocks Item → its BIC
+6. Drawings → holder of each drawing's latest submission; more than one holder = **Mixed** (new Tasks option)
+7. No drawings → DT if assigned, else DM; In Production → Production
+- `ITEM_BIC_AUTO` = off | **dry** (default: review only) | on (each sync writes up to 40 changes).
+- Triage → **Ball in court** tab lists every difference with the reason; apply selected or all. `GET /api/item-bic/plan`, `POST /api/item-bic/apply`.
+- Writes patch the tasks snapshot, so they don't flood Just logged. Tests: `test/item-bic.test.js`.
+- Batch editing (2 Nov): Data fixes, Team and Ball in court rows can be ticked (or Select all) and fixed together from a sticky bar, like the action and item lists. Data fixes and Team share `src/pages/brief/FixCard.jsx`; shared controls moved to `controls.jsx`. Ball in court's bar applies the derived value, or overrides it and ticks Lock Status ("Set & lock", "Lock as is").

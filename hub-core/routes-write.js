@@ -1,6 +1,8 @@
 // Write routes: Notion writes that patch the snapshot, plus sync-now.
 import { createAction, createRfi, createVariation, updateItem, updateRecord, trashRecord, actionToTask } from './write.js';
 import { runSync } from './sync.js';
+import { previewTeamEmails, sendTeamEmails } from './team-email.js';
+import { getBicPlan, applyBic } from './item-bic-sync.js';
 
 export const writeRoutes = [
   ['POST', /^\/api\/actions\/?$/, ({ body }) => createAction(body)],
@@ -11,6 +13,10 @@ export const writeRoutes = [
   ['PATCH', /^\/api\/records\/([a-z]+)\/([^/]+)\/?$/, ({ body, params }) => updateRecord(params[0], params[1], body)],
   ['POST', /^\/api\/records\/([a-z]+)\/([^/]+)\/trash\/?$/, ({ params }) => trashRecord(params[0], params[1])],
   ['POST', /^\/api\/records\/([a-z]+)\/([^/]+)\/restore\/?$/, ({ params }) => trashRecord(params[0], params[1], true)],
+  ['POST', /^\/api\/team\/email\/preview\/?$/, ({ body }) => previewTeamEmails(body)],
+  ['POST', /^\/api\/team\/email\/send\/?$/, ({ body }) => sendTeamEmails(body)],
+  ['GET', /^\/api\/item-bic\/plan\/?$/, () => getBicPlan()],
+  ['POST', /^\/api\/item-bic\/apply\/?$/, ({ body }) => applyBic({ ids: body?.ids, deadline: Date.now() + 8000 })],
   // Interactive refresh: incremental only, short budget. Full rebuilds run in the background function.
   ['POST', /^\/api\/sync-now\/?$/, ({ query }) => runSync({ budgetMs: Number(query.get('budget')) || 8000, allowFull: false })],
 ];

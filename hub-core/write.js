@@ -126,6 +126,7 @@ export async function updateItem(id, body) {
 // Whitelisted fields per DB: [Notion property, kind]. Anything else is refused.
 const FIELD_MAP = {
   actions: {
+    title: ['Note', 'title'], // description: a manual fix to a meeting / email transcription
     bic: ['Ball in Court', 'select'], dtId: ['Person', 'rel1'], due: ['Due', 'date'], itemIds: ['Items', 'rel'],
     done: ['Checked', 'check'], blocks: ['Blocks Item', 'check'],
   },
@@ -148,12 +149,16 @@ const FIELD_MAP = {
   },
   submissions: { dtId: ['DT', 'rel1'] },
   todo: {
-    title: ['Item Description', 'title'], done: ['Task Done', 'check'], personIds: ['Person', 'rel'], itemIds: ['Item', 'rel'],
+    title: ['Item Description', 'title'], status: ['Status', 'select'], personIds: ['Person', 'rel'], personId: ['Person', 'rel1'], itemIds: ['Item', 'rel'],
     start: ['Start Date', 'date'], end: ['End Date (Manual)', 'date'], hours: ['Task Hours (Est)', 'number'],
     changeTask: ['Change Task', 'check'], vcIds: ['Related Variation', 'rel'], rfiIds: ['Related RFI', 'rel'],
   },
   meetings: { itemIds: ['Items', 'rel'] },
+  team: { email: ['Email', 'email'], role: ['Role', 'select'], capacity: ['Weekly Capacity (hrs)', 'number'] },
 };
+// Until Task Done is deleted, a To Do Status write also ticks/unticks it so old
+// Notion views stay right. Set TODO_MIRROR_TASK_DONE=off once it's gone.
+const mirrorTaskDone = () => process.env.TODO_MIRROR_TASK_DONE !== 'off';
 const PARTY_FIELDS = new Set(['bic', 'tbcBy', 'raisedBy']);
 
 function toProp(kind, value) {
@@ -168,6 +173,7 @@ function toProp(kind, value) {
     case 'rel': return rel(value || []);
     case 'rel1': return rel(value ? [value] : []);
     case 'title': return { title: text(value || '') };
+    case 'email': return { email: value ? String(value).trim() : null };
     default: throw bad(`Unknown field kind ${kind}`);
   }
 }
@@ -185,8 +191,12 @@ export async function updateRecord(db, id, body) {
     const spec = map[field];
     if (!spec) throw bad(`Field ${field} can't be edited on ${db}`);
     if (PARTY_FIELDS.has(field)) noHidden(value, field);
+    if (spec[1] === 'title' && !String(value ?? '').trim()) throw bad('The description can\'t be empty');
+    if (db === 'todo' && field === 'status' && value && !['Not Started', 'In Progress', 'Blocked', 'Done'].includes(value)) throw bad(`Unknown status ${value}`);
+    if (db === 'team' && field === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) throw bad('That email address doesn’t look right');
     props[spec[0]] = toProp(spec[1], value);
   }
+  if (db === 'todo' && 'status' in set && mirrorTaskDone()) props['Task Done'] = { checkbox: set.status === 'Done' };
   const store = await getHubStore();
   const prev = (await readSnapshot(store, db)).rows.find(r => r.id === id) || null;
   if (db === 'actions' && (chase || 'due' in set)) {
@@ -238,7 +248,8 @@ export async function actionToTask(id, body = {}) {
     'Change Task': { checkbox: !!body.changeTask },
     'Related Variation': rel([body.vcId]),
     'Related RFI': rel([body.rfiId]),
-    'Task Done': { checkbox: false },
+    Status: sel('Not Started'),
+    ...(mirrorTaskDone() && { 'Task Done': { checkbox: false } }),
     'From Action': rel([id]),
   };
   const page = await withRetry(() => notion().pages.create({ parent: { type: 'data_source_id', data_source_id: DATA_SOURCES.todo }, properties: props }));

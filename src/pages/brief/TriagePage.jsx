@@ -8,6 +8,11 @@ import { Card, Badge, Button, Tabs, SkeletonRows, useToast, cx } from '../../com
 import { SearchBox } from '../../components/ui/table.jsx';
 import { useUpdateRecord, useTrashRecord, useBootstrap, useActionToTask } from '../../hooks/hub.js';
 import { addDays, OPEN_RFI_STATUSES } from '../../../hub-core/derive.js';
+import { TeamFixes, useTeamIssues } from './TeamFixes.jsx';
+import { ctl, Sel, DateIn, Check, Mini, ItemPicker } from './controls.jsx';
+import { BicReview } from './BicReview.jsx';
+import { FixCard } from './FixCard.jsx';
+import { teamErrorCount } from '../../../hub-core/team.js';
 import { groupOf, ageDays, fmtDay, bicTone, extendDue, BICS, ACTIVE_ITEM_STATUSES, latestSubmissions } from './shared.jsx';
 
 const TABS = [
@@ -21,6 +26,8 @@ const TABS = [
   { id: 'rfis', label: 'RFIs', kind: 'rfi' },
   { id: 'vars', label: 'Variations', kind: 'var' },
   { id: 'fixes', label: 'Data fixes', kind: 'fixes' },
+  { id: 'team', label: 'Team', kind: 'team' },
+  { id: 'bic', label: 'Ball in court', kind: 'bic' },
 ];
 const DB_OF = { action: 'actions', item: 'tasks', rfi: 'rfis', var: 'variations' };
 // Cockpit count cards land here with ?filter=<key>
@@ -29,42 +36,12 @@ const FROM_FILTER = {
   'bic-dm': { tab: 'mine' }, 'rfis-open': { tab: 'rfis' }, 'vcs-open': { tab: 'vars' },
 };
 
-// ── Small controls ───────────────────────────────────────────────────────────
-const ctl = 'min-h-11 px-3 bg-ground border border-line-strong text-text text-[14px] outline-none focus:border-accent';
-function Sel({ value, onChange, options, blank = '—', label }) {
-  return (
-    <select aria-label={label} value={value ?? ''} onChange={e => onChange(e.target.value)} className={cx(ctl, 'cursor-pointer max-w-[260px]')}>
-      <option value="">{blank}</option>
-      {options.map(o => (typeof o === 'string' ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>))}
-    </select>
-  );
-}
-const DateIn = ({ value, onChange, label }) => <input type="date" aria-label={label} value={value || ''} onChange={e => onChange(e.target.value)} className={ctl} />;
-const Check = ({ checked, onChange, label }) => (
-  <label className="inline-flex items-center gap-2 min-h-11 text-[14px] text-text-2 cursor-pointer">
-    <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} className="w-5 h-5 accent-accent" /> {label}
-  </label>
-);
-const Mini = ({ children, ...p }) => <button type="button" className="min-h-11 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] cursor-pointer" {...p}>{children}</button>;
-
+// ── Small controls (shared ones live in controls.jsx) ──────────────────────
 function Field({ label, changed, children }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className={cx('w-32 shrink-0 font-mono text-[11px] uppercase tracking-[0.1em]', changed ? 'text-accent' : 'text-muted')}>{label}{changed ? ' •' : ''}</span>
+      <span className={cx('w-full sm:w-32 shrink-0 font-mono text-[11px] uppercase tracking-[0.1em]', changed ? 'text-accent' : 'text-muted')}>{label}{changed ? ' •' : ''}</span>
       {children}
-    </div>
-  );
-}
-
-function ItemPicker({ d, value, onChange }) {
-  const current = d.items_.get(value?.[0]);
-  const [proj, setProj] = useState(current?.projectId || '');
-  const items = d.all.tasks.filter(i => i.projectId === proj && !i.archived).sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Sel label="Project" value={proj} onChange={setProj} blank="Project…" options={d.projectOptions} />
-      <Sel label="Item" value={value?.[0] || ''} onChange={v => onChange(v ? [v] : [])} blank={proj ? 'Item…' : 'Pick a project'} options={items.map(i => ({ value: i.id, label: i.title }))} />
-      {!value?.length && <Badge tone="danger">No item linked</Badge>}
     </div>
   );
 }
@@ -147,6 +124,10 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
     if (kind === 'action' && 'dtId' in set_ && set_.dtId) set_.bic = 'DT';
     if (kind === 'item' && 'dtId' in set_ && set_.dtId && !('bic' in set_)) set_.bic = 'DT';
     if (task) delete set_.done; // moving closes the action anyway
+    if ('title' in set_) {
+      set_.title = String(set_.title).trim();
+      if (!set_.title) { toast.show('The description can\'t be empty', { tone: 'danger' }); return; }
+    }
     try {
       if (Object.keys(set_).length || chase) await update.mutateAsync({ id: row.id, set: set_, chase });
       if (task) {
@@ -165,6 +146,16 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
   if (kind === 'action') {
     fields = (
       <>
+        <Field label="Description" changed={'title' in draft}>
+          <textarea
+            rows={2}
+            value={val('title', row.title) || ''}
+            onChange={e => set('title', row.title)(e.target.value)}
+            aria-label="Action description"
+            placeholder="What needs doing"
+            className={cx(ctl, 'flex-1 min-w-[220px] py-2 resize-y leading-snug')}
+          />
+        </Field>
         <Field label="Done" changed={'done' in draft}><Check label="Mark done on save" checked={val('done', false)} onChange={set('done', false)} /></Field>
         <Field label="Ball in court" changed={'bic' in draft}><Sel label="Ball in court" value={val('bic', row.bic)} onChange={set('bic', row.bic)} options={BICS} /></Field>
         <Field label="DT" changed={'dtId' in draft}><Sel label="DT" value={val('dtId', row.personIds[0] || '')} onChange={set('dtId', row.personIds[0] || '')} blank="Unassigned" options={d.dts.map(x => ({ value: x.id, label: x.name }))} /></Field>
@@ -260,30 +251,31 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
   let title, meta, side;
   if (kind === 'action') {
     title = row.title; meta = [d.itemName(row.itemIds) || 'No item', d.personName(row.personIds[0]), row.source];
-    side = <>{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted w-10 text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
+    side = <>{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
   } else if (kind === 'item') {
     title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dmPhase, row.dtIds.map(d.personName).join(', '), row.blocker?.join(', '), row.lockStatus && 'locked'];
-    side = <>{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted w-10 text-right">{ageDays(row.editedAt, t)}d</span></>;
+    side = <>{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.editedAt, t)}d</span></>;
   } else if (kind === 'rfi') {
     title = `RFI-${String(row.number ?? '?').padStart(3, '0')} ${row.title || ''}`; meta = [d.itemName(row.itemIds) || 'No item', row.tbcBy && `TBC ${row.tbcBy}`, row.stopsWork && 'stops work'];
-    side = <><Badge tone="accent">{row.status}</Badge>{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted w-10 text-right">{ageDays(row.raised, t) ?? '–'}d</span></>;
+    side = <><Badge tone="accent">{row.status}</Badge>{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.raised, t) ?? '–'}d</span></>;
   } else {
     title = `${row.code || 'VC'} ${row.title || ''}`; meta = [d.itemName(row.itemIds) || 'No item', row.type, row.raisedBy && `raised by ${row.raisedBy}`];
-    side = <><Badge tone="accent">{row.status || 'No status'}</Badge><span className="font-mono text-[12px] text-muted w-10 text-right">{ageDays(row.requested || row.createdAt, t)}d</span></>;
+    side = <><Badge tone="accent">{row.status || 'No status'}</Badge><span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.requested || row.createdAt, t)}d</span></>;
   }
   const dirty = Object.keys(drafts.get(row.id)).length > 0;
   return (
     <li className={cx('border-t border-line first:border-t-0', row.done && 'opacity-60')}>
-      <div className="flex items-start gap-3 px-4 py-2">
+      <div className="flex flex-wrap sm:flex-nowrap items-start gap-x-3 px-4 py-2">
         {onSelect && <input type="checkbox" aria-label={`Select ${title}`} checked={selected} onChange={e => onSelect(e.target.checked)} className="mt-3 w-5 h-5 accent-accent shrink-0" />}
         <button type="button" onClick={onToggle} aria-expanded={open} className="flex-1 min-w-0 text-left bg-transparent border-0 p-0 py-1.5 cursor-pointer text-text flex gap-2">
           {open ? <ChevronDown size={16} className="mt-1 text-muted shrink-0" /> : <ChevronRight size={16} className="mt-1 text-muted shrink-0" />}
           <span className="min-w-0">
             <span className={cx('block text-[14px]', dirty && 'text-accent')}>{title || 'Untitled'}</span>
-            <span className="block mt-0.5 font-mono text-[11px] text-muted truncate">{meta.filter(Boolean).join(' · ')}</span>
+            <span className="block mt-0.5 font-mono text-[11px] text-muted break-words sm:truncate">{meta.filter(Boolean).join(' · ')}</span>
           </span>
         </button>
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-1.5 shrink-0 max-w-[45%]">
+        {/* Phone: badges sit under the title (indented to it); wider screens: on the right */}
+        <div className={cx('flex flex-wrap items-center gap-2 w-full pb-1 sm:w-auto sm:pb-0 sm:pl-0 sm:pt-1.5 sm:justify-end sm:shrink-0 sm:max-w-[45%]', onSelect ? 'pl-14' : 'pl-6')}>
           {side}
           <a href={row.url} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-muted hover:text-accent">Notion ↗</a>
         </div>
@@ -379,64 +371,18 @@ function useChecks(d) {
   }, [d]);
 }
 
-function FixRow({ check, row, d }) {
-  const update = useUpdateRecord(check.db);
-  const toast = useToast();
-  const field = row._field || check.field;
-  const [value, setValue] = useState(check.fix === 'item' ? [] : '');
-  const has = Array.isArray(value) ? value.length > 0 : !!value;
-  const save = () => update.mutate({ id: row.id, set: { [field]: value } }, {
-    onSuccess: () => toast.show('Fixed in Notion'),
-    onError: e => toast.show(`Not saved: ${e.message}`, { tone: 'danger', ms: 8000 }),
-  });
-  return (
-    <li className="border-t border-line px-4 py-3 flex flex-wrap items-center gap-3">
-      <div className="flex-1 min-w-[220px]">
-        <a href={row.url} target="_blank" rel="noreferrer" className="text-[14px] text-text no-underline hover:underline">{check.label(row) || 'Untitled'}</a>
-        {check.sub && <div className="font-mono text-[11px] text-muted">{check.sub(row)}</div>}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {check.fix === 'date' && <><Mini onClick={() => setValue(d.today)}>Today</Mini><DateIn label="Date" value={value} onChange={setValue} /></>}
-        {check.fix === 'select' && <Sel label={check.title} value={value} onChange={setValue} options={check.options} blank="Choose…" />}
-        {check.fix === 'dt' && <Sel label="DT" value={value} onChange={setValue} blank="Choose DT…" options={d.dts.map(x => ({ value: x.id, label: x.name }))} />}
-        {check.fix === 'item' && <ItemPicker d={d} value={value} onChange={setValue} />}
-        <Button onClick={save} disabled={!has || update.isPending}>{update.isPending ? 'Saving…' : 'Save'}</Button>
-      </div>
-    </li>
-  );
-}
-
 function DataFixes({ d }) {
   const checks = useChecks(d);
-  const [open, setOpen] = useState(() => new Set());
-  const toggle = id => setOpen(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   return (
     <div className="flex flex-col gap-3">
-      {checks.map(c => (
-        <Card key={c.id}>
-          <h3 className="m-0">
-            <button type="button" aria-expanded={open.has(c.id)} onClick={() => toggle(c.id)} className="w-full text-left bg-transparent border-0 cursor-pointer px-4 py-3 flex items-start gap-3 text-text hover:bg-surface-hi">
-              {open.has(c.id) ? <ChevronDown size={16} className="mt-1 text-muted" /> : <ChevronRight size={16} className="mt-1 text-muted" />}
-              <span className="flex-1 min-w-0">
-                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-accent mr-2">{c.app}</span>
-                <span className="text-[14px] font-semibold">{c.title}</span>
-                <span className="block mt-1 text-[13px] font-normal text-muted">{c.why}</span>
-              </span>
-              <Badge tone={c.rows.length ? 'accent' : 'ok'} className="py-1">{c.rows.length || 'Clear'}</Badge>
-            </button>
-          </h3>
-          {open.has(c.id) && c.rows.length > 0 && (
-            <ul className="m-0 p-0 list-none">{c.rows.slice(0, 100).map(r => <FixRow key={r._key || r.id} check={c} row={r} d={d} />)}</ul>
-          )}
-        </Card>
-      ))}
+      {checks.map(c => <FixCard key={c.id} check={{ ...c, tag: c.app }} d={d} />)}
     </div>
   );
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function TriagePage() {
-  const { data: d0 } = useOutletContext();
+  const { data: d0, project: projectFilter } = useOutletContext();
   const { data: boot } = useBootstrap();
   const lookups = boot?.lookups || { statuses: [], phases: [], bic: [], rfiTbcBy: [], rfiStatuses: [], vcStatuses: [], vcPause: [] };
   const d = useMemo(() => ({ ...d0, lookups }), [d0, lookups]);
@@ -453,6 +399,8 @@ export default function TriagePage() {
   const t = d.today;
   const kind = TABS.find(x => x.id === tab)?.kind || 'action';
   const trash = useTrashRecord(DB_OF[kind] || 'actions');
+  const { issues: teamIss } = useTeamIssues();
+  const teamErrors = teamErrorCount(teamIss);
 
   const go = next => { const p = { tab: next.tab ?? tab }; const du = next.due ?? due; if (du !== 'all') p.due = du; setParams(p); setOpen(null); setSel(new Set()); };
 
@@ -487,12 +435,12 @@ export default function TriagePage() {
   return (
     <div className="flex flex-col gap-4">
       <Tabs label="Triage lists" value={tab} onChange={id => go({ tab: id })} tabs={TABS.map(x => ({
-        id: x.id, label: x.kind === 'fixes' ? x.label : `${x.label} · ${(lists[x.id] || []).length}`,
+        id: x.id, label: x.kind === 'fixes' || x.kind === 'bic' ? x.label : x.kind === 'team' ? `${x.label}${teamErrors ? ` · ${teamErrors}` : ''}` : `${x.label} · ${(lists[x.id] || []).length}`,
       }))} />
 
       {undo && <UndoBar undo={undo} onClose={() => setUndo(null)} />}
 
-      {tab !== 'fixes' && (
+      {tab !== 'fixes' && tab !== 'team' && tab !== 'bic' && (
         <div className="flex flex-wrap items-center gap-2">
           <SearchBox value={q} onChange={setQ} />
           {(kind === 'action' || kind === 'rfi') && ['all', 'overdue', 'week'].map(k => (
@@ -508,7 +456,7 @@ export default function TriagePage() {
 
       {selectable && selectedRows.length > 0 && <BulkBar kind={kind} rows={selectedRows} d={d} lookups={lookups} onDone={() => setSel(new Set())} />}
 
-      {tab === 'fixes' ? <DataFixes d={d} /> : (
+      {tab === 'fixes' ? <DataFixes d={d} /> : tab === 'team' ? <TeamFixes d={d} /> : tab === 'bic' ? <BicReview project={projectFilter || ''} /> : (
         <Card>
           {rows.length === 0 ? <p className="m-0 p-6 text-center text-[14px] text-muted">Nothing here.</p> : (
             <ul className="m-0 p-0 list-none">

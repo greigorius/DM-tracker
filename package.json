@@ -11,7 +11,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "backfill:status": "node scripts/todo-status-backfill.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^11.1.7",

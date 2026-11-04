@@ -73,6 +73,17 @@ export const mappers = {
     drawingRef: v(page, 'Drawing Ref'),
     holdDays: v(page, 'Hold Days'),
     noClientApproval: v(page, 'No Client Approval'),
+    programmeDriven: v(page, 'Programme-driven'),
+    reissueReason: v(page, 'Reissue Reason'),
+    // Submission dates exactly as the Scheduling Tool stores them on the Tasks DB
+    // (Adj = current forecast / reissue date, Plan = locked baseline). Read by the Timeline.
+    prog: {
+      s4Adj: day(v(page, '1st Submission Date (Adj)')), s4Plan: day(v(page, '1st Submission Date (Plan)')),
+      s5Adj: day(v(page, '2nd Submission Date (Adj)')), s5Plan: day(v(page, '2nd Submission Date (Plan)')),
+      conAdj: day(v(page, 'Constr. Submission Date (Adj)')), conPlan: day(v(page, 'Constr. Submission Date (Plan)')),
+      // Scheduling Tool acceleration: a shorter review / sign-off for this item (blank = normal)
+      s4ReviewDays: v(page, 'Accel S4 Review Days'), s5ReviewDays: v(page, 'Accel S5 Review Days'), signOffDays: v(page, 'Accel C01 Sign Off Days'),
+    },
     dates: {
       instruction: day(v(page, 'Date of Instruction')),
       dt1Start: day(v(page, '1st DT Start (Plan)')),
@@ -165,21 +176,10 @@ export const mappers = {
     itemIds: ids(page, 'Item'),
     lockStatus: v(page, 'Lock Status'),
     noClientApproval: v(page, 'No Client Approval'),
-    // submitted/statusDate = actuals; *Plan = the Scheduling Tool's Adj date (Plan if no Adj), read by the Timeline
-    s4: {
-      submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')),
-      submitPlan: day(v(page, 'S4 Submit Date (Adj)')) || day(v(page, 'S4 Submit Date (Plan)')),
-      statusPlan: day(v(page, 'S4 Status Date (Adj)')) || day(v(page, 'S4 Status Date (Plan)')),
-    },
-    s5: {
-      submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')),
-      submitPlan: day(v(page, 'S5 Submit Date (Adj)')) || day(v(page, 'S5 Submit Date (Plan)')),
-      statusPlan: day(v(page, 'S5 Status Date (Adj)')) || day(v(page, 'S5 Status Date (Plan)')),
-    },
-    c01: {
-      submitted: day(v(page, 'C01 Submit Date (Actual)')), signOff: day(v(page, 'C01 Sign Off')),
-      submitPlan: day(v(page, 'C01 Submit Date (Adj)')) || day(v(page, 'C01 Submit Date (Plan)')),
-    },
+    // Actuals only. Planned dates come from the Tasks DB, where the Scheduling Tool writes them.
+    s4: { submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')) },
+    s5: { submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')) },
+    c01: { submitted: day(v(page, 'C01 Submit Date (Actual)')), signOff: day(v(page, 'C01 Sign Off')) },
     prd: { status: v(page, 'PRD Status'), statusDate: day(v(page, 'PRD Status Date')), scheduled: day(v(page, 'Schedule Production (Actual)')) },
     holdNotes: v(page, 'Hold Notes'),
   }),
@@ -205,7 +205,10 @@ export const mappers = {
   todo: page => ({
     ...base(page),
     title: v(page, 'Item Description'),
-    done: v(page, 'Task Done'),
+    // Status is the completion flag; Task Done is only a fallback until the
+    // backfill has run (npm run backfill:status) and the property is deleted.
+    status: v(page, 'Status') || (v(page, 'Task Done') ? 'Done' : 'Not Started'),
+    done: (v(page, 'Status') || (v(page, 'Task Done') ? 'Done' : null)) === 'Done',
     itemIds: ids(page, 'Item'),
     personIds: ids(page, 'Person'),
     start: day(v(page, 'Start Date')),
@@ -226,6 +229,9 @@ export const mappers = {
     ownerIds: ids(page, 'Owner'),
     start: day(v(page, 'Start Date')),
     end: day(v(page, 'End Date')),
+    // Scheduling Tool period overrides (blank = the tool's default)
+    reviewDays: v(page, 'Approval Days'),
+    signOffDays: v(page, 'C01 Sign Off Days'),
   }),
 
   clients: page => ({
@@ -280,6 +286,7 @@ export const mappers = {
     title: v(page, 'Name'),
     role: v(page, 'Role'),
     email: v(page, 'Email'),
+    capacity: v(page, 'Weekly Capacity (hrs)'),
   }),
 };
 

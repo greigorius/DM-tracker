@@ -13,26 +13,27 @@ const GRADE = {
   NA: { background: '#E7E8EA', color: '#33363B' },
 };
 
-function Sub({ c, today }) {
+function Sub({ c, today, na }) {
+  if (na) return <span className="tr-none">N/A</span>;
   if (!c) return <span className="tr-none">—</span>;
   return (
     <>
-      <span className={c.kind === 'plan' ? (c.late ? 'tr-late tr-plan' : 'tr-plan') : ''}>{c.reissue ? 'R ' : ''}{fmtDay(c.date, today)}</span>
-      {c.kind === 'act' && c.total > c.issued && <span className="tr-sub">{c.issued}/{c.total} issued</span>}
+      <span className={c.kind === 'plan' ? (c.late ? 'tr-late tr-plan' : 'tr-plan') : ''}>{c.reissue ? 'R ' : ''}{c.date ? fmtDay(c.date, today) : 'No forecast'}</span>
+      {c.total > 0 && c.issued < c.total && <span className="tr-sub">{c.issued}/{c.total} issued</span>}
       {c.late > 0 && <span className="tr-sub tr-late">{c.late} days late</span>}
     </>
   );
 }
 
-function Ret({ c, today }) {
+function Ret({ c, today, na }) {
+  if (na) return <span className="tr-none">N/A</span>;
   if (!c) return <span className="tr-none">—</span>;
-  if (c.kind === 'act') return <span>{c.grade && <span className="tr-grade" style={GRADE[c.grade]}>{c.grade}</span>}{fmtDay(c.date, today)}</span>;
-  if (c.kind === 'plan') return <span className="tr-plan">{fmtDay(c.date, today)}</span>;
+  if (c.kind === 'act') return <span>{c.grade === 'Approved' ? <span className="tr-tick" aria-label="Approved">✓</span> : c.grade && <span className="tr-grade" style={GRADE[c.grade]}>{c.grade}</span>}{fmtDay(c.date, today)}</span>;
   return (
     <>
-      <span>Awaiting</span>
-      {c.total > 1 && <span className="tr-sub">{c.back}/{c.total} back</span>}
-      {c.late > 0 ? <span className="tr-sub tr-late">{c.late} days late</span> : c.date && <span className="tr-sub tr-plan">due {fmtDay(c.date, today)}</span>}
+      <span className={c.late ? 'tr-late tr-plan' : 'tr-plan'}>{c.date ? fmtDay(c.date, today) : 'No forecast'}</span>
+      {c.awaiting && <span className="tr-sub">Awaiting{c.total > 1 ? ` · ${c.back}/${c.total} back` : ''}</span>}
+      {c.late > 0 && <span className="tr-sub tr-late">{c.late} days late</span>}
     </>
   );
 }
@@ -64,6 +65,7 @@ const CSS = `
 .timeline-print .tr-plan { color: #5A5E66; font-style: italic; }
 .timeline-print .tr-late { color: #B3261E; font-style: normal; font-weight: 500; }
 .timeline-print .tr-none { color: #A3A7AE; }
+.timeline-print .tr-tick { display: inline-block; width: 10px; height: 10px; line-height: 9px; text-align: center; margin-right: 4px; border: 1px solid #1E7A45; color: #1E7A45; font-size: 8pt; font-weight: 700; font-family: 'DM Sans', sans-serif; }
 .timeline-print .tr-grade { display: inline-block; padding: 0 4px; margin-right: 4px; font-weight: 500; }
 .timeline-print .tr-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #C9CCD1; font-family: 'DM Mono', monospace; font-size: 7pt; color: #4A4E55; }
 `;
@@ -118,10 +120,10 @@ export function TimelineReport({ rows, stages, today, projectTitle, clientName, 
                   <td style={{ fontFamily: "'DM Sans', sans-serif" }}>{reportBic(r.bic, clientName || clientOf?.(r.projectId))}</td>
                   {stages.map(s => (
                     <Fragment key={s.key}>
-                      <td className="tr-edge"><Sub c={r.stages[s.key].sub} today={today} /></td>
+                      <td className="tr-edge"><Sub c={r.stages[s.key].sub} na={r.stages[s.key].na} today={today} /></td>
                       <td>
-                        <Ret c={r.stages[s.key].ret} today={today} />
-                        {s.key === 'con' && r.stages.con.sub?.kind === 'act' && <span className="tr-sub">{r.prd ? 'PRD' : 'A4.5'}</span>}
+                        <Ret c={r.stages[s.key].ret} na={r.stages[s.key].na} today={today} />
+                        {s.key === 'con' && r.stages.con.sub && <span className="tr-sub">{r.prd ? 'PRD' : 'A4.5'}</span>}
                       </td>
                     </Fragment>
                   ))}
@@ -132,8 +134,8 @@ export function TimelineReport({ rows, stages, today, projectTitle, clientName, 
         </tbody>
       </table>
       <div className="tr-foot">
-        <span>Actual dates upright · planned dates in italics · late in red · A/B/C grade · R = reissue pending</span>
-        <span>Item dates are the earliest submission and latest return across that item's drawings</span>
+        <span>Actual dates upright · planned dates in italics · late in red · A/B/C grade · ✓ approved · R = reissue pending</span>
+        <span>A stage is dated when every drawing has gone out (the last date); forecasts are the Scheduling Tool's Adj dates</span>
       </div>
     </div>,
     document.body,

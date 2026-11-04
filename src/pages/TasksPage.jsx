@@ -3,12 +3,13 @@ import { TrackerPage, fmtDate } from './TrackerPage.jsx';
 import { StatusPill } from '../components/ui/table.jsx';
 import { Badge } from '../components/ui/index.js';
 import { londonToday } from '../../hub-core/derive.js';
+import { todoStatus } from '../../hub-core/team.js';
 
 const today = londonToday();
-// Task Done is the one completion flag (Status is barely used and is being retired).
-const statusOf = r => (r.done ? 'Done' : 'Open');
-const TONE = { Open: 'accent', Done: 'ok' };
-const OPEN = new Set(['Open']);
+// Status (Not Started / In Progress / Blocked / Done) is the completion flag.
+const statusOf = todoStatus;
+const TONE = { 'Not Started': 'muted', 'In Progress': 'info', Blocked: 'danger', Done: 'ok' };
+const OPEN = new Set(['Not Started', 'In Progress', 'Blocked']);
 const isOpen = r => statusOf(r) !== 'Done';
 const num = r => (r.number != null ? `TD-${String(r.number).padStart(3, '0')}` : '—');
 const vcOf = (r, ctx) => (r.vcIds?.[0] ? ctx.vcs.get(r.vcIds[0]) : null);

@@ -231,6 +231,8 @@ function applyLocal(db, row, set) {
   const r = { ...row, dates: row.dates && { ...row.dates }, dt: row.dt && { ...row.dt } };
   for (const [k, v] of Object.entries(set)) {
     if (k === 'dtId') { if (db === 'submissions' || db === 'tasks') r.dtIds = v ? [v] : []; else r.personIds = v ? [v] : []; }
+    else if (k === 'personId') r.personIds = v ? [v] : [];
+    else if (db === 'todo' && k === 'status') { r.status = v; r.done = v === 'Done'; }
     else if (k === 'instruction') r.dates.instruction = v;
     else if (/Act$/.test(k) && r.dt) r.dt[k] = v;
     else r[k] = v;

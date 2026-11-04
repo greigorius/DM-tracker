@@ -130,8 +130,17 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
   }
 
   await appendEvents(store, allEvents);
+
+  // Derived item BIC (hub-core/item-bic.js). Only writes when ITEM_BIC_AUTO=on.
+  let bic = null;
+  const { bicMode, applyBic } = await import('./item-bic-sync.js');
+  if (bicMode() === 'on' && Date.now() < deadline) {
+    try { bic = await applyBic({ deadline, max: 40 }); }
+    catch (err) { console.error('[sync] item BIC:', err.message); bic = { error: err.message }; }
+  }
+
   meta.syncedAt = new Date().toISOString();
-  meta.lastRun = { at: meta.syncedAt, ms: Date.now() - t0, results, skipped, needsFull };
+  meta.lastRun = { at: meta.syncedAt, ms: Date.now() - t0, results, skipped, needsFull, ...(bic && { bic: { written: bic.done?.length || 0, failed: bic.failed?.length || 0, remaining: bic.remaining, error: bic.error } }) };
   await store.setJSON(META_KEY, meta);
   return meta.lastRun;
 }

@@ -14,7 +14,7 @@ export function Tabs({ tabs, value, onChange, label, onHover }) {
     refs.current[n]?.focus();
   };
   return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap border-b border-line">
+    <div role="tablist" aria-label={label} className="flex overflow-x-auto sm:flex-wrap border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t, i) => {
         const active = t.id === value;
         return (
@@ -31,7 +31,7 @@ export function Tabs({ tabs, value, onChange, label, onHover }) {
             onKeyDown={e => onKey(e, i)}
             onMouseEnter={() => onHover?.(t.id)}
             className={cx(
-              'min-h-11 px-4 font-mono text-[12px] uppercase tracking-[0.1em] border-b-2 -mb-px cursor-pointer',
+              'min-h-11 px-4 shrink-0 whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.1em] border-b-2 -mb-px cursor-pointer',
               active ? 'bg-surface-hi text-text border-accent' : 'bg-transparent text-muted border-transparent hover:text-text-2',
             )}
           >
