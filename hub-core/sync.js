@@ -144,3 +144,25 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
   await store.setJSON(META_KEY, meta);
   return meta.lastRun;
 }
+
+// Start a full rebuild of the DBs a quick sync had to skip (first deploy, a
+// mapper change, the nightly rebuild). On Netlify that is the
+// sync-full-background function (15-minute limit); locally it runs in-process.
+export async function triggerFullRebuild() {
+  if (process.env.URL) {          // set by Netlify; unset in local dev
+    try {
+      await fetch(`${process.env.URL}/.netlify/functions/sync-full-background`, {
+        method: 'POST',
+        headers: { 'x-hub-sync-key': process.env.HUB_SYNC_KEY || '' },
+        signal: AbortSignal.timeout(3000),
+      });
+      return true;
+    } catch (err) {
+      // A background function answers 202 straight away; a timeout here usually still started it.
+      console.warn('[sync] full rebuild trigger:', err.message);
+      return err.name === 'TimeoutError';
+    }
+  }
+  runSync({ budgetMs: 10 * 60_000, allowFull: true }).catch(err => console.error('[sync] full rebuild:', err.message));
+  return true;
+}
