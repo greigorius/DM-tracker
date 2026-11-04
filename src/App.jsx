@@ -1,40 +1,46 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import AxiomHome from './pages/AxiomHome.jsx';
-import ClientHome from './pages/ClientHome.jsx';
-import ProjectHome from './pages/ProjectHome.jsx';
-import TimelinePage from './pages/TimelinePage.jsx';
-import TasksPage from './pages/TasksPage.jsx';
-import ProductionPage from './pages/ProductionPage.jsx';
-import ItemSchedulePage from './pages/ItemSchedulePage.jsx';
-import RFISchedulePage from './pages/RFISchedulePage.jsx';
-import VariationSchedulePage from './pages/VariationSchedulePage.jsx';
-import DrawingsPage from './pages/DrawingsPage.jsx';
-import DTDrawingChecksPage from './pages/DTDrawingChecksPage.jsx';
-import ClientCommentReviewPage from './pages/ClientCommentReviewPage.jsx';
-import TeamPage from './pages/TeamPage.jsx';
-import ItemDateMatrixPage from './pages/ItemDateMatrixPage.jsx';
+import { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ROUTES, pages } from './routes.jsx';
+
+const { briefLayout: BriefLayout, dailyBrief: DailyBrief, triage: TriagePage } = pages;
+import Cockpit from './pages/Cockpit.jsx';
+import { SkeletonRows } from './components/ui/index.js';
+
+function PageFallback() {
+  return (
+    <div className="hub">
+      <div className="bg-bar border-b border-line h-16" />
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6"><SkeletonRows rows={8} /></div>
+    </div>
+  );
+}
+
+function KeepQuery({ to }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<AxiomHome />} />
-        <Route path="/client/:clientId" element={<ClientHome />} />
-        <Route path="/project/:projectId" element={<ProjectHome />} />
-        <Route path="/timeline" element={<TimelinePage />} />
-        <Route path="/timeline/item-date-matrix" element={<ItemDateMatrixPage />} />
-        <Route path="/timeline/:projectId" element={<TimelinePage />} />
-        <Route path="/tasks" element={<TasksPage />} />
-        <Route path="/tasks/production" element={<ProductionPage />} />
-        <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
-        <Route path="/trackers/item-schedule" element={<ItemSchedulePage />} />
-        <Route path="/trackers/rfis" element={<RFISchedulePage />} />
-        <Route path="/trackers/variations" element={<VariationSchedulePage />} />
-        <Route path="/drawings" element={<DrawingsPage />} />
-        <Route path="/drawings/dt-checks" element={<DTDrawingChecksPage />} />
-        <Route path="/drawings/comment-review" element={<ClientCommentReviewPage />} />
-        <Route path="/team" element={<TeamPage />} />
-      </Routes>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/" element={<Cockpit />} />
+          <Route element={<BriefLayout title="Brief" subtitle="What’s next, upcoming and past due" />}>
+            <Route path="/brief" element={<DailyBrief />} />
+          </Route>
+          <Route element={<BriefLayout title="Triage" subtitle="Act on anything across the Hub" />}>
+            <Route path="/triage" element={<TriagePage />} />
+          </Route>
+          {ROUTES.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
+
+          {/* Old paths */}
+          <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
+          <Route path="/trackers/task-schedule" element={<Navigate to="/tasks" replace />} />
+          <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

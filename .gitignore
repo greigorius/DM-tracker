@@ -24,3 +24,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.claude/settings.local.json
+_archive/
+.cache/
+.netlify/

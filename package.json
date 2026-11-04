@@ -1,29 +1,33 @@
 {
-  "name": "dmtracker",
+  "name": "axiom-dl-hub",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server/index.js",
+    "server": "nodemon server/index.js",
+    "sync": "node scripts/sync.mjs",
+    "audit:todo": "node scripts/notion-audit.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "backfill:status": "node scripts/todo-status-backfill.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.1.7",
     "@notionhq/client": "^5.17.0",
+    "@tanstack/react-query": "^5.105.0",
+    "@tanstack/react-query-persist-client": "^5.105.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
-    "jszip": "^3.10.1",
+    "idb-keyval": "^6.3.0",
     "lucide-react": "^1.7.0",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.6.205",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.14.0",
-    "recharts": "^3.8.1"
+    "react-router-dom": "^7.14.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -35,6 +39,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "nodemon": "^3.1.14",
     "tailwindcss": "^4.2.2",
     "vite": "^8.0.4"
   }

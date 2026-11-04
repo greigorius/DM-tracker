@@ -5,160 +5,22 @@
 [functions]
   node_bundler = "esbuild"
 
-# ── API rewrites → Netlify Functions ─────────────────────────────────────────
-[[redirects]]
-  from   = "/api/projects/:id/items"
-  to     = "/.netlify/functions/project-items"
-  status = 200
+# Hub functions declare their own paths (config.path), so no API redirects:
+#   api-read              GET   /api/snapshot, /api/bootstrap
+#   api-write             POST  /api/actions, /api/rfis, /api/variations, /api/sync-now,
+#                               /api/records/:db/:id/trash|restore
+#                         PATCH /api/items/:id, /api/records/:db/:id
+#                         POST  /api/team/email/preview|send, /api/item-bic/apply
+#                         GET   /api/item-bic/plan
+#   sync-snapshots        scheduled, every 5 minutes
+#   sync-full-background  nightly / first-run full rebuild
+#   item-status*          Item & Drawing Status automation (legacy functions, kept as-is)
 
-[[redirects]]
-  from   = "/api/projects/:id/timeline"
-  to     = "/.netlify/functions/project-timeline"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects/:id/drawings"
-  to     = "/.netlify/functions/project-drawings"
-  status = 200
-
-[[redirects]]
-  from   = "/api/projects"
-  to     = "/.netlify/functions/projects"
-  status = 200
-
-[[redirects]]
-  from   = "/api/stats"
-  to     = "/.netlify/functions/stats"
-  status = 200
-
-[[redirects]]
-  from   = "/api/rfis"
-  to     = "/.netlify/functions/rfis"
-  status = 200
-
-[[redirects]]
-  from   = "/api/all-items"
-  to     = "/.netlify/functions/all-items"
-  status = 200
-
-[[redirects]]
-  from   = "/api/item-drawings"
-  to     = "/.netlify/functions/item-drawings"
-  status = 200
-
+# Item & Drawing Status automation (PRs #5–#10): manual run / dry run with STATUS_SECRET.
+# item-status-nightly runs on its own schedule (config in the function).
 [[redirects]]
   from   = "/api/item-status"
   to     = "/.netlify/functions/item-status"
-  status = 200
-
-[[redirects]]
-  from   = "/api/rfi-schedule"
-  to     = "/.netlify/functions/rfi-schedule"
-  status = 200
-
-[[redirects]]
-  from   = "/api/variations"
-  to     = "/.netlify/functions/variations"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tdl"
-  to     = "/.netlify/functions/tdl"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/todo"
-  to     = "/.netlify/functions/quick-log-todo"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/rfi"
-  to     = "/.netlify/functions/quick-log-rfi"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/drawing-check"
-  to     = "/.netlify/functions/quick-log-drawing-check"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/comment-review"
-  to     = "/.netlify/functions/quick-log-comment-review"
-  status = 200
-
-[[redirects]]
-  from   = "/api/quick-log/production"
-  to     = "/.netlify/functions/quick-log-production"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tasks/update"
-  to     = "/.netlify/functions/task-update"
-  status = 200
-
-[[redirects]]
-  from   = "/api/tasks"
-  to     = "/.netlify/functions/tasks"
-  status = 200
-
-[[redirects]]
-  from   = "/api/task-categories"
-  to     = "/.netlify/functions/task-categories"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/update"
-  to     = "/.netlify/functions/drawings-register-update"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/bulk"
-  to     = "/.netlify/functions/drawings-register-bulk"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/items"
-  to     = "/.netlify/functions/drawings-register-items"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register/chunk"
-  to     = "/.netlify/functions/drawings-register-chunk"
-  status = 200
-
-[[redirects]]
-  from   = "/api/drawings-register"
-  to     = "/.netlify/functions/drawings-register"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-projects"
-  to     = "/.netlify/functions/dt-checker-projects"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-suffixes"
-  to     = "/.netlify/functions/dt-checker-suffixes"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-drawings"
-  to     = "/.netlify/functions/dt-checker-drawings"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-finishes"
-  to     = "/.netlify/functions/dt-checker-finishes"
-  status = 200
-
-[[redirects]]
-  from   = "/api/dt-checker-export-pdf"
-  to     = "/.netlify/functions/dt-checker-export-pdf"
-  status = 200
-
-[[redirects]]
-  from   = "/api/schedule-items"
-  to     = "/.netlify/functions/schedule-items"
   status = 200
 
 # ── SPA fallback ──────────────────────────────────────────────────────────────

@@ -1,0 +1,6 @@
+{
+  "watch": ["server", "hub-core"],
+  "ext": "js,mjs,json",
+  "ignore": ["src", "netlify", "node_modules"],
+  "delay": 300
+}
