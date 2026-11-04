@@ -14,6 +14,14 @@
 #                         GET   /api/item-bic/plan
 #   sync-snapshots        scheduled, every 5 minutes
 #   sync-full-background  nightly / first-run full rebuild
+#   item-status*          Item & Drawing Status automation (legacy functions, kept as-is)
+
+# Item & Drawing Status automation (PRs #5–#10): manual run / dry run with STATUS_SECRET.
+# item-status-nightly runs on its own schedule (config in the function).
+[[redirects]]
+  from   = "/api/item-status"
+  to     = "/.netlify/functions/item-status"
+  status = 200
 
 # ── SPA fallback ──────────────────────────────────────────────────────────────
 [[redirects]]
