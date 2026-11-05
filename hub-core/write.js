@@ -16,13 +16,33 @@ const date = iso => ({ date: iso ? { start: iso } : null });
 const rel = ids => ({ relation: (ids || []).filter(Boolean).map(id => ({ id })) });
 const noHidden = (v, field) => { if (v && HIDDEN_PARTY.test(v)) throw bad(`"${v}" is not a valid ${field}; use DM`); return v; };
 
+// Snapshot upkeep after a Notion write. Notion is the source of truth: if the
+// blob store has a problem the write still succeeds and the next sync repairs
+// the copy, so these never throw.
 async function patchSnapshot(db, row) {
-  const store = await getHubStore();
-  const snap = await readSnapshot(store, db);
-  const rows = snap.rows.filter(r => r.id !== row.id);
-  if (!row.archived) rows.push(row);
-  await store.setJSON(snapKey(db), { ...snap, rows });
-  return store;
+  try {
+    const store = await getHubStore();
+    const snap = await readSnapshot(store, db);
+    const rows = snap.rows.filter(r => r.id !== row.id);
+    if (!row.archived) rows.push(row);
+    await store.setJSON(snapKey(db), { ...snap, rows });
+    return store;
+  } catch (err) {
+    console.error(`[hub-store] could not patch ${db} snapshot:`, err.message);
+    return null;
+  }
+}
+
+// Snapshot reads used only for context (previous row, events): null on a store problem.
+async function snapshotRows(db) {
+  try { return (await readSnapshot(await getHubStore(), db)).rows; }
+  catch (err) { console.error(`[hub-store] could not read ${db} snapshot:`, err.message); return null; }
+}
+
+async function logEvents(store, events) {
+  if (!store || !events?.length) return;
+  try { await appendEvents(store, events); }
+  catch (err) { console.error('[hub-store] could not log events:', err.message); }
 }
 
 // A page that was archived / trashed / deleted in Notion after the last full
@@ -31,9 +51,13 @@ const isGone = err => err?.code === 'object_not_found'
   || (err?.code === 'validation_error' && /archived|in trash/i.test(err.message || ''));
 
 async function dropFromSnapshot(db, id) {
-  const store = await getHubStore();
-  const snap = await readSnapshot(store, db);
-  if (snap.rows.some(r => r.id === id)) await store.setJSON(snapKey(db), { ...snap, rows: snap.rows.filter(r => r.id !== id) });
+  try {
+    const store = await getHubStore();
+    const snap = await readSnapshot(store, db);
+    if (snap.rows.some(r => r.id === id)) await store.setJSON(snapKey(db), { ...snap, rows: snap.rows.filter(r => r.id !== id) });
+  } catch (err) {
+    console.error(`[hub-store] could not drop from ${db} snapshot:`, err.message);
+  }
 }
 
 // pages.update, but a page that's already gone from Notion is removed from the
@@ -49,9 +73,7 @@ async function updatePage(db, id, args) {
 }
 
 async function itemsIndex() {
-  const store = await getHubStore();
-  const snap = await readSnapshot(store, 'tasks');
-  return new Map(snap.rows.map(r => [r.id, r]));
+  return new Map((await snapshotRows('tasks') || []).map(r => [r.id, r]));
 }
 
 async function create(db, properties) {
@@ -59,7 +81,7 @@ async function create(db, properties) {
   const row = mapPage(db, page);
   const store = await patchSnapshot(db, row);
   const event = eventForNewRow(db, row, await itemsIndex(), 'Cockpit');
-  if (event) await appendEvents(store, [event]);
+  if (event) await logEvents(store, [event]);
   return { row, event };
 }
 
@@ -89,9 +111,12 @@ export async function createRfi(body) {
   const { itemId, question, bic, due } = body || {};
   if (!question?.trim()) throw bad('Question is required');
   noHidden(bic, 'Ball in Court');
-  const store = await getHubStore();
-  const rfis = await readSnapshot(store, 'rfis');
-  const next = Math.max(0, ...rfis.rows.map(r => r.number || 0)) + 1;
+  let rows = await snapshotRows('rfis');
+  if (!rows) {
+    const res = await withRetry(() => notion().dataSources.query({ data_source_id: DATA_SOURCES.rfis, page_size: 1, sorts: [{ property: 'RFI Number', direction: 'descending' }] }));
+    rows = res.results.map(pg => mapPage('rfis', pg));
+  }
+  const next = Math.max(0, ...rows.map(r => r.number || 0)) + 1;
   const q = question.trim();
   const toDm = !bic || bic === 'DM';
   const props = {
@@ -132,16 +157,15 @@ export async function updateItem(id, body) {
   // Programme / delivery dates are deliberately not writable here: the
   // Scheduling Tool is the only place they are set.
 
-  const store = await getHubStore();
-  const prev = (await readSnapshot(store, 'tasks')).rows.find(r => r.id === id) || null;
+  const prev = (await snapshotRows('tasks'))?.find(r => r.id === id) || null;
   const page = await updatePage('tasks', id, { properties: props });
   const row = mapPage('tasks', page);
-  await patchSnapshot('tasks', row);
+  const store = await patchSnapshot('tasks', row);
   const events = eventsForItemChange(prev, row, 'Cockpit');
   if (dtId !== undefined && prev && (prev.dtIds[0] || null) !== (dtId || null)) {
     events.push({ ...events[0], id: `dt:${id}:${Date.now()}`, kind: 'status', summary: `${row.title}: DT reassigned`, at: row.editedAt, itemId: id, projectId: row.projectId, source: 'Cockpit', refId: id, url: row.url, blocking: false });
   }
-  await appendEvents(store, events.filter(Boolean));
+  await logEvents(store, events.filter(Boolean));
   return { row, events };
 }
 
@@ -220,8 +244,7 @@ export async function updateRecord(db, id, body) {
     props[spec[0]] = toProp(spec[1], value);
   }
   if (db === 'todo' && 'status' in set && mirrorTaskDone()) props['Task Done'] = { checkbox: set.status === 'Done' };
-  const store = await getHubStore();
-  const prev = (await readSnapshot(store, db)).rows.find(r => r.id === id) || null;
+  const prev = (await snapshotRows(db))?.find(r => r.id === id) || null;
   if (db === 'actions' && (chase || 'due' in set)) {
     const next = 'due' in set ? set.due : prev?.due;
     const line = `${londonToday()} — ${chase ? `chased: ${chase}` : 'due moved'}${next ? ` (next ${next})` : ''}`;
@@ -230,9 +253,9 @@ export async function updateRecord(db, id, body) {
   if (!Object.keys(props).length) throw bad('Nothing to update');
   const page = await updatePage(db, id, { properties: props });
   const row = mapPage(db, page);
-  await patchSnapshot(db, row);
+  const store = await patchSnapshot(db, row);
   const events = db === 'tasks' ? eventsForItemChange(prev, row, 'Triage') : [];
-  if (events.length) await appendEvents(store, events);
+  await logEvents(store, events);
   return { row, events };
 }
 
@@ -258,16 +281,14 @@ export async function trashRecord(db, id, restore = false) {
 // Creates the To Do row (linked back through "From Action"), then closes the
 // action and logs the move in its Response Log. Refuses if already moved.
 export async function actionToTask(id, body = {}) {
-  const store = await getHubStore();
-  const action = (await readSnapshot(store, 'actions')).rows.find(r => r.id === id);
-  if (!action) throw bad('Action not found', 404);
-  if (action.taskIds?.length) throw bad('This action is already in Tasks', 409);
-  // Check the action still exists in Notion before creating the task, so a gone action leaves no orphan task
+  // Read the action from Notion: proves it still exists (no orphan task) and doesn't depend on the snapshot
   const live = await withRetry(() => notion().pages.retrieve({ page_id: id })).catch(err => { if (isGone(err)) return null; throw err; });
   if (!live || live.archived || live.in_trash) {
     await dropFromSnapshot('actions', id);
     throw bad('This action was archived or deleted in Notion, so it has been removed from the Hub. Restore it in Notion to move it.', 410);
   }
+  const action = mapPage('actions', live);
+  if (action.taskIds?.length) throw bad('This action is already in Tasks', 409);
   const itemId = body.itemId || action.itemIds?.[0];
   if (!itemId) throw bad('Link the action to an item first');
   const title = (body.title || action.title || '').trim();
@@ -301,9 +322,9 @@ export async function actionToTask(id, body = {}) {
     'Response Log': { rich_text: text(action.log ? `${line}\n${action.log}` : line) },
   } });
   const actionRow = mapPage('actions', aPage);
-  await patchSnapshot('actions', actionRow);
+  const store = await patchSnapshot('actions', actionRow);
 
   const event = eventForNewRow('todo', task, await itemsIndex(), 'Triage');
-  if (event) await appendEvents(store, [event]);
+  if (event) await logEvents(store, [event]);
   return { row: task, action: actionRow, event };
 }

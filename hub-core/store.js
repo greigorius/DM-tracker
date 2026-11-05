@@ -7,12 +7,27 @@ let storePromise = null;
 
 async function makeNetlifyStore() {
   const { getStore } = await import('@netlify/blobs');
-  // Strong consistency so a read straight after a write sees the patch.
-  const store = getStore({ name: BLOB_STORE, consistency: 'strong' });
+  // Strong consistency so a read straight after a write sees the patch. Some
+  // function contexts don't support it ("…not been configured with a
+  // 'uncachedEdgeURL' property"); reads then fall back to eventual consistency
+  // for the rest of this instance instead of failing.
+  const strong = getStore({ name: BLOB_STORE, consistency: 'strong' });
+  const eventual = getStore({ name: BLOB_STORE });
+  let useStrong = true;
   return {
     kind: 'netlify',
-    getJSON: key => store.get(key, { type: 'json' }),
-    setJSON: (key, value) => store.setJSON(key, value),
+    async getJSON(key) {
+      if (useStrong) {
+        try { return await strong.get(key, { type: 'json' }); }
+        catch (e) {
+          if (!/uncachedEdgeURL|strong consistency/i.test(e.message || '')) throw e;
+          console.warn('[hub-store] strong reads unavailable, using eventual consistency:', e.message);
+          useStrong = false;
+        }
+      }
+      return eventual.get(key, { type: 'json' });
+    },
+    setJSON: (key, value) => eventual.setJSON(key, value),
   };
 }
 
