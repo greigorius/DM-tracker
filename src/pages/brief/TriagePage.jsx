@@ -428,7 +428,9 @@ export default function TriagePage() {
   const selectedRows = rows.filter(r => sel.has(r.id));
 
   const onTrash = row => trash.mutate({ id: row.id }, {
-    onSuccess: () => setUndo({ row, db: DB_OF[kind] }),
+    onSuccess: res => (res?.alreadyGone
+      ? toast.show('Already archived in Notion, so removed from the Hub')
+      : setUndo({ row, db: DB_OF[kind] })),
     onError: e => toast.show(`Not deleted: ${e.message}`, { tone: 'danger' }),
   });
 
