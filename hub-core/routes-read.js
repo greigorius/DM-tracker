@@ -1,5 +1,5 @@
 // Read routes: snapshot + bootstrap. Imports no Notion SDK code.
-import { getSnapshots, getBootstrap } from './read.js';
+import { getSnapshots, getBootstrap, getDismissedDuplicates } from './read.js';
 
 export const readRoutes = [
   ['GET', /^\/api\/snapshot\/?$/, async ({ query }) => {
@@ -7,4 +7,5 @@ export const readRoutes = [
     return getSnapshots(dbs);
   }],
   ['GET', /^\/api\/bootstrap\/?$/, async () => getBootstrap()],
+  ['GET', /^\/api\/duplicates\/dismissed\/?$/, async () => getDismissedDuplicates()],
 ];

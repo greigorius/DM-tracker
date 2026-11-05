@@ -2,7 +2,7 @@
 // held as a draft until Save, then go to Notion in one update. Delete moves the
 // page to Notion Trash (restorable for 30 days, with Undo here).
 import { useMemo, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, Badge, Button, Tabs, SkeletonRows, useToast, cx } from '../../components/ui/index.js';
 import { SearchBox } from '../../components/ui/table.jsx';
@@ -12,6 +12,8 @@ import { TeamFixes, useTeamIssues } from './TeamFixes.jsx';
 import { ctl, Sel, DateIn, Check, Mini, ItemPicker } from './controls.jsx';
 import { BicReview } from './BicReview.jsx';
 import { FixCard } from './FixCard.jsx';
+import { Duplicates, useDuplicatePairs } from './Duplicates.jsx';
+import { duplicateIds } from '../../../hub-core/duplicates.js';
 import { teamErrorCount } from '../../../hub-core/team.js';
 import { groupOf, ageDays, fmtDay, bicTone, extendDue, BICS, ACTIVE_ITEM_STATUSES, latestSubmissions } from './shared.jsx';
 
@@ -22,6 +24,7 @@ const TABS = [
   { id: 'dt', label: 'DT team', kind: 'action' },
   { id: 'unfiled', label: 'Unfiled', kind: 'action' },
   { id: 'all', label: 'All actions', kind: 'action' },
+  { id: 'dupes', label: 'Duplicates', kind: 'dupes' },
   { id: 'items', label: 'Items', kind: 'item' },
   { id: 'rfis', label: 'RFIs', kind: 'rfi' },
   { id: 'vars', label: 'Variations', kind: 'var' },
@@ -246,12 +249,12 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
   );
 }
 
-function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups, onTrash }) {
+function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups, onTrash, dupe }) {
   const t = d.today;
   let title, meta, side;
   if (kind === 'action') {
     title = row.title; meta = [d.itemName(row.itemIds) || 'No item', d.personName(row.personIds[0]), row.source];
-    side = <>{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
+    side = <>{dupe && <Link to="?tab=dupes" className="no-underline" title="Looks like another open action — review in Duplicates"><Badge tone="info">Possible duplicate</Badge></Link>}{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
   } else if (kind === 'item') {
     title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dmPhase, row.dtIds.map(d.personName).join(', '), row.blocker?.join(', '), row.lockStatus && 'locked'];
     side = <>{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.editedAt, t)}d</span></>;
@@ -288,10 +291,13 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
 // ── Bulk edit bar ────────────────────────────────────────────────────────────
 function BulkBar({ kind, rows, d, lookups, onDone }) {
   const update = useUpdateRecord(DB_OF[kind]);
+  const trash = useTrashRecord(DB_OF[kind]);
   const toast = useToast();
   const [b, setB] = useState({});
   const [busy, setBusy] = useState(false);
-  const setK = k => v => setB(x => { const n = { ...x }; if (v === '' || v == null || v === false) delete n[k]; else n[k] = v; return n; });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const setK = k => v => setB(x => { const n = { ...x }; if (v === '' || v == null || v === false || (Array.isArray(v) && !v.length)) delete n[k]; else n[k] = v; return n; });
+  const noun = kind === 'item' ? 'item' : kind === 'action' ? 'action' : 'row';
   const apply = async () => {
     setBusy(true);
     let ok = 0;
@@ -304,6 +310,19 @@ function BulkBar({ kind, rows, d, lookups, onDone }) {
     toast.show(`${ok} of ${rows.length} rows saved`, { tone: ok === rows.length ? 'ok' : 'danger' });
     if (ok === rows.length) { setB({}); onDone(); }
   };
+  const remove = async () => {
+    setBusy(true);
+    let ok = 0;
+    for (const r of rows) {
+      try { await trash.mutateAsync({ id: r.id }); ok++; } catch { /* counted below */ }
+    }
+    setBusy(false);
+    setConfirmDelete(false);
+    toast.show(ok === rows.length
+      ? `${ok} ${noun}${ok === 1 ? '' : 's'} deleted. They stay in Notion's trash for 30 days`
+      : `${ok} of ${rows.length} deleted`, { tone: ok === rows.length ? 'ok' : 'danger', ms: 8000 });
+    onDone();
+  };
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 p-3 bg-surface-hi border border-accent">
       <span className="font-semibold mr-1">{rows.length} selected</span>
@@ -311,11 +330,23 @@ function BulkBar({ kind, rows, d, lookups, onDone }) {
       {kind === 'item' && <Sel label="DM phase" value={b.dmPhase} onChange={setK('dmPhase')} blank="DM phase…" options={lookups.phases} />}
       <Sel label="Ball in court" value={b.bic} onChange={setK('bic')} blank="Ball in court…" options={kind === 'item' ? lookups.bic : BICS} />
       <Sel label="DT" value={b.dtId} onChange={setK('dtId')} blank="DT…" options={d.dts.map(x => ({ value: x.id, label: x.name }))} />
+      {kind === 'action' && <ItemPicker d={d} value={b.itemIds} onChange={setK('itemIds')} required={false} />}
       {kind === 'action' && <DateIn label="Due" value={b.due} onChange={setK('due')} />}
       {kind === 'action' && <Check label="Mark done" checked={b.done} onChange={setK('done')} />}
-      <span className="ml-auto flex gap-2">
-        <Button onClick={apply} disabled={!Object.keys(b).length || busy}>{busy ? 'Saving…' : 'Apply to selected'}</Button>
-        <Button variant="secondary" onClick={onDone}>Clear</Button>
+      <span className="ml-auto flex flex-wrap gap-2">
+        {confirmDelete ? (
+          <>
+            <span className="self-center text-[14px] text-danger">Delete {rows.length} {noun}{rows.length === 1 ? '' : 's'}?</span>
+            <Button className="!bg-danger !border-danger" onClick={remove} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</Button>
+            <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={apply} disabled={!Object.keys(b).length || busy}>{busy ? 'Saving…' : 'Apply to selected'}</Button>
+            <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy} aria-label={`Delete ${rows.length} selected`}>Delete…</Button>
+            <Button variant="secondary" onClick={onDone}>Clear</Button>
+          </>
+        )}
       </span>
     </div>
   );
@@ -401,6 +432,8 @@ export default function TriagePage() {
   const trash = useTrashRecord(DB_OF[kind] || 'actions');
   const { issues: teamIss } = useTeamIssues();
   const teamErrors = teamErrorCount(teamIss);
+  const dupPairs = useDuplicatePairs(d);
+  const dupIds = useMemo(() => duplicateIds(dupPairs), [dupPairs]);
 
   const go = next => { const p = { tab: next.tab ?? tab }; const du = next.due ?? due; if (du !== 'all') p.due = du; setParams(p); setOpen(null); setSel(new Set()); };
 
@@ -437,12 +470,12 @@ export default function TriagePage() {
   return (
     <div className="flex flex-col gap-4">
       <Tabs label="Triage lists" value={tab} onChange={id => go({ tab: id })} tabs={TABS.map(x => ({
-        id: x.id, label: x.kind === 'fixes' || x.kind === 'bic' ? x.label : x.kind === 'team' ? `${x.label}${teamErrors ? ` · ${teamErrors}` : ''}` : `${x.label} · ${(lists[x.id] || []).length}`,
+        id: x.id, label: x.kind === 'fixes' || x.kind === 'bic' ? x.label : x.kind === 'team' ? `${x.label}${teamErrors ? ` · ${teamErrors}` : ''}` : x.kind === 'dupes' ? `${x.label} · ${dupPairs.length}` : `${x.label} · ${(lists[x.id] || []).length}`,
       }))} />
 
       {undo && <UndoBar undo={undo} onClose={() => setUndo(null)} />}
 
-      {tab !== 'fixes' && tab !== 'team' && tab !== 'bic' && (
+      {!['fixes', 'team', 'bic', 'dupes'].includes(tab) && (
         <div className="flex flex-wrap items-center gap-2">
           <SearchBox value={q} onChange={setQ} />
           {(kind === 'action' || kind === 'rfi') && ['all', 'overdue', 'week'].map(k => (
@@ -458,7 +491,7 @@ export default function TriagePage() {
 
       {selectable && selectedRows.length > 0 && <BulkBar kind={kind} rows={selectedRows} d={d} lookups={lookups} onDone={() => setSel(new Set())} />}
 
-      {tab === 'fixes' ? <DataFixes d={d} /> : tab === 'team' ? <TeamFixes d={d} /> : tab === 'bic' ? <BicReview project={projectFilter || ''} /> : (
+      {tab === 'dupes' ? <Duplicates d={d} /> : tab === 'fixes' ? <DataFixes d={d} /> : tab === 'team' ? <TeamFixes d={d} /> : tab === 'bic' ? <BicReview project={projectFilter || ''} /> : (
         <Card>
           {rows.length === 0 ? <p className="m-0 p-6 text-center text-[14px] text-muted">Nothing here.</p> : (
             <ul className="m-0 p-0 list-none">
@@ -468,7 +501,7 @@ export default function TriagePage() {
                 </li>
               )}
               {rows.map(r => (
-                <Row key={r.id} kind={kind} row={r} d={d} lookups={lookups} drafts={drafts} onTrash={onTrash}
+                <Row key={r.id} kind={kind} row={r} d={d} dupe={kind === 'action' && dupIds.has(r.id)} lookups={lookups} drafts={drafts} onTrash={onTrash}
                   open={open === r.id} onToggle={() => setOpen(o => (o === r.id ? null : r.id))}
                   selected={sel.has(r.id)} onSelect={selectable ? v => setSel(s => { const n = new Set(s); if (v) n.add(r.id); else n.delete(r.id); return n; }) : null} />
               ))}

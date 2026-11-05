@@ -7,6 +7,7 @@ import { getHubStore } from './store.js';
 import { notion, withRetry } from './notion.js';
 import { mapPage } from './mappers.js';
 import { readSnapshot, appendEvents } from './sync.js';
+import { DISMISSED_KEY } from './read.js';
 import { eventForNewRow, eventsForItemChange, londonToday } from './derive.js';
 
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -327,4 +328,53 @@ export async function actionToTask(id, body = {}) {
   const event = eventForNewRow('todo', task, await itemsIndex(), 'Triage');
   if (event) await logEvents(store, [event]);
   return { row: task, action: actionRow, event };
+}
+
+// ── Duplicate actions ────────────────────────────────────────────────────────
+// POST /api/duplicates/merge  { keep, drop }
+// Keeps one action and deletes the other (Notion Trash, 30 days). Before the
+// delete, the dropped action's wording and source go into the kept action's
+// Response Log, its items are added, and its due date / ball in court fill
+// any gaps.
+export async function mergeDuplicate(body = {}) {
+  const { keep, drop } = body;
+  if (!keep || !drop || keep === drop) throw bad('Pick the action to keep and the one to delete');
+  const live = async id => {
+    const page = await withRetry(() => notion().pages.retrieve({ page_id: id })).catch(err => { if (isGone(err)) return null; throw err; });
+    if (!page || page.archived || page.in_trash) {
+      await dropFromSnapshot('actions', id);
+      return null;
+    }
+    return mapPage('actions', page);
+  };
+  const [k, d] = await Promise.all([live(keep), live(drop)]);
+  if (!k) throw bad('The action to keep was archived or deleted in Notion, so it has been removed from the Hub.', 410);
+  if (!d) return { row: k, dropped: drop, alreadyGone: true };
+
+  const meta = [d.source, d.from, d.received].filter(Boolean).join(', ');
+  const line = `${londonToday()} — merged duplicate: "${d.title}"${meta ? ` (${meta})` : ''}`;
+  const props = { 'Response Log': { rich_text: text([line, k.log, d.log && `[merged log] ${d.log}`].filter(Boolean).join('\n')) } };
+  const itemIds = [...new Set([...(k.itemIds || []), ...(d.itemIds || [])])];
+  if (itemIds.length !== (k.itemIds || []).length) props.Items = rel(itemIds);
+  if (!k.due && d.due) props.Due = date(d.due);
+  if (!k.bic && d.bic) props['Ball in Court'] = sel(d.bic);
+  if (!k.personIds?.length && d.personIds?.length) props.Person = rel(d.personIds.slice(0, 1));
+  if (d.blocks && !k.blocks) props['Blocks Item'] = { checkbox: true };
+
+  const page = await updatePage('actions', keep, { properties: props });
+  const row = mapPage('actions', page);
+  await patchSnapshot('actions', row);
+  await trashRecord('actions', drop);
+  return { row, dropped: drop };
+}
+
+// "Not a duplicate": remembered in the Hub store so the pair isn't raised again.
+export async function dismissDuplicate(body = {}) {
+  const key = String(body.key || '');
+  if (!/^[\w-]+\|[\w-]+$/.test(key)) throw bad('Unknown pair');
+  const store = await getHubStore();
+  const cur = (await store.getJSON(DISMISSED_KEY)) || [];
+  const next = body.undo ? cur.filter(x => x !== key) : [...new Set([key, ...cur])].slice(0, 2000);
+  await store.setJSON(DISMISSED_KEY, next);
+  return { dismissed: next };
 }

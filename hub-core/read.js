@@ -36,3 +36,10 @@ export async function getBootstrap() {
     empty: !meta?.syncedAt,
   };
 }
+
+// Duplicate pairs marked "Not a duplicate" in Triage (pair keys, see duplicates.js).
+export const DISMISSED_KEY = 'duplicates/dismissed';
+export async function getDismissedDuplicates() {
+  try { return { dismissed: (await (await getHubStore()).getJSON(DISMISSED_KEY)) || [] }; }
+  catch (err) { console.error('[hub-store] could not read dismissed duplicates:', err.message); return { dismissed: [] }; }
+}
