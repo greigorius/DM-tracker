@@ -25,6 +25,29 @@ async function patchSnapshot(db, row) {
   return store;
 }
 
+// A page that was archived / trashed / deleted in Notion after the last full
+// sync (incremental syncs can't see that: Notion's queries skip archived pages).
+const isGone = err => err?.code === 'object_not_found'
+  || (err?.code === 'validation_error' && /archived|in trash/i.test(err.message || ''));
+
+async function dropFromSnapshot(db, id) {
+  const store = await getHubStore();
+  const snap = await readSnapshot(store, db);
+  if (snap.rows.some(r => r.id === id)) await store.setJSON(snapKey(db), { ...snap, rows: snap.rows.filter(r => r.id !== id) });
+}
+
+// pages.update, but a page that's already gone from Notion is removed from the
+// Hub and reported clearly (410) instead of Notion's "unarchive the block".
+async function updatePage(db, id, args) {
+  try {
+    return await withRetry(() => notion().pages.update({ page_id: id, ...args }));
+  } catch (err) {
+    if (!isGone(err)) throw err;
+    await dropFromSnapshot(db, id);
+    throw bad('This was archived or deleted in Notion, so it has been removed from the Hub. Restore it in Notion to edit it.', 410);
+  }
+}
+
 async function itemsIndex() {
   const store = await getHubStore();
   const snap = await readSnapshot(store, 'tasks');
@@ -111,7 +134,7 @@ export async function updateItem(id, body) {
 
   const store = await getHubStore();
   const prev = (await readSnapshot(store, 'tasks')).rows.find(r => r.id === id) || null;
-  const page = await withRetry(() => notion().pages.update({ page_id: id, properties: props }));
+  const page = await updatePage('tasks', id, { properties: props });
   const row = mapPage('tasks', page);
   await patchSnapshot('tasks', row);
   const events = eventsForItemChange(prev, row, 'Cockpit');
@@ -205,7 +228,7 @@ export async function updateRecord(db, id, body) {
     props['Response Log'] = { rich_text: text(prev?.log ? `${line}\n${prev.log}` : line) };
   }
   if (!Object.keys(props).length) throw bad('Nothing to update');
-  const page = await withRetry(() => notion().pages.update({ page_id: id, properties: props }));
+  const page = await updatePage(db, id, { properties: props });
   const row = mapPage(db, page);
   await patchSnapshot(db, row);
   const events = db === 'tasks' ? eventsForItemChange(prev, row, 'Triage') : [];
@@ -216,7 +239,15 @@ export async function updateRecord(db, id, body) {
 // POST /api/records/:db/:id/trash | /restore — Notion Trash keeps pages 30 days.
 export async function trashRecord(db, id, restore = false) {
   if (!FIELD_MAP[db]) throw bad(`Records in ${db} can't be deleted here`);
-  const page = await withRetry(() => notion().pages.update({ page_id: id, in_trash: !restore }));
+  let page;
+  try {
+    page = await withRetry(() => notion().pages.update({ page_id: id, in_trash: !restore }));
+  } catch (err) {
+    if (!isGone(err)) throw err;
+    // Deleting something Notion already archived: the job's done, just drop it from the Hub.
+    if (!restore) { await dropFromSnapshot(db, id); return { row: { id, archived: true }, alreadyGone: true }; }
+    page = await withRetry(() => notion().pages.update({ page_id: id, archived: false }));
+  }
   const row = { ...mapPage(db, page), archived: !restore };
   await patchSnapshot(db, row);
   return { row };
@@ -231,6 +262,12 @@ export async function actionToTask(id, body = {}) {
   const action = (await readSnapshot(store, 'actions')).rows.find(r => r.id === id);
   if (!action) throw bad('Action not found', 404);
   if (action.taskIds?.length) throw bad('This action is already in Tasks', 409);
+  // Check the action still exists in Notion before creating the task, so a gone action leaves no orphan task
+  const live = await withRetry(() => notion().pages.retrieve({ page_id: id })).catch(err => { if (isGone(err)) return null; throw err; });
+  if (!live || live.archived || live.in_trash) {
+    await dropFromSnapshot('actions', id);
+    throw bad('This action was archived or deleted in Notion, so it has been removed from the Hub. Restore it in Notion to move it.', 410);
+  }
   const itemId = body.itemId || action.itemIds?.[0];
   if (!itemId) throw bad('Link the action to an item first');
   const title = (body.title || action.title || '').trim();
@@ -258,11 +295,11 @@ export async function actionToTask(id, body = {}) {
 
   const ref = task.number != null ? `TD-${String(task.number).padStart(3, '0')}` : 'Tasks';
   const line = `${londonToday()} — moved to Tasks (${ref})`;
-  const aPage = await withRetry(() => notion().pages.update({ page_id: id, properties: {
+  const aPage = await updatePage('actions', id, { properties: {
     Checked: { checkbox: true },
     Task: rel([task.id]),
     'Response Log': { rich_text: text(action.log ? `${line}\n${action.log}` : line) },
-  } }));
+  } });
   const actionRow = mapPage('actions', aPage);
   await patchSnapshot('actions', actionRow);
 

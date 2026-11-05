@@ -90,9 +90,10 @@ function useOptimisticWrite({ kind, db, request, toRow, toEvent }) {
       }
       return { prevBoot, prevSnap, tempId };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, vars, ctx) => {
       if (ctx?.prevBoot) qc.setQueryData(keys.bootstrap, ctx.prevBoot);
       if (db && ctx?.prevSnap) qc.setQueryData(keys.snapshot(db), ctx.prevSnap);
+      if (db && kind === 'item' && isGone(err)) dropRow(qc, db, vars.id);
     },
     onSuccess: (result, _vars, ctx) => {
       // Swap the temp row/event for the real ones from the server.
@@ -172,6 +173,13 @@ export function useUpdateItem() {
 
 // ── Generic record edits (Triage) ───────────────────────────────────────────
 // Patches the row in its snapshot straight away; rolls back if Notion refuses.
+// 410 = the record was archived / deleted in Notion; the server has dropped it
+// from the snapshot, so drop it here too instead of rolling the edit back.
+const isGone = err => err?.status === 410;
+function dropRow(qc, db, id) {
+  qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.filter(r => r.id !== id) }));
+}
+
 export function useUpdateRecord(db) {
   const qc = useQueryClient();
   return useMutation({
@@ -182,7 +190,7 @@ export function useUpdateRecord(db) {
       qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === id ? applyLocal(db, r, set) : r)) }));
       return { prev };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); },
+    onError: (e, { id }, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); if (isGone(e)) dropRow(qc, db, id); },
     onSuccess: ({ row }) => qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === row.id ? row : r)) })),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
   });
@@ -217,7 +225,7 @@ export function useActionToTask() {
       qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === id ? { ...r, done: true } : r)) }));
       return { prev };
     },
-    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot('actions'), ctx.prev); },
+    onError: (e, { id }, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot('actions'), ctx.prev); if (isGone(e)) dropRow(qc, 'actions', id); },
     onSuccess: ({ row, action }) => {
       qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === action.id ? action : r)) }));
       qc.setQueryData(keys.snapshot('todo'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] }));
