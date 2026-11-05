@@ -288,10 +288,13 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
 // ── Bulk edit bar ────────────────────────────────────────────────────────────
 function BulkBar({ kind, rows, d, lookups, onDone }) {
   const update = useUpdateRecord(DB_OF[kind]);
+  const trash = useTrashRecord(DB_OF[kind]);
   const toast = useToast();
   const [b, setB] = useState({});
   const [busy, setBusy] = useState(false);
-  const setK = k => v => setB(x => { const n = { ...x }; if (v === '' || v == null || v === false) delete n[k]; else n[k] = v; return n; });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const setK = k => v => setB(x => { const n = { ...x }; if (v === '' || v == null || v === false || (Array.isArray(v) && !v.length)) delete n[k]; else n[k] = v; return n; });
+  const noun = kind === 'item' ? 'item' : kind === 'action' ? 'action' : 'row';
   const apply = async () => {
     setBusy(true);
     let ok = 0;
@@ -304,6 +307,19 @@ function BulkBar({ kind, rows, d, lookups, onDone }) {
     toast.show(`${ok} of ${rows.length} rows saved`, { tone: ok === rows.length ? 'ok' : 'danger' });
     if (ok === rows.length) { setB({}); onDone(); }
   };
+  const remove = async () => {
+    setBusy(true);
+    let ok = 0;
+    for (const r of rows) {
+      try { await trash.mutateAsync({ id: r.id }); ok++; } catch { /* counted below */ }
+    }
+    setBusy(false);
+    setConfirmDelete(false);
+    toast.show(ok === rows.length
+      ? `${ok} ${noun}${ok === 1 ? '' : 's'} deleted. They stay in Notion's trash for 30 days`
+      : `${ok} of ${rows.length} deleted`, { tone: ok === rows.length ? 'ok' : 'danger', ms: 8000 });
+    onDone();
+  };
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 p-3 bg-surface-hi border border-accent">
       <span className="font-semibold mr-1">{rows.length} selected</span>
@@ -311,11 +327,23 @@ function BulkBar({ kind, rows, d, lookups, onDone }) {
       {kind === 'item' && <Sel label="DM phase" value={b.dmPhase} onChange={setK('dmPhase')} blank="DM phase…" options={lookups.phases} />}
       <Sel label="Ball in court" value={b.bic} onChange={setK('bic')} blank="Ball in court…" options={kind === 'item' ? lookups.bic : BICS} />
       <Sel label="DT" value={b.dtId} onChange={setK('dtId')} blank="DT…" options={d.dts.map(x => ({ value: x.id, label: x.name }))} />
+      {kind === 'action' && <ItemPicker d={d} value={b.itemIds} onChange={setK('itemIds')} required={false} />}
       {kind === 'action' && <DateIn label="Due" value={b.due} onChange={setK('due')} />}
       {kind === 'action' && <Check label="Mark done" checked={b.done} onChange={setK('done')} />}
-      <span className="ml-auto flex gap-2">
-        <Button onClick={apply} disabled={!Object.keys(b).length || busy}>{busy ? 'Saving…' : 'Apply to selected'}</Button>
-        <Button variant="secondary" onClick={onDone}>Clear</Button>
+      <span className="ml-auto flex flex-wrap gap-2">
+        {confirmDelete ? (
+          <>
+            <span className="self-center text-[14px] text-danger">Delete {rows.length} {noun}{rows.length === 1 ? '' : 's'}?</span>
+            <Button className="!bg-danger !border-danger" onClick={remove} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</Button>
+            <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={busy}>Cancel</Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={apply} disabled={!Object.keys(b).length || busy}>{busy ? 'Saving…' : 'Apply to selected'}</Button>
+            <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy} aria-label={`Delete ${rows.length} selected`}>Delete…</Button>
+            <Button variant="secondary" onClick={onDone}>Clear</Button>
+          </>
+        )}
       </span>
     </div>
   );

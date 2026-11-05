@@ -14,7 +14,7 @@ export function Sel({ value, onChange, options, blank = '—', label }) {
 export const DateIn = ({ value, onChange, label }) => <input type="date" aria-label={label} value={value || ''} onChange={e => onChange(e.target.value)} className={ctl} />;
 export const Mini = ({ children, ...p }) => <button type="button" className="min-h-11 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] cursor-pointer" {...p}>{children}</button>;
 
-export function ItemPicker({ d, value, onChange }) {
+export function ItemPicker({ d, value, onChange, required = true }) {
   const current = d.items_.get(value?.[0]);
   const [proj, setProj] = useState(current?.projectId || '');
   const items = d.all.tasks.filter(i => i.projectId === proj && !i.archived).sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
@@ -22,7 +22,7 @@ export function ItemPicker({ d, value, onChange }) {
     <div className="flex flex-wrap gap-2">
       <Sel label="Project" value={proj} onChange={setProj} blank="Project…" options={d.projectOptions} />
       <Sel label="Item" value={value?.[0] || ''} onChange={v => onChange(v ? [v] : [])} blank={proj ? 'Item…' : 'Pick a project'} options={items.map(i => ({ value: i.id, label: i.title }))} />
-      {!value?.length && <Badge tone="danger">No item linked</Badge>}
+      {required && !value?.length && <Badge tone="danger">No item linked</Badge>}
     </div>
   );
 }
