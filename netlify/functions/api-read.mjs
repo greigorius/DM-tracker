@@ -5,6 +5,6 @@ import { handle } from '../../hub-core/netlify-adapter.js';
 export default req => handle(readRoutes, req, { cache: true });
 
 export const config = {
-  path: ['/api/snapshot', '/api/bootstrap'],
+  path: ['/api/snapshot', '/api/bootstrap', '/api/duplicates/dismissed'],
   method: ['GET'],
 };

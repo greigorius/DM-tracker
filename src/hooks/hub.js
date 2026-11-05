@@ -247,3 +247,46 @@ function applyLocal(db, row, set) {
   }
   return r;
 }
+
+// ── Duplicate actions ────────────────────────────────────────────────────────
+const dismissedKey = ['duplicates', 'dismissed'];
+export function useDismissedDuplicates() {
+  return useQuery({ queryKey: dismissedKey, queryFn: ({ signal }) => api('/api/duplicates/dismissed', { signal }) });
+}
+
+export function useDismissDuplicate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, undo }) => api('/api/duplicates/dismiss', { method: 'POST', body: { key, undo } }),
+    onMutate: async ({ key, undo }) => {
+      await qc.cancelQueries({ queryKey: dismissedKey });
+      const prev = qc.getQueryData(dismissedKey);
+      qc.setQueryData(dismissedKey, old => {
+        const cur = old?.dismissed || [];
+        return { dismissed: undo ? cur.filter(x => x !== key) : [key, ...cur] };
+      });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx) qc.setQueryData(dismissedKey, ctx.prev); },
+    onSuccess: data => qc.setQueryData(dismissedKey, data),
+  });
+}
+
+// Keep one action, delete the other (its wording goes into the kept one's log).
+export function useMergeDuplicate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keep, drop }) => api('/api/duplicates/merge', { method: 'POST', body: { keep, drop } }),
+    onMutate: async ({ drop }) => {
+      await qc.cancelQueries({ queryKey: keys.snapshot('actions') });
+      const prev = qc.getQueryData(keys.snapshot('actions'));
+      qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.filter(r => r.id !== drop) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot('actions'), ctx.prev); },
+    onSuccess: ({ row }) => {
+      qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === row.id ? row : r)) }));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
