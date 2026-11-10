@@ -33,5 +33,25 @@ test('a held drawing shows first; an unissued drawing reads as DT drawing', () =
 test('sketches only count when an item has no numbered drawings', () => {
   const st = itemStage({ status: 'In Progress' }, [dw(S5, 'Client Review'), dw(S4, 'DT Review', { type: 'Sketch' })]);
   assert.equal(st.label, 'S5 · With client');
-  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], [dw(S4, 'DM Review', { type: 'Sketch' })]).get('i1').label, 'S4 · DM review');
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], [dw(S4, 'DM Review', { type: 'Sketch', id: 'k' })], [{ drawingIds: ['k'] }]).get('i1').label, 'S4 · DM review');
+});
+
+test('without Drawing Flow history, Drawing Status is ignored and the MDS actuals decide', () => {
+  const legacy = [
+    dw(S5, 'On Hold', { id: 'a', s5: { submitted: '2026-01-27', status: 'B', statusDate: '2026-02-13' } }),
+    dw(S5, 'On Hold', { id: 'b', s5: { submitted: '2026-01-27' } }),
+  ];
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], legacy, []).get('i1').label, 'S5 · Revising');
+  // a held drawing that Drawing Flow manages still shows on hold
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], legacy, [{ drawingIds: ['a'] }]).get('i1').label, 'S5 · On hold');
+  const unissued = [dw(A45, 'On Hold', { id: 'c', c01: {} })];
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], unissued, []).get('i1').label, 'A4.5 · DT drawing');
+  const signed = [dw(A45, 'On Hold', { id: 'c', c01: { submitted: '2026-10-01', signOff: '2026-10-03' } })];
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], signed, []).get('i1').label, 'A4.5 · Approved');
+});
+
+test('S5 Status NA counts as past S5', () => {
+  const d = [dw(S5, 'On Hold', { id: 'a', s5: { status: 'NA' } }), dw(S5, 'On Hold', { id: 'b', s5: { submitted: '2026-01-27', status: 'B', statusDate: '2026-02-13' } })];
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], d, []).get('i1').label, 'S5 · Revising');
+  assert.equal(stagesFor([{ id: 'i1', status: 'In Progress' }], [d[0]], []).get('i1').label, 'S5 · Approved');
 });

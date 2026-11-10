@@ -63,7 +63,7 @@ export function useBriefData(projectId) {
       for (const i of s.tasks) if (i.projectId && !['Complete', 'Omitted', 'Close Out', 'Design Complete'].includes(i.status)) counts.set(i.projectId, (counts.get(i.projectId) || 0) + 1);
       return [...counts].map(([id, n]) => ({ value: id, label: `${projects.get(id) || 'Unknown'} (${n})` })).sort((a, b) => a.label.localeCompare(b.label));
     })();
-    const stages = stagesFor(s.tasks, s.drawings);
+    const stages = stagesFor(s.tasks, s.drawings, s.submissions);
     return {
       isPending, today, ...f, all: s,
       items_: items, team, projects, projectOptions,

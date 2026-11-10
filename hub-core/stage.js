@@ -3,11 +3,17 @@
 //
 //   Item Status  (Item Status automation)   Omitted / Design Complete /
 //                                           In Production / Blocked win outright
-//   Drawings     (MDS Submission Stage +    otherwise the item is as far along as
-//                 Drawing Status, kept by   its least-advanced drawing: the lowest
-//                 Drawing Flow / automation) stage (S3 → S4 → S5 → A4.5 → PRD), and
+//   Drawings     (MDS Submission Stage)     otherwise the item is as far along as
+//                                           its least-advanced drawing: the lowest
+//                                           stage (S3 → S4 → S5 → A4.5 → PRD), and
 //                                           within it the status that needs
 //                                           attention first
+//
+// A drawing's status is its Drawing Status only when it has Drawing Flow
+// history (a submission links to it): that's when the automation keeps it.
+// Older drawings carry a hand-set Drawing Status (often a stale "On Hold"), so
+// for them the status comes from the MDS actuals the Timeline reads: submit
+// date, return date and grade for the drawing's stage.
 //   Nothing to go on                        Not started (To Do / Backlog) or In progress
 
 const STAGE_ORDER = ['S3', 'S4', 'S5', 'A4.5', 'PRD', 'AB'];
@@ -39,16 +45,35 @@ const ITEM_WINS = {
 
 export const stageCode = s => (s ? String(s).split(' - ')[0].trim() : null);
 
+// A / Approved, or NA (the drawing skips this stage): past it. B / C: being revised.
+const RETURNED = g => (g === 'A' || g === 'Approved' || g === 'NA' ? 'Schedule' : g === 'B' || g === 'C' || g === 'Rejected' ? 'Approval Updates' : null);
+
+// Status for a drawing with no Drawing Flow history, from its MDS actuals.
+export function legacyStatus(d) {
+  const code = stageCode(d.stage);
+  const st = code === 'S4' ? d.s4 : code === 'S5' ? d.s5 : null;
+  if (st) {
+    if (st.status === 'NA' || (st.status && st.statusDate)) return RETURNED(st.status) || 'Client Review';
+    return st.submitted ? 'Client Review' : null;
+  }
+  if (code === 'A4.5') return d.c01?.signOff ? 'Schedule' : d.c01?.submitted ? 'Client Review' : null;
+  if (code === 'PRD') return d.prd?.scheduled ? 'In Production' : d.prd?.status ? RETURNED(d.prd.status) || 'Client Review' : null;
+  return null;
+}
+
 /**
  * @param {object}   item      tasks snapshot row
  * @param {object[]} drawings  the item's drawings (MDS rows)
+ * @param {Set}      [flowIds] ids of drawings with Drawing Flow history; omitted = trust every Drawing Status
  * @returns {{ label: string, tone: string, why: string }}
  */
-export function itemStage(item, drawings = []) {
+export function itemStage(item, drawings = [], flowIds) {
   const win = ITEM_WINS[item.status];
   if (win) return { label: win[0], tone: win[1], why: `Item Status: ${item.status}` };
 
-  const live = drawings.filter(d => !d.archived && stageCode(d.stage) && (d.type === 'Drawing' || !drawings.some(x => x.type === 'Drawing')));
+  const live = drawings
+    .filter(d => !d.archived && stageCode(d.stage) && (d.type === 'Drawing' || !drawings.some(x => x.type === 'Drawing')))
+    .map(d => (!flowIds || flowIds.has(d.id) ? d : { ...d, status: legacyStatus(d) }));
   if (!live.length) {
     const started = !['To Do', 'Backlog', 'Set Up', null, undefined, ''].includes(item.status);
     return started
@@ -73,12 +98,14 @@ export function itemStage(item, drawings = []) {
   return { label: `${code} · ${label}`, tone, why };
 }
 
-// item id → stage, for a list of items.
-export function stagesFor(items, drawings) {
+// item id → stage, for a list of items. `submissions` (Drawing Flow) decides
+// which drawings' Drawing Status is kept by the automation.
+export function stagesFor(items, drawings, submissions = []) {
+  const flowIds = new Set(submissions.flatMap(x => x.drawingIds || []));
   const byItem = new Map();
   for (const d of drawings || []) for (const id of d.itemIds || []) {
     if (!byItem.has(id)) byItem.set(id, []);
     byItem.get(id).push(d);
   }
-  return new Map(items.map(i => [i.id, itemStage(i, byItem.get(i.id) || [])]));
+  return new Map(items.map(i => [i.id, itemStage(i, byItem.get(i.id) || [], flowIds)]));
 }

@@ -28,7 +28,7 @@ function useCounts(ctx) {
       rfis: by(ctx.data.rfis || [], isOpenRfi),
       vcs: by(ctx.data.variations || [], isOpenVc),
       drawings: by(ctx.data.drawings || [], () => true),
-      stages: stagesFor(ctx.data.tasks || [], ctx.data.drawings || []),
+      stages: stagesFor(ctx.data.tasks || [], ctx.data.drawings || [], ctx.data.submissions || []),
     };
   }, [ctx.data]);
 }
@@ -69,7 +69,7 @@ export default function ItemsPage() {
       title="Items"
       subtitle="Status, owner and programme per item"
       db="tasks"
-      extraDbs={['rfis', 'variations', 'drawings']}
+      extraDbs={['rfis', 'variations', 'drawings', 'submissions']}
       projectOf={r => r.projectId}
       statusOf={r => r.status}
       statusTone={toneOf}
