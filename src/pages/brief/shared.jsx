@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useSnapshots, useBootstrap } from '../../hooks/hub.js';
 import { londonToday, addDays, isOpenAction, isOpenRfi, isOpenVc } from '../../../hub-core/derive.js';
 import { stagesFor } from '../../../hub-core/stage.js';
+import { drawnByFor, drawnByIds } from '../../../hub-core/drawnBy.js';
 
 export const EXTERNAL = new Set(['Contractor', 'Consultant', 'Architect', 'Client']);
 export const CHASE_ITEM_STATUSES = new Set(['Set Up', 'In Design', 'Awaiting Approval', 'By Others', 'Backlog', 'Blocked', 'To Do', 'In Progress']);
@@ -64,6 +65,7 @@ export function useBriefData(projectId) {
       return [...counts].map(([id, n]) => ({ value: id, label: `${projects.get(id) || 'Unknown'} (${n})` })).sort((a, b) => a.label.localeCompare(b.label));
     })();
     const stages = stagesFor(s.tasks, s.drawings, s.submissions);
+    const drawnBy = drawnByFor(s.submissions);
     return {
       isPending, today, ...f, all: s,
       items_: items, team, projects, projectOptions,
@@ -71,6 +73,7 @@ export function useBriefData(projectId) {
       projectName: ids => projects.get(projOf(ids)) || '',
       personName: id => team.get(id)?.title || '',
       stageOf: id => stages.get(id) || null,
+      drawnBy: id => drawnByIds(drawnBy, id),
       dts: s.team.filter(t => t.role === 'DT').map(t => ({ id: t.id, name: t.title })).sort((a, b) => a.name.localeCompare(b.name)),
       openActions: f.actions.filter(isOpenAction),
       openRfis: f.rfis.filter(isOpenRfi),

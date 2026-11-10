@@ -255,7 +255,8 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
     title = row.title; meta = [d.itemName(row.itemIds) || 'No item', d.personName(row.personIds[0]), row.source];
     side = <>{dupe && <Link to="?tab=dupes" className="no-underline" title="Looks like another open action — review in Duplicates"><Badge tone="info">Possible duplicate</Badge></Link>}{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
   } else if (kind === 'item') {
-    title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dtIds.map(d.personName).join(', '), row.blocker?.join(', '), row.lockStatus && 'locked'];
+    const others = d.drawnBy(row.id).filter(id => !row.dtIds.includes(id));
+    title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dtIds.map(d.personName).join(', '), others.length && `drawn by ${others.map(d.personName).filter(Boolean).join(', ')}`, row.blocker?.join(', '), row.lockStatus && 'locked'];
     const st = d.stageOf(row.id);
     side = <>{st && <span title={st.why}><Badge tone={st.tone}>{st.label}</Badge></span>}{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.editedAt, t)}d</span></>;
   } else if (kind === 'rfi') {
