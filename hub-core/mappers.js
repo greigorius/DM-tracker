@@ -65,7 +65,6 @@ export const mappers = {
     bic: party(v(page, 'Ball In Court')),
     projectId: ids(page, 'Projects')[0] ?? null,
     dtIds: ids(page, 'Person'),
-    dmPhase: v(page, 'DM Phase'),
     priority: v(page, 'Priority'),
     blocker: v(page, 'Blocker') || [],
     blockerNote: v(page, 'Blocker Note'),

@@ -132,7 +132,6 @@ export function buildLookups(s, schema = {}) {
     rfiTbcBy: ['DM', ...cleanOptions(schema.rfiTbcBy)],
     vcRaisedBy: cleanOptions(schema.vcRaisedBy).length ? cleanOptions(schema.vcRaisedBy) : ['DM', 'Architect', 'Client', 'Contractor', 'Consultant', 'Supplier'],
     statuses: cleanOptions(schema.taskStatuses),
-    phases: cleanOptions(schema.taskPhases),
     blockers: cleanOptions(schema.taskBlockers),
     rfiStatuses: cleanOptions(schema.rfiStatuses).length ? cleanOptions(schema.rfiStatuses) : ['Raise', 'Open', 'Close Out', 'Closed'],
     vcStatuses: cleanOptions(schema.vcStatuses).length ? cleanOptions(schema.vcStatuses) : ['Awaiting Design Info', 'Awaiting Instruction', 'Instruction Received', 'Declined', 'Withdrawn'],
