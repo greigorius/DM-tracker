@@ -62,7 +62,6 @@ export async function retrieveSchemaOptions() {
     version: SCHEMA_VERSION,
     taskStatuses: await opts('tasks', 'Item Status'),
     taskBic: await opts('tasks', 'Ball In Court'),
-    taskPhases: await opts('tasks', 'DM Phase'),
     taskBlockers: await opts('tasks', 'Blocker'),
     actionBic: await opts('actions', 'Ball in Court'),
     rfiTbcBy: await opts('rfis', 'TBC by'),

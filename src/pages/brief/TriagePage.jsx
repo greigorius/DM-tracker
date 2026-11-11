@@ -180,7 +180,6 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
       <>
         <Field label="Status" changed={'status' in draft}><Sel label="Item status" value={val('status', row.status)} onChange={set('status', row.status)} options={lookups.statuses} /></Field>
         <Field label="Lock status" changed={'lockStatus' in draft}><Check label="Automation leaves this status alone" checked={val('lockStatus', !!row.lockStatus)} onChange={set('lockStatus', !!row.lockStatus)} /></Field>
-        <Field label="DM phase" changed={'dmPhase' in draft}><Sel label="DM phase" value={val('dmPhase', row.dmPhase)} onChange={set('dmPhase', row.dmPhase)} options={lookups.phases} /></Field>
         <Field label="Ball in court" changed={'bic' in draft}><Sel label="Ball in court" value={val('bic', row.bic)} onChange={set('bic', row.bic)} options={lookups.bic} /></Field>
         <Field label="DT" changed={'dtId' in draft}><Sel label="DT" value={val('dtId', row.dtIds[0] || '')} onChange={set('dtId', row.dtIds[0] || '')} blank="Unassigned" options={d.dts.map(x => ({ value: x.id, label: x.name }))} /></Field>
         <Field label="Blocker note" changed={'blockerNote' in draft}>
@@ -256,8 +255,10 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
     title = row.title; meta = [d.itemName(row.itemIds) || 'No item', d.personName(row.personIds[0]), row.source];
     side = <>{dupe && <Link to="?tab=dupes" className="no-underline" title="Looks like another open action — review in Duplicates"><Badge tone="info">Possible duplicate</Badge></Link>}{row.bic ? <Badge tone={bicTone(row.bic)}>{row.bic}</Badge> : <Badge tone="danger">Unfiled</Badge>}{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.received || row.createdAt, t)}d</span></>;
   } else if (kind === 'item') {
-    title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dmPhase, row.dtIds.map(d.personName).join(', '), row.blocker?.join(', '), row.lockStatus && 'locked'];
-    side = <>{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.editedAt, t)}d</span></>;
+    const others = d.drawnBy(row.id).filter(id => !row.dtIds.includes(id));
+    title = row.title; meta = [d.projects.get(row.projectId), row.status, row.dtIds.map(d.personName).join(', '), others.length && `drawn by ${others.map(d.personName).filter(Boolean).join(', ')}`, row.blocker?.join(', '), row.lockStatus && 'locked'];
+    const st = d.stageOf(row.id);
+    side = <>{st && <span title={st.why}><Badge tone={st.tone}>{st.label}</Badge></span>}{row.bic && <Badge tone={bicTone(row.bic)}>{row.bic}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.editedAt, t)}d</span></>;
   } else if (kind === 'rfi') {
     title = `RFI-${String(row.number ?? '?').padStart(3, '0')} ${row.title || ''}`; meta = [d.itemName(row.itemIds) || 'No item', row.tbcBy && `TBC ${row.tbcBy}`, row.stopsWork && 'stops work'];
     side = <><Badge tone="accent">{row.status}</Badge>{row.due && <Badge tone={row.due < t ? 'danger' : 'muted'}>{fmtDay(row.due)}</Badge>}<span className="font-mono text-[12px] text-muted sm:w-10 sm:text-right">{ageDays(row.raised, t) ?? '–'}d</span></>;
@@ -327,7 +328,6 @@ function BulkBar({ kind, rows, d, lookups, onDone }) {
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 p-3 bg-surface-hi border border-accent">
       <span className="font-semibold mr-1">{rows.length} selected</span>
       {kind === 'item' && <Sel label="Status" value={b.status} onChange={setK('status')} blank="Status…" options={lookups.statuses} />}
-      {kind === 'item' && <Sel label="DM phase" value={b.dmPhase} onChange={setK('dmPhase')} blank="DM phase…" options={lookups.phases} />}
       <Sel label="Ball in court" value={b.bic} onChange={setK('bic')} blank="Ball in court…" options={kind === 'item' ? lookups.bic : BICS} />
       <Sel label="DT" value={b.dtId} onChange={setK('dtId')} blank="DT…" options={d.dts.map(x => ({ value: x.id, label: x.name }))} />
       {kind === 'action' && <ItemPicker d={d} value={b.itemIds} onChange={setK('itemIds')} required={false} />}
@@ -415,7 +415,7 @@ function DataFixes({ d }) {
 export default function TriagePage() {
   const { data: d0, project: projectFilter } = useOutletContext();
   const { data: boot } = useBootstrap();
-  const lookups = boot?.lookups || { statuses: [], phases: [], bic: [], rfiTbcBy: [], rfiStatuses: [], vcStatuses: [], vcPause: [] };
+  const lookups = boot?.lookups || { statuses: [], bic: [], rfiTbcBy: [], rfiStatuses: [], vcStatuses: [], vcPause: [] };
   const d = useMemo(() => ({ ...d0, lookups }), [d0, lookups]);
   const [params, setParams] = useSearchParams();
   const preset = FROM_FILTER[params.get('filter')] || {};

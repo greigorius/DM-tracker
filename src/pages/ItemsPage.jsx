@@ -5,6 +5,8 @@ import { TrackerPage, fmtDate } from './TrackerPage.jsx';
 import { StatusPill } from '../components/ui/table.jsx';
 import { Badge } from '../components/ui/index.js';
 import { ITEM_STATUS_COLORS } from '../data/colors.js';
+import { stagesFor } from '../../hub-core/stage.js';
+import { drawnByFor, drawnByIds } from '../../hub-core/drawnBy.js';
 import { DONE_ITEM_STATUSES, isOpenRfi, isOpenVc, londonToday } from '../../hub-core/derive.js';
 
 const today = londonToday();
@@ -14,6 +16,7 @@ const toneOf = s => {
 };
 const OPEN = { has: s => !DONE_ITEM_STATUSES.has(s) };
 const dateCell = (d, done) => (d ? <span className={`font-mono text-[12px] whitespace-nowrap ${!done && d < today ? 'text-danger' : 'text-text-2'}`}>{fmtDate(d)}</span> : <span className="text-muted">—</span>);
+const names = (ids, ctx, sep = ', ') => ids.map(id => ctx.team.get(id)).filter(Boolean).join(sep);
 const count = (n, tone) => (n ? <Badge tone={tone}>{n}</Badge> : <span className="text-muted">·</span>);
 
 function useCounts(ctx) {
@@ -27,6 +30,8 @@ function useCounts(ctx) {
       rfis: by(ctx.data.rfis || [], isOpenRfi),
       vcs: by(ctx.data.variations || [], isOpenVc),
       drawings: by(ctx.data.drawings || [], () => true),
+      drawnBy: drawnByFor(ctx.data.submissions || []),
+      stages: stagesFor(ctx.data.tasks || [], ctx.data.drawings || [], ctx.data.submissions || []),
     };
   }, [ctx.data]);
 }
@@ -37,9 +42,12 @@ function columns(ctx) {
   return [
     { key: 'title', label: 'Item', render: r => <a href={r.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline min-w-[200px] inline-block">{r.title || 'Untitled'}</a> },
     { key: 'status', label: 'Status', width: 160, render: r => <StatusPill status={r.status} tone={toneOf(r.status)} /> },
-    { key: 'dmPhase', label: 'DM phase', width: 180, cellClassName: 'text-text-2' },
+    { key: 'stage', label: 'Stage', width: 170, sortValue: r => c.stages.get(r.id)?.label, csv: r => c.stages.get(r.id)?.label,
+      render: r => { const s = c.stages.get(r.id); return s ? <span title={s.why}><Badge tone={s.tone}>{s.label}</Badge></span> : null; } },
     { key: 'bic', label: 'BIC', width: 110, cellClassName: 'font-mono text-[12px] text-text-2' },
     { key: 'dt', label: 'DT', width: 150, sortValue: r => ctx.team.get(r.dtIds[0]), render: r => <span className="text-text-2">{r.dtIds.map(id => ctx.team.get(id)).filter(Boolean).join(', ') || '—'}</span>, csv: r => r.dtIds.map(id => ctx.team.get(id)).join('; ') },
+    { key: 'drawnBy', label: 'Drawn by', width: 170, sortValue: r => names(drawnByIds(c.drawnBy, r.id), ctx) || '~', csv: r => names(drawnByIds(c.drawnBy, r.id), ctx, '; '),
+      render: r => { const n = names(drawnByIds(c.drawnBy, r.id), ctx); return n ? <span className="text-text-2" title="From Drawing Flow submissions, most recent first">{n}</span> : <span className="text-muted">—</span>; } },
     { key: 'sub1', label: 'S4 sub', width: 104, sortValue: r => r.dates?.sub1, render: r => dateCell(r.dates?.sub1, !!r.dt?.s4DelAct), csv: r => r.dates?.sub1 },
     { key: 'sub2', label: 'S5 sub', width: 104, sortValue: r => r.dates?.sub2, render: r => dateCell(r.dates?.sub2, !!r.dt?.s5DelAct), csv: r => r.dates?.sub2 },
     { key: 'constrSub', label: 'C01 sub', width: 104, sortValue: r => r.dates?.constrSub, render: r => dateCell(r.dates?.constrSub, !!r.dt?.cDelAct), csv: r => r.dates?.constrSub },
@@ -66,7 +74,7 @@ export default function ItemsPage() {
       title="Items"
       subtitle="Status, owner and programme per item"
       db="tasks"
-      extraDbs={['rfis', 'variations', 'drawings']}
+      extraDbs={['rfis', 'variations', 'drawings', 'submissions']}
       projectOf={r => r.projectId}
       statusOf={r => r.status}
       statusTone={toneOf}
@@ -75,7 +83,7 @@ export default function ItemsPage() {
       columns={columns}
       groupings={GROUPINGS}
       defaultGroup="project"
-      searchText={(r, ctx) => [r.title, r.status, r.dmPhase, r.bic, ...r.dtIds.map(id => ctx.team.get(id))].filter(Boolean).join(' ')}
+      searchText={(r, ctx) => [r.title, r.status, r.bic, ...r.dtIds.map(id => ctx.team.get(id))].filter(Boolean).join(' ')}
       initialSort={{ key: 'title', dir: 'asc' }}
       filename="items.csv"
     />

@@ -9,6 +9,7 @@ import { ChevronDown, ChevronRight, FileDown, Sheet } from 'lucide-react';
 import { PageShell, Card, Badge, SkeletonRows, cx, useToast } from '../components/ui/index.js';
 import { ToolbarSelect, ToolbarButton, TableGroup, useGroups } from '../components/ui/table.jsx';
 import { useSnapshots, useBootstrap } from '../hooks/hub.js';
+import { drawnByFor, drawnByIds } from '../../hub-core/drawnBy.js';
 import { isActiveItem, londonToday } from '../../hub-core/derive.js';
 import { buildTimeline, STAGES, SHOW } from '../../hub-core/timeline.js';
 import { TimelineReport } from './timeline/TimelineReport.jsx';
@@ -104,7 +105,7 @@ function TimelineTable({ rows, stages, today, team }) {
           <tr className="bg-bar border-b border-line">
             <th scope="col" className={th} style={{ width: 250 }}>Item</th>
             <th scope="col" className={th} style={{ width: 200 }}>Drawings</th>
-            <th scope="col" className={th} style={{ width: 52 }}>DT</th>
+            <th scope="col" className={th} style={{ width: 72 }} title="Lead DT, then anyone else who has submitted drawings for the item">DT</th>
             <th scope="col" className={th} style={{ width: 92 }}>BIC</th>
             {stages.map(s => (
               <Fragment key={s.key}>
@@ -117,7 +118,10 @@ function TimelineTable({ rows, stages, today, team }) {
         <tbody>
           {rows.map(r => {
             const isOpen = open.has(r.id);
-            const dts = r.dtIds.map(id => team.get(id)).filter(Boolean);
+            const lead = r.dtIds.map(id => team.get(id)).filter(Boolean);
+            const others = r.drawnBy.filter(id => !r.dtIds.includes(id)).map(id => team.get(id)).filter(Boolean);
+            const dts = [...lead, ...others];
+            const dtTitle = [lead.length && `Lead: ${lead.join(', ')}`, others.length && `Also drawn by: ${others.join(', ')}`].filter(Boolean).join(' · ');
             return (
               <Fragment key={r.id}>
                 <tr className={cx('border-b border-line align-top', isOpen ? 'bg-surface-hi' : 'hover:bg-surface-hi')}>
@@ -138,7 +142,7 @@ function TimelineTable({ rows, stages, today, team }) {
                       {r.count > 1 && <Badge>+{r.count - 1}</Badge>}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-[12px] text-text-2" title={dts.join(', ')}>{dts.map(initials).join(', ') || '—'}</td>
+                  <td className="px-3 py-2.5 font-mono text-[12px] text-text-2 whitespace-nowrap" title={dtTitle}>{lead.map(initials).join(', ')}{others.length > 0 && <span className="text-muted">{lead.length ? ' + ' : ''}{others.map(initials).join(', ')}</span>}{!dts.length && '—'}</td>
                   <td className="px-2.5 py-2.5">{r.bic ? <Badge tone={BIC_TONE[r.bic] || 'muted'}>{r.bic}</Badge> : <span className="text-muted">—</span>}</td>
                   {stages.map(s => (
                     <Fragment key={s.key}>
@@ -197,7 +201,7 @@ export default function TimelinePage() {
   const toast = useToast();
   const { data: boot } = useBootstrap();
   const today = boot?.today || londonToday();
-  const { data, isPending } = useSnapshots(['tasks', 'drawings', 'projects', 'clients', 'team']);
+  const { data, isPending } = useSnapshots(['tasks', 'drawings', 'projects', 'clients', 'team', 'submissions']);
 
   const [show, setShow] = useStored('hub.timeline.show', 'all');
   const [stage, setStage] = useStored('hub.timeline.stage', 'all');
@@ -212,15 +216,17 @@ export default function TimelinePage() {
   // Every active item with drawings, built once; filters run on top.
   const all = useMemo(() => {
     const items = data.tasks.filter(i => isActiveItem(i) && (!projectId || i.projectId === projectId));
+    const drawnBy = drawnByFor(data.submissions);
     return buildTimeline({ items, drawings: data.drawings, projects, today })
+      .map(r => ({ ...r, drawnBy: drawnByIds(drawnBy, r.id) }))
       .filter(r => r.count > 0)
       .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
-  }, [data.tasks, data.drawings, projects, projectId, today]);
+  }, [data.tasks, data.drawings, data.submissions, projects, projectId, today]);
 
   const showTest = SHOW.find(s => s.value === show)?.test || SHOW[0].test;
   const rows = useMemo(() => all.filter(r => showTest(r)
     && (bic === 'all' || r.bic === bic)
-    && (dt === 'all' || r.dtIds.includes(dt))), [all, showTest, bic, dt]);
+    && (dt === 'all' || r.dtIds.includes(dt) || r.drawnBy.includes(dt))), [all, showTest, bic, dt]);
 
   const stages = stage === 'all' ? STAGES : STAGES.filter(s => s.key === stage);
   const { groups, isOpen, toggle } = useGroups(rows, projectId ? null : r => r.projectId, k => projects.get(k)?.title || 'No project');
@@ -236,7 +242,7 @@ export default function TimelinePage() {
   ], [data.tasks, projects]);
   const showOptions = SHOW.map(s => ({ value: s.value, label: `${s.label} (${all.filter(s.test).length})` }));
   const bicOptions = [{ value: 'all', label: 'Any ball in court' }, ...[...new Set(all.map(r => r.bic).filter(Boolean))].sort().map(b => ({ value: b, label: `BIC: ${b}` }))];
-  const dtOptions = [{ value: 'all', label: 'All DTs' }, ...[...new Set(all.flatMap(r => r.dtIds))].map(id => ({ value: id, label: team.get(id) || 'Unknown' })).sort((a, b) => a.label.localeCompare(b.label))];
+  const dtOptions = [{ value: 'all', label: 'All DTs' }, ...[...new Set(all.flatMap(r => [...r.dtIds, ...r.drawnBy]))].map(id => ({ value: id, label: team.get(id) || 'Unknown' })).sort((a, b) => a.label.localeCompare(b.label))];
 
   const exportName = `${(project?.title || 'All-projects').replace(/[^\w-]+/g, '-')}_Timeline_${today.slice(2).replace(/-/g, '')}`;
 

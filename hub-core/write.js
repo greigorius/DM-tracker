@@ -179,7 +179,7 @@ const FIELD_MAP = {
     done: ['Checked', 'check'], blocks: ['Blocks Item', 'check'],
   },
   tasks: {
-    status: ['Item Status', 'status'], bic: ['Ball In Court', 'select'], dtId: ['Person', 'rel1'], dmPhase: ['DM Phase', 'select'],
+    status: ['Item Status', 'status'], bic: ['Ball In Court', 'select'], dtId: ['Person', 'rel1'],
     blocker: ['Blocker', 'multi'], blockerNote: ['Blocker Note', 'text'], lockStatus: ['Lock Status', 'check'],
     // Inputs the Scheduling Tool reads (never its calculated dates):
     instruction: ['Date of Instruction', 'date'], holdDays: ['Hold Days', 'number'],

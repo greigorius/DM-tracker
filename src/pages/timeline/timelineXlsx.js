@@ -45,6 +45,7 @@ export async function exportTimelineXlsx({ rows, stages, today, team, projects, 
     { header: 'First Drawing', width: 28 },
     { header: 'Drawings', width: 10 },
     { header: 'DT', width: 18 },
+    { header: 'Drawn by', width: 22 },
     { header: 'Ball in Court', width: 14 },
   ];
   const perStage = [
@@ -80,6 +81,7 @@ export async function exportTimelineXlsx({ rows, stages, today, team, projects, 
       ...(grouped ? [projects.get(r.projectId)?.title || ''] : []),
       r.title, r.first, r.count,
       r.dtIds.map(id => team.get(id)).filter(Boolean).join(', '),
+      (r.drawnBy || []).map(id => team.get(id)).filter(Boolean).join(', '),
       r.bic || '',
     ];
     const styles = [];
