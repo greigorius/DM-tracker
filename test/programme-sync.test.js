@@ -52,3 +52,16 @@ test('writes are limited to Adj dates and Reissue Reason', () => {
   assert.throws(() => changeProperties({ fields: { 'S5 Submit Date (Actual)': '2026-11-20' } }), /Refused/);
   assert.throws(() => changeProperties({ selects: { 'Item Status': 'Complete' } }), /Refused/);
 });
+
+test('DT Start in the past is normal for the stage in progress', async () => {
+  const { itemView } = await import('../hub-core/programme/view.js');
+  const rows = [...Object.values(AUDITORIUM), ...Object.values(OBSERVATORY)];
+  for (const row of rows) {
+    const v = itemView({ row: { ...row, drawings: row._dwgs }, c: calcRow(row, {}, { today: TODAY }) }, TODAY);
+    const live = v.stages.filter(s => !s.na);
+    const cur = live.findIndex(s => s.state !== 'closed');
+    if (cur >= 0) assert.notEqual(live[cur].past?.key, 'start', `${row.name}: current stage start flagged`);
+    for (const s of live.slice(cur + 1)) if (s.past?.key === 'start') assert.ok(s.conflict > 0, `${row.name}: future start flagged without a conflict`);
+    assert.ok(!v.flags.some(f => /start in the past/.test(f.text)));
+  }
+});

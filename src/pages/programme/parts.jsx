@@ -132,7 +132,8 @@ export function StageCard({ s, today }) {
       {s.squeezed && <span className="text-[12px] text-accent">DT + QA squeezed to {s.squeezed.used} of {s.squeezed.std} days</span>}
       {s.conflict > 0 && <span className="text-[12px] text-danger">{s.conflict} day{s.conflict === 1 ? '' : 's'} short at the minimum periods{s.achievable ? ` · earliest ${fmt(s.achievable)}` : ''}</span>}
       {s.closedSub && <span className="text-[12px] text-muted">Previous issue {fmt(s.closedSub, true)}</span>}
-      {s.past && <span className="text-[12px] text-accent">DT {s.past.key === 'start' ? 'start' : 'delivery'} {fmt(s.past.date)} has passed ({s.past.days}d)</span>}
+      {s.past?.key === 'del' && <span className="text-[12px] text-accent">DT delivery {fmt(s.past.date)} overdue ({s.past.days}d)</span>}
+      {s.past?.key === 'start' && <span className="text-[12px] text-danger">DT start {fmt(s.past.date)} has already passed — no time left to draw before the programme date</span>}
       {s.passed && s.sub.date < today && <span className="sr-only">Submission date has passed</span>}
     </div>
   );

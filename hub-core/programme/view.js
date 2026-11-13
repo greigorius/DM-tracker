@@ -63,7 +63,10 @@ function stageView(sd, row, c, today) {
     squeezed: st.squeezed, slip: st.slip, conflict: st.conflict, achievable: iso(st.achievable),
     closedSub: iso(st.closedSub), statusC: !!st.statusC,
     canStart: !!st.dt?.canStart && !!MANUAL_DT_START_OPTS[sd.key], startManual: !!st.dt?.startManual,
-    past: st.dt?.past ? { key: st.dt.past.key, date: iso(st.dt.past.date), days: st.dt.past.days } : null,
+    // Forecast DT dates already behind today (which of them matters is decided per item, below)
+    startPast: st.state !== 'closed' && start.kind === 'fc' && start.date && start.date < today ? start.date : null,
+    delPast: st.state !== 'closed' && del.kind === 'fc' && sub.kind !== 'act' && del.date && del.date < today ? del.date : null,
+    past: null,
   };
 }
 
@@ -75,6 +78,18 @@ export function itemView({ row, c }, today) {
   const bd = drawingBreakdown(row);
   const prod = { date: iso(c.prodDateAdj), target: iso(c.target), float: c.floatDays };
   const closed = CLOSED_STATUS.test(row.status || '') || c.omitted;
+
+  // DT dates in the past. The stage in progress (the first one not issued) has
+  // usually started, so its DT Start being past is normal; only an overdue DT
+  // Delivery matters there. A later stage whose DT Start is already past can't
+  // fit before today — that only happens with a programme conflict, so it's
+  // flagged only then.
+  const cur = live.findIndex(s => s.state !== 'closed');
+  live.forEach((s, i) => {
+    const at = (key, date) => ({ key, date, days: wdBetween(date, today) });
+    if (i === cur && s.delPast) s.past = at('del', s.delPast);
+    else if (cur >= 0 && i > cur && s.startPast && s.conflict > 0) s.past = at('start', s.startPast);
+  });
   const hasDates = live.some(s => s.sub.date) || !!prod.date;
 
   // Flags (chips)
@@ -87,7 +102,8 @@ export function itemView({ row, c }, today) {
   for (const s of live) {
     if (s.state === 'required') flags.push({ text: `${short(s)} reissue needed`, tone: 'danger' });
     else if (s.passed) flags.push({ text: `${short(s)} date passed`, tone: 'danger' });
-    if (s.past) flags.push({ text: `${short(s)} DT ${s.past.key === 'start' ? 'start' : 'delivery'} in the past`, tone: 'accent' });
+    if (s.past?.key === 'del') flags.push({ text: `${short(s)} DT delivery overdue`, tone: 'accent' });
+    if (s.past?.key === 'start') flags.push({ text: `${short(s)} DT start already passed`, tone: 'danger' });
   }
   if (c.onHold) flags.push({ text: `On hold ${c.openHoldDays}d`, tone: 'info' });
   if (bd.split) flags.push({ text: 'Split', tone: 'info' });
@@ -98,7 +114,7 @@ export function itemView({ row, c }, today) {
   const conflictStage = live.find(s => s.conflict > 0);
   const required = live.find(s => s.state === 'required');
   const passed = live.find(s => s.passed);
-  const pastDt = live.find(s => s.past);
+  const pastDt = live.find(s => s.past?.key === 'del');
   if (closed || !hasDates) {
     group = 'idle';
     reason = c.omitted ? 'Omitted · Adj dates cleared' : closed ? row.status : 'No Date of Instruction, 1st DT Start or Production target';
@@ -123,7 +139,7 @@ export function itemView({ row, c }, today) {
     group = 'check';
     if (required) { reason = `${short(required)} status C — reissue needed`; todo = `${required.label} came back status C. Set a Reissue Reason or a reissue date; until then it is forecast from today.`; }
     else if (passed) { reason = `${short(passed)} forecast date passed`; todo = `${passed.label} was forecast for ${fmt(passed.sub.date)}. Record the issue if it has gone; the next sync moves the forecast on from today.`; }
-    else if (pastDt) { reason = `${short(pastDt)} DT ${pastDt.past.key === 'start' ? 'start' : 'delivery'} is in the past`; todo = `The back-calculated DT ${pastDt.past.key === 'start' ? 'start' : 'delivery'} for ${pastDt.label} (${fmt(pastDt.past.date)}) has passed. If the DT started on another date, set it.`; }
+    else if (pastDt) { reason = `${short(pastDt)} DT delivery overdue`; todo = `${pastDt.label} DT delivery was due ${fmt(pastDt.past.date)} and the drawings haven’t been issued. Check with the DT; record the DT Delivery (Actual) once it lands.`; }
     else if (c.flags.slipping) { reason = `Slipping +${c.flags.slipDays}d`; todo = `Squeezing our side wasn’t enough: the item is moving out by ${c.flags.slipDays} working day${c.flags.slipDays === 1 ? '' : 's'}. Production is now ${fmt(prod.date)}.`; }
     else { const q = c.flags.squeezed[0]; reason = `${short(stages.find(s => s.key === q.stage))} squeezed to ${q.used} of ${q.std} days`; todo = 'DT and QA time has been shortened to protect the submission date. Check the DT can deliver in the time left.'; }
   }
