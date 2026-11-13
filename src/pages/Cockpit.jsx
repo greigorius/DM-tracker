@@ -248,9 +248,9 @@ function QuickCapture({ boot }) {
         )}
 
         <div className="mt-auto pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-line">
-          <a href={schedulingLink(projectId, itemId)} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-text-2 hover:text-accent no-underline inline-flex items-center gap-1.5 min-h-11">
-            Change delivery date in Scheduling <ArrowRight size={13} aria-hidden="true" />
-          </a>
+          <Link to={schedulingLink(projectId, itemId)} className="font-mono text-[12px] text-text-2 hover:text-accent no-underline inline-flex items-center gap-1.5 min-h-11">
+            Programme dates <ArrowRight size={13} aria-hidden="true" />
+          </Link>
           <Button type="submit" disabled={!canSubmit}>
             {tab === 'status' ? 'Update item' : tab === 'note' ? `Log ${noteType.toLowerCase()}` : tab === 'rfi' ? 'Log RFI' : 'Log variation'}
           </Button>
@@ -341,7 +341,7 @@ export default function Cockpit() {
         <LaunchTiles boot={boot} />
         <nav aria-label="Legacy pages" className="font-mono text-[12px] text-muted flex flex-wrap items-center gap-x-5">
           <span>Also in the Hub:</span>
-          {[['/trackers/task-schedule', 'Task schedule'], ['/trackers/item-schedule', 'Item schedule'], ['/trackers/finishes-schedule', 'Finishes'], ['/drawings', 'Drawing register'], ['/timeline', 'DT schedule']].map(([to, l]) => (
+          {[['/trackers/task-schedule', 'Task schedule'], ['/trackers/item-schedule', 'Item schedule'], ['/trackers/finishes-schedule', 'Finishes'], ['/drawings', 'Drawing register'], ['/programme?tab=table', 'Programme']].map(([to, l]) => (
             <Link key={to} to={to} onMouseEnter={() => preloadRoute(to)} className="text-text-2 hover:text-accent no-underline min-h-11 inline-flex items-center">{l}</Link>
           ))}
         </nav>

@@ -46,6 +46,79 @@ const ids = (page, name) => v(page, name) || [];
 const party = val => (val && HIDDEN_PARTY.test(val) ? 'DM' : val); // "Axiom" never leaves the server
 const day = iso => (iso ? iso.slice(0, 10) : null);
 
+// Strictly typed readers for the programme engine's inputs. They read a value
+// only when the property has the type the Scheduling Tool reads (a formula or
+// roll-up of the same name gives null there, so it gives null here too).
+const tDate = (page, name) => day(P(page, name)?.date?.start ?? null);
+const tNum = (page, name) => P(page, name)?.number ?? null;
+const tCheck = (page, name) => P(page, name)?.checkbox ?? false;
+const tMulti = (page, name) => (P(page, name)?.multi_select || []).map(o => o.name);
+
+// Accel property for each engine row key (hub-core/programme/schedule.js ACCEL_PROPS)
+const ACCEL = {
+  accApprovalIssueDays: 'Accel Approval Issue Days', accS4ReviewDays: 'Accel S4 Review Days',
+  accRevisionDays: 'Accel Revision Issue Days', accS5ReviewDays: 'Accel S5 Review Days',
+  accConstrIssueDays: 'Accel Construction Issue Days', accQaDays: 'Accel QA Days',
+  accC01SignOffDays: 'Accel C01 Sign Off Days', accProdPackDays: 'Accel Production Pack Days',
+};
+
+// Programme engine inputs, keyed exactly as the Scheduling Tool's task rows
+// (its lib/routes.js GET /api/notion/tasks). Read by hub-core/programme/adapter.js.
+function schedInputs(page) {
+  return {
+    dateOfInstruction: tDate(page, 'Date of Instruction'),
+    dtStart1PlanInput: tDate(page, '1st DT Start (Plan)'),
+    prodDate: tDate(page, 'Production Date (Plan)'),
+    installDate: tDate(page, 'Install Date (Plan)'),
+    coordDays: tNum(page, 'Coordination Days'),
+    holdDaysManual: tNum(page, 'Hold Days'),
+    coordS4Days: tNum(page, 'S4 Coord Days'),
+    coordS5Days: tNum(page, 'S5 Coord Days'),
+    coordC01Days: tNum(page, 'C01 Coord Days'),
+    dd1: tNum(page, 'Draw Days - DD1'),
+    constrDrawDays: tNum(page, 'Draw Days - DD-C'),
+    ...Object.fromEntries(Object.entries(ACCEL).map(([k, prop]) => [k, tNum(page, prop)])),
+    dtStart1Act: tDate(page, '1st DT Start (Actual)'),
+    del1Act: tDate(page, '1st DT Delivery (Actual)'),
+    dtStart2Act: tDate(page, '2nd DT Start (Actual)'),
+    del2Act: tDate(page, '2nd DT Delivery (Actual)'),
+    stCActDate: tDate(page, 'Constr. DT Start (Actual)'),
+    delCAct: tDate(page, 'Constr. DT Delivery (Actual)'),
+    noClientApproval: tCheck(page, 'No Client Approval'),
+    programmeDriven: tCheck(page, 'Programme-driven'),
+    reissueReason: P(page, 'Reissue Reason')?.select?.name ?? null,
+    manualDtStart: tMulti(page, 'Manual DT Start'),
+    subAdj1In: tDate(page, '1st Submission Date (Adj)'),
+    subAdj2In: tDate(page, '2nd Submission Date (Adj)'),
+    subAdjCIn: tDate(page, 'Constr. Submission Date (Adj)'),
+    del1AdjIn: tDate(page, '1st DT Delivery (Adj)'),
+    st2AdjIn: tDate(page, '2nd DT Start (Adj)'),
+    del2AdjIn: tDate(page, '2nd DT Delivery (Adj)'),
+    stCAdjIn: tDate(page, 'Constr. DT Start (Adj)'),
+    delCAdjIn: tDate(page, 'Constr. DT Delivery (Adj)'),
+  };
+}
+
+// Project period overrides and squeeze minimums, keyed as the Scheduling Tool's
+// project objects (PROJECT_PERIOD_KEYS / MIN_PROJECT_KEYS). Blank = default.
+function schedPeriods(page) {
+  return {
+    approvalDays: tNum(page, 'Approval Days'),
+    mobilisationDays: tNum(page, 'DT Mobilisation Days'),
+    revisionDays: tNum(page, 'Revision Days'),
+    coordinationDays: tNum(page, 'Coordination Days'),
+    approvalIssueDays: tNum(page, 'Approval Issue Days'),
+    qaDays: tNum(page, 'QA Days'),
+    constrIssueDays: tNum(page, 'Construction Issue Days'),
+    c01SignOffDays: tNum(page, 'C01 Sign Off Days'),
+    productionPackDays: tNum(page, 'Production Pack Days'),
+    minApprovalIssueDays: tNum(page, 'Min Approval Issue Days'),
+    minRevisionDays: tNum(page, 'Min Revision Days'),
+    minConstrIssueDays: tNum(page, 'Min Construction Issue Days'),
+    minQaDays: tNum(page, 'Min QA Days'),
+  };
+}
+
 function base(page) {
   return {
     id: page.id,
@@ -74,6 +147,7 @@ export const mappers = {
     noClientApproval: v(page, 'No Client Approval'),
     programmeDriven: v(page, 'Programme-driven'),
     reissueReason: v(page, 'Reissue Reason'),
+    sched: schedInputs(page),
     // Submission dates exactly as the Scheduling Tool stores them on the Tasks DB
     // (Adj = current forecast / reissue date, Plan = locked baseline). Read by the Timeline.
     prog: {
@@ -167,6 +241,7 @@ export const mappers = {
   drawings: page => ({
     ...base(page),
     title: v(page, 'Drawing Number'),
+    title1: v(page, 'Drawing Title 1'),
     name: [v(page, 'Drawing Title 1'), v(page, 'Drawing Title 2'), v(page, 'Drawing Title 3')].filter(Boolean).join(' · ') || null,
     status: v(page, 'Drawing Status'),
     stage: v(page, 'Submission Stage'),
@@ -231,6 +306,7 @@ export const mappers = {
     // Scheduling Tool period overrides (blank = the tool's default)
     reviewDays: v(page, 'Approval Days'),
     signOffDays: v(page, 'C01 Sign Off Days'),
+    sched: schedPeriods(page),
   }),
 
   clients: page => ({

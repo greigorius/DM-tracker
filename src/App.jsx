@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ROUTES, pages } from './routes.jsx';
 
 const { briefLayout: BriefLayout, dailyBrief: DailyBrief, triage: TriagePage } = pages;
@@ -20,6 +20,12 @@ function KeepQuery({ to }) {
   return <Navigate to={`${to}${search}`} replace />;
 }
 
+// Timeline became the Programme page's Table tab
+function TimelineRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/programme/${projectId}?tab=table`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -36,6 +42,9 @@ export default function App() {
 
           {/* Old paths */}
           <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
+          <Route path="/timeline" element={<Navigate to="/programme?tab=table" replace />} />
+          <Route path="/timeline/:projectId" element={<TimelineRedirect />} />
+          <Route path="/scheduling" element={<Navigate to="/programme" replace />} />
           <Route path="/trackers/task-schedule" element={<Navigate to="/tasks" replace />} />
           <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

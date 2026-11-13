@@ -17,7 +17,7 @@ export const NAV = [
   { to: '/trackers/variations', label: 'Variations' },
   { to: '/trackers/finishes-schedule', label: 'Finishes' },
   { to: '/drawings', label: 'Drawings' },
-  { to: '/timeline', label: 'Timeline' },
+  { to: '/programme', label: 'Programme' },
   { to: '/triage', label: 'Triage' },
 ];
 

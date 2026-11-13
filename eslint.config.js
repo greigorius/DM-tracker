@@ -29,7 +29,7 @@ export default defineConfig([
   },
   {
     // Server-side code: Express, Netlify functions, shared hub-core, scripts
-    files: ['server/**/*.js', 'netlify/**/*.{js,mjs}', 'hub-core/**/*.js', 'scripts/**/*.mjs'],
+    files: ['server/**/*.js', 'netlify/**/*.{js,mjs}', 'hub-core/**/*.js', 'scripts/**/*.mjs', 'test/**/*.js'],
     languageOptions: { globals: { ...globals.node } },
   },
 ])

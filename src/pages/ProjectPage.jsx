@@ -54,7 +54,7 @@ export default function ProjectPage() {
   return (
     <PageShell title={v.project.title} subtitle={[v.client?.title, v.project.status].filter(Boolean).join(' · ')}
       toolbar={<>
-        <Link to={`/timeline/${projectId}`} className="min-h-11 px-3 inline-flex items-center border border-line-strong text-text-2 hover:bg-surface-hi no-underline font-mono text-[12px] uppercase tracking-[0.08em]">Timeline</Link>
+        <Link to={`/programme/${projectId}`} className="min-h-11 px-3 inline-flex items-center border border-line-strong text-text-2 hover:bg-surface-hi no-underline font-mono text-[12px] uppercase tracking-[0.08em]">Programme</Link>
         <a href={v.project.url} target="_blank" rel="noreferrer" className="min-h-11 px-3 inline-flex items-center border border-line-strong text-text-2 hover:bg-surface-hi no-underline font-mono text-[12px] uppercase tracking-[0.08em]">Open in Notion ↗</a>
       </>}>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
