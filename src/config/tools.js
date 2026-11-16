@@ -18,9 +18,10 @@ export const TOOLS = [
   { id: 'variations', name: 'Variations', path: '/trackers/variations', icon: FileDiff, inHub: true, dbs: ['variations'] },
   {
     id: 'reports', name: 'Reports', path: '/reports', icon: ChartColumn, inHub: false,
+    // The Reports tab lists these too (src/pages/ReportsPage.jsx)
     links: [
-      { label: 'Weekly Client Report', href: env.VITE_URL_REPORT_CLIENT || A('4Xf4VaXVcwbXwikW33GVoR') },
-      { label: 'Contract vs Variation Hours', href: env.VITE_URL_REPORT_HOURS || A('WukVtAcucmqg678Cgtu8bT') },
+      { label: 'Weekly Client Report', href: env.VITE_URL_REPORT_CLIENT || A('4Xf4VaXVcwbXwikW33GVoR'), desc: 'Per-project week overview from the Notion databases, with PDF export' },
+      { label: 'Contract vs Variation Hours', href: env.VITE_URL_REPORT_HOURS || A('WukVtAcucmqg678Cgtu8bT'), desc: 'Hours split between contracted work and variations' },
     ],
   },
 ];

@@ -45,7 +45,10 @@ export default function App() {
           <Route path="/timeline" element={<Navigate to="/programme?tab=table" replace />} />
           <Route path="/timeline/:projectId" element={<TimelineRedirect />} />
           <Route path="/scheduling" element={<Navigate to="/programme" replace />} />
-          <Route path="/trackers/task-schedule" element={<Navigate to="/tasks" replace />} />
+          <Route path="/trackers/task-schedule" element={<KeepQuery to="/trackers/tasks" />} />
+          <Route path="/tasks" element={<KeepQuery to="/trackers/tasks" />} />
+          <Route path="/team" element={<KeepQuery to="/trackers/team" />} />
+          <Route path="/drawings" element={<KeepQuery to="/trackers/drawings" />} />
           <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -19,21 +19,23 @@ export const pages = {
   variations: lazyPage(() => import('./pages/VariationsPage.jsx')),
   finishes: lazyPage(() => import('./pages/FinishesPage.jsx')),
   drawings: lazyPage(() => import('./pages/DrawingsPage.jsx')),
+  reports: lazyPage(() => import('./pages/ReportsPage.jsx')),
 };
 
 // path → page, used by App and by preloadRoute
 export const ROUTES = [
   ['/client/:clientId', pages.clientHome],
   ['/project/:projectId', pages.projectHome],
-  ['/tasks', pages.tasks],
-  ['/team', pages.team],
+  ['/trackers/tasks', pages.tasks],
+  ['/trackers/team', pages.team],
   ['/programme', pages.programme],
   ['/programme/:projectId', pages.programme],
   ['/trackers/item-schedule', pages.itemSchedule],
   ['/trackers/rfis', pages.rfis],
   ['/trackers/variations', pages.variations],
   ['/trackers/finishes-schedule', pages.finishes],
-  ['/drawings', pages.drawings],
+  ['/trackers/drawings', pages.drawings],
+  ['/reports', pages.reports],
 ];
 
 

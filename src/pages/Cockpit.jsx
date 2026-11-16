@@ -341,7 +341,7 @@ export default function Cockpit() {
         <LaunchTiles boot={boot} />
         <nav aria-label="Legacy pages" className="font-mono text-[12px] text-muted flex flex-wrap items-center gap-x-5">
           <span>Also in the Hub:</span>
-          {[['/trackers/task-schedule', 'Task schedule'], ['/trackers/item-schedule', 'Item schedule'], ['/trackers/finishes-schedule', 'Finishes'], ['/drawings', 'Drawing register'], ['/programme?tab=table', 'Programme']].map(([to, l]) => (
+          {[['/trackers/tasks', 'Tasks'], ['/trackers/item-schedule', 'Item schedule'], ['/trackers/finishes-schedule', 'Finishes'], ['/trackers/drawings', 'Drawing register'], ['/programme?tab=table', 'Programme']].map(([to, l]) => (
             <Link key={to} to={to} onMouseEnter={() => preloadRoute(to)} className="text-text-2 hover:text-accent no-underline min-h-11 inline-flex items-center">{l}</Link>
           ))}
         </nav>
