@@ -9,8 +9,6 @@ export const pages = {
   briefLayout: lazyPage(() => import('./pages/brief/BriefLayout.jsx')),
   dailyBrief: lazyPage(() => import('./pages/brief/DailyBrief.jsx')),
   triage: lazyPage(() => import('./pages/brief/TriagePage.jsx')),
-  clientHome: lazyPage(() => import('./pages/ClientPage.jsx')),
-  projectHome: lazyPage(() => import('./pages/ProjectPage.jsx')),
   tasks: lazyPage(() => import('./pages/TasksPage.jsx')),
   team: lazyPage(() => import('./pages/team/TeamPage.jsx')),
   programme: lazyPage(() => import('./pages/programme/ProgrammePage.jsx')),
@@ -24,8 +22,6 @@ export const pages = {
 
 // path → page, used by App and by preloadRoute
 export const ROUTES = [
-  ['/client/:clientId', pages.clientHome],
-  ['/project/:projectId', pages.projectHome],
   ['/trackers/tasks', pages.tasks],
   ['/trackers/team', pages.team],
   ['/programme', pages.programme],

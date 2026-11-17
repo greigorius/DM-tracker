@@ -26,6 +26,12 @@ function TimelineRedirect() {
   return <Navigate to={`/programme/${projectId}?tab=table`} replace />;
 }
 
+// The project and client pages were retired (Nov 2026): every tab has a project filter
+function ProjectRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/programme/${projectId}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -44,6 +50,8 @@ export default function App() {
           <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
           <Route path="/timeline" element={<Navigate to="/programme?tab=table" replace />} />
           <Route path="/timeline/:projectId" element={<TimelineRedirect />} />
+          <Route path="/project/:projectId" element={<ProjectRedirect />} />
+          <Route path="/client/:clientId" element={<Navigate to="/programme" replace />} />
           <Route path="/scheduling" element={<Navigate to="/programme" replace />} />
           <Route path="/trackers/task-schedule" element={<KeepQuery to="/trackers/tasks" />} />
           <Route path="/tasks" element={<KeepQuery to="/trackers/tasks" />} />

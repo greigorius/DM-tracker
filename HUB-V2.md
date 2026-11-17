@@ -128,8 +128,9 @@ Design: the Programme artboard (Review | Table | Timeline) on the design canvas.
 - Removed: `src/pages/TimelinePage.jsx` (its PDF and Excel exports remain, under Export).
 
 ## Top-level tabs (16 Nov 2026)
-Nav is now **Cockpit · Triage · Programme · Trackers · Reports** (+ Projects menu), per the page redesign concept. Sections with sub-pages show a second row (`NAV[].tabs` in `src/components/ui/HubNav.jsx`); the current tab scrolls into view on phones.
+Nav is now **Cockpit · Triage · Programme · Trackers · Reports**, per the page redesign concept. Sections with sub-pages show a second row (`NAV[].tabs` in `src/components/ui/HubNav.jsx`); the current tab scrolls into view on phones.
 - **Triage**: Triage | Brief (they already shared `BriefLayout`).
 - **Trackers**: Items, Drawings, Tasks, Team, Finishes, RFIs, Variations. RFIs and Variations are registers, so they moved in; you act on them in Triage. Tasks, Team and Drawings moved to `/trackers/tasks`, `/trackers/team`, `/trackers/drawings`; `/tasks`, `/team`, `/drawings` and `/trackers/task-schedule` redirect with their query.
 - **Reports** (`/reports`): Weekly Client Report and Contract vs Variation Hours (still link out) and a pointer to Programme exports.
 - Next: the close-out tracker joins Trackers as a sub-tab once its branch is in the repo.
+- 17 Nov 2026: Projects menu removed, and the project (`/project/:id`) and client (`/client/:id`) pages retired with `components/ui/Gantt.jsx` — every tab has a project filter and hours are in Reports. `/project/:id` redirects to that project on Programme; `/client/:id` to Programme.
