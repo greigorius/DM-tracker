@@ -11,16 +11,17 @@ const A = id => `https://claude.ai/artifact/${id}`;
 export const TOOLS = [
   { id: 'brief', name: 'Daily Brief', path: '/brief', icon: Sun, inHub: true, dbs: BRIEF_DBS },
   { id: 'triage', name: 'Triage', path: '/triage', icon: ListChecks, inHub: true, tone: 'accent', dbs: BRIEF_DBS },
-  { id: 'scheduling', name: 'Scheduling', path: '/scheduling', icon: CalendarClock, inHub: false, href: env.VITE_URL_SCHEDULING || 'https://dm-scheduling-tool.netlify.app/', envVar: 'VITE_URL_SCHEDULING' },
+  { id: 'scheduling', name: 'Programme', path: '/programme', icon: CalendarClock, inHub: true, dbs: ['tasks', 'drawings'] },
   { id: 'drawing-flow', name: 'Drawing Flow', path: '/drawing-flow', icon: GitPullRequestArrow, inHub: false, href: env.VITE_URL_DRAWING_FLOW || 'https://axiom-drawing-flow.netlify.app', envVar: 'VITE_URL_DRAWING_FLOW', tone: 'accent' },
   { id: 'drawing-studio', name: 'Drawing Studio', path: '/drawing-studio', icon: PenTool, inHub: false, href: env.VITE_URL_DRAWING_STUDIO || A('XpE4W273jbPeiyzeDArokd'), envVar: 'VITE_URL_DRAWING_STUDIO' },
   { id: 'rfis', name: 'RFIs', path: '/trackers/rfis', icon: CircleHelp, inHub: true, tone: 'info', dbs: ['rfis'] },
   { id: 'variations', name: 'Variations', path: '/trackers/variations', icon: FileDiff, inHub: true, dbs: ['variations'] },
   {
     id: 'reports', name: 'Reports', path: '/reports', icon: ChartColumn, inHub: false,
+    // The Reports tab lists these too (src/pages/ReportsPage.jsx)
     links: [
-      { label: 'Weekly Client Report', href: env.VITE_URL_REPORT_CLIENT || A('4Xf4VaXVcwbXwikW33GVoR') },
-      { label: 'Contract vs Variation Hours', href: env.VITE_URL_REPORT_HOURS || A('WukVtAcucmqg678Cgtu8bT') },
+      { label: 'Weekly Client Report', href: env.VITE_URL_REPORT_CLIENT || A('4Xf4VaXVcwbXwikW33GVoR'), desc: 'Per-project week overview from the Notion databases, with PDF export' },
+      { label: 'Contract vs Variation Hours', href: env.VITE_URL_REPORT_HOURS || A('WukVtAcucmqg678Cgtu8bT'), desc: 'Hours split between contracted work and variations' },
     ],
   },
 ];
@@ -28,13 +29,8 @@ export const TOOLS = [
 // Snapshot DBs each tool reads, for "Updated x ago" on its tile.
 export const TOOL_SNAPSHOT = { triage: 'actions', rfis: 'rfis', variations: 'variations', 'drawing-flow': 'submissions', brief: 'actions' };
 
-// Scheduling Tool deep link with the current Project and Item preselected.
+// Programme page with the current Project and Item preselected (Review tab).
 export function schedulingLink(projectId, itemId) {
-  const base = TOOLS.find(t => t.id === 'scheduling').href;
-  try {
-    const u = new URL(base);
-    if (projectId) u.searchParams.set('project', projectId);
-    if (itemId) u.searchParams.set('item', itemId);
-    return u.toString();
-  } catch { return base; }
+  const q = new URLSearchParams({ tab: 'review', ...(itemId && { item: itemId }) });
+  return `${projectId ? `/programme/${projectId}` : '/programme'}?${q}`;
 }

@@ -87,7 +87,7 @@ Backup of all 2,327 rows and the old schemas: `_archive/todo-backup-2026-10-29.j
 
 ## Still to do
 - Port Drawing Flow, Drawing Studio and Reports into the Hub. Until then their tiles link out (addresses in `src/config/tools.js`).
-- Scheduling Tool port: last, under the protection rules (styling and data hooks only; date-equality check before/after).
+- ~~Scheduling Tool port~~ — done 13 Nov 2026 as the Programme page (below).
 - Lighthouse check on the deployed site.
 
 ## Verification done
@@ -116,3 +116,21 @@ Nothing wrote Tasks `Ball In Court` before: Drawing Flow sets BIC per submission
 - Triage → **Ball in court** tab lists every difference with the reason; apply selected or all. `GET /api/item-bic/plan`, `POST /api/item-bic/apply`.
 - Writes patch the tasks snapshot, so they don't flood Just logged. Tests: `test/item-bic.test.js`.
 - Batch editing (2 Nov): Data fixes, Team and Ball in court rows can be ticked (or Select all) and fixed together from a sticky bar, like the action and item lists. Data fixes and Team share `src/pages/brief/FixCard.jsx`; shared controls moved to `controls.jsx`. Ball in court's bar applies the derived value, or overrides it and ticks Lock Status ("Set & lock", "Lock as is").
+
+## Programme page — Scheduling Tool merged in (13 Nov 2026)
+Design: the Programme artboard (Review | Table | Timeline) on the design canvas. **Programme** (`/programme`, `/programme/:projectId`) replaces Timeline in the nav; `/timeline…` and `/scheduling` redirect, and the Cockpit's Scheduling tile and "Programme dates" link now route here.
+- **Engine:** `hub-core/programme/schedule.js`, `release.js`, `ganttExport.js` are the Scheduling Tool's `lib/` copied unchanged from branch `dt-mobilisation-drawing-view` (commit 43fd771: mobilisation, manual DT Start, drawings view). Its tests run here: `test/programme-engine.test.js` (63) and `test/programme-acceptance.test.js` (12, the Nov 2026 brief checks). Change the engine in one place and copy it, or retire the tool's copy.
+- **Inputs from the snapshots:** the tasks mapper gains `sched` (the tool's task-row keys, read with the same property types — a formula of the same name reads as blank, as in the tool) and projects gain `sched` (periods + minimums); drawings gain `title1`. `MAPPER_VERSION` 10. `hub-core/programme/adapter.js` rebuilds the tool's rows: MDS stage completion (Drawing-only counting, NCA / S5 NA skips), holds from Variations (pause rules, added days when instructed) and stop-work RFIs.
+- **Date-equality check:** `test/programme-adapter.test.js` turns every fixture item back into Notion pages, maps them through the Hub, and checks calcRow gives identical dates, flags, stage states and Notion patch — plus periods, minimums, holds and manual DT Start. All 17 EIT items match.
+- **Tabs:** Review (landing: Fix now / Challenge the programme / Check dates / On track, with what to do, stage cards, drawings and item inputs), Table (stage by stage, expandable), Timeline (client reviews on a date axis). One Filter, one Export (Gantt, release schedule, PDF, item rows Excel), ⚙ for periods, minimums and writing to Notion. Dates are calculated in the browser from the cached snapshots, so nothing waits on Notion.
+- **Writes** (`hub-core/programme/sync.js`): `GET /api/programme/plan`, `POST /api/programme/apply` (snap newly issued stages, then every differing Adj date; order-check failures blocked), `PATCH /api/programme/items/:id` (Manual DT Start, Reissue Reason, Programme-driven, Date of Instruction, acceleration — then re-syncs the item), `PATCH /api/programme/projects/:id` (periods, minimums — then re-syncs the project). Only In progress projects. The Actuals seen at the last applied sync live in blob `snap/programme-actuals` (the tool kept them in localStorage). Checked against a mock Notion: a second plan after applying is empty, and only Adj properties were written.
+- `PROGRAMME_AUTO` = off | **dry** (default) | on. Leave it on dry until the plan matches what the Scheduling Tool writes, then turn it on and retire the tool.
+- Removed: `src/pages/TimelinePage.jsx` (its PDF and Excel exports remain, under Export).
+
+## Top-level tabs (16 Nov 2026)
+Nav is now **Cockpit · Triage · Programme · Trackers · Reports**, per the page redesign concept. Sections with sub-pages show a second row (`NAV[].tabs` in `src/components/ui/HubNav.jsx`); the current tab scrolls into view on phones.
+- **Triage**: Triage | Brief (they already shared `BriefLayout`).
+- **Trackers**: Items, Drawings, Tasks, Team, Finishes, RFIs, Variations. RFIs and Variations are registers, so they moved in; you act on them in Triage. Tasks, Team and Drawings moved to `/trackers/tasks`, `/trackers/team`, `/trackers/drawings`; `/tasks`, `/team`, `/drawings` and `/trackers/task-schedule` redirect with their query.
+- **Reports** (`/reports`): Weekly Client Report and Contract vs Variation Hours (still link out) and a pointer to Programme exports.
+- Next: the close-out tracker joins Trackers as a sub-tab once its branch is in the repo.
+- 17 Nov 2026: Projects menu removed, and the project (`/project/:id`) and client (`/client/:id`) pages retired with `components/ui/Gantt.jsx` — every tab has a project filter and hours are in Reports. `/project/:id` redirects to that project on Programme; `/client/:id` to Programme.

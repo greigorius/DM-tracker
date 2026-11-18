@@ -9,31 +9,29 @@ export const pages = {
   briefLayout: lazyPage(() => import('./pages/brief/BriefLayout.jsx')),
   dailyBrief: lazyPage(() => import('./pages/brief/DailyBrief.jsx')),
   triage: lazyPage(() => import('./pages/brief/TriagePage.jsx')),
-  clientHome: lazyPage(() => import('./pages/ClientPage.jsx')),
-  projectHome: lazyPage(() => import('./pages/ProjectPage.jsx')),
   tasks: lazyPage(() => import('./pages/TasksPage.jsx')),
   team: lazyPage(() => import('./pages/team/TeamPage.jsx')),
-  timeline: lazyPage(() => import('./pages/TimelinePage.jsx')),
+  programme: lazyPage(() => import('./pages/programme/ProgrammePage.jsx')),
   itemSchedule: lazyPage(() => import('./pages/ItemsPage.jsx')),
   rfis: lazyPage(() => import('./pages/RFIsPage.jsx')),
   variations: lazyPage(() => import('./pages/VariationsPage.jsx')),
   finishes: lazyPage(() => import('./pages/FinishesPage.jsx')),
   drawings: lazyPage(() => import('./pages/DrawingsPage.jsx')),
+  reports: lazyPage(() => import('./pages/ReportsPage.jsx')),
 };
 
 // path → page, used by App and by preloadRoute
 export const ROUTES = [
-  ['/client/:clientId', pages.clientHome],
-  ['/project/:projectId', pages.projectHome],
-  ['/tasks', pages.tasks],
-  ['/team', pages.team],
-  ['/timeline', pages.timeline],
-  ['/timeline/:projectId', pages.timeline],
+  ['/trackers/tasks', pages.tasks],
+  ['/trackers/team', pages.team],
+  ['/programme', pages.programme],
+  ['/programme/:projectId', pages.programme],
   ['/trackers/item-schedule', pages.itemSchedule],
   ['/trackers/rfis', pages.rfis],
   ['/trackers/variations', pages.variations],
   ['/trackers/finishes-schedule', pages.finishes],
-  ['/drawings', pages.drawings],
+  ['/trackers/drawings', pages.drawings],
+  ['/reports', pages.reports],
 ];
 
 

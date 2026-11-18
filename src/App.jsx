@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ROUTES, pages } from './routes.jsx';
 
 const { briefLayout: BriefLayout, dailyBrief: DailyBrief, triage: TriagePage } = pages;
@@ -20,6 +20,18 @@ function KeepQuery({ to }) {
   return <Navigate to={`${to}${search}`} replace />;
 }
 
+// Timeline became the Programme page's Table tab
+function TimelineRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/programme/${projectId}?tab=table`} replace />;
+}
+
+// The project and client pages were retired (Nov 2026): every tab has a project filter
+function ProjectRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/programme/${projectId}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -36,7 +48,15 @@ export default function App() {
 
           {/* Old paths */}
           <Route path="/brief/triage" element={<KeepQuery to="/triage" />} />
-          <Route path="/trackers/task-schedule" element={<Navigate to="/tasks" replace />} />
+          <Route path="/timeline" element={<Navigate to="/programme?tab=table" replace />} />
+          <Route path="/timeline/:projectId" element={<TimelineRedirect />} />
+          <Route path="/project/:projectId" element={<ProjectRedirect />} />
+          <Route path="/client/:clientId" element={<Navigate to="/programme" replace />} />
+          <Route path="/scheduling" element={<Navigate to="/programme" replace />} />
+          <Route path="/trackers/task-schedule" element={<KeepQuery to="/trackers/tasks" />} />
+          <Route path="/tasks" element={<KeepQuery to="/trackers/tasks" />} />
+          <Route path="/team" element={<KeepQuery to="/trackers/team" />} />
+          <Route path="/drawings" element={<KeepQuery to="/trackers/drawings" />} />
           <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

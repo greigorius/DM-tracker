@@ -439,7 +439,11 @@ export default function TriagePage() {
 
   const lists = useMemo(() => {
     const week = addDays(t, 7);
-    const dueOk = x => due === 'all' || (due === 'overdue' ? x.due && x.due < t : x.due && x.due >= t && x.due <= week);
+    // Latest = added in the last 7 days (date received, else created), newest first
+    const since = addDays(t, -7);
+    const added = x => (x.received || x.raised || x.createdAt || '').slice(0, 10);
+    const dueOk = x => due === 'all' || (due === 'latest' ? added(x) >= since
+      : due === 'overdue' ? x.due && x.due < t : x.due && x.due >= t && x.due <= week);
     const acts = d.openActions.filter(dueOk);
     const out = {
       mine: acts.filter(a => groupOf(a.bic) === 'mine'), ext: acts.filter(a => groupOf(a.bic) === 'ext'), int: acts.filter(a => groupOf(a.bic) === 'int'),
@@ -447,7 +451,10 @@ export default function TriagePage() {
       items: d.items.filter(i => ['Set Up', 'In Design', 'Awaiting Approval', 'By Others', 'Backlog', 'Blocked', 'To Do', 'In Progress'].includes(i.status) && i.bic && (!preset.bic || i.bic === preset.bic)),
       rfis: d.openRfis.filter(dueOk), vars: d.openVcs,
     };
-    const sortActions = l => [...l].sort((a, b) => (a.due || '9').localeCompare(b.due || '9'));
+    if (due === 'latest') out.rfis.sort((a, b) => (b.createdAt || added(b)).localeCompare(a.createdAt || added(a)));
+    const sortActions = l => [...l].sort(due === 'latest'
+      ? (a, b) => (b.createdAt || added(b)).localeCompare(a.createdAt || added(a))
+      : (a, b) => (a.due || '9').localeCompare(b.due || '9'));
     for (const k of ['mine', 'ext', 'int', 'dt', 'unfiled', 'all']) out[k] = sortActions(out[k]);
     out.items.sort((a, b) => (a.editedAt || '').localeCompare(b.editedAt || ''));
     return out;
@@ -478,10 +485,10 @@ export default function TriagePage() {
       {!['fixes', 'team', 'bic', 'dupes'].includes(tab) && (
         <div className="flex flex-wrap items-center gap-2">
           <SearchBox value={q} onChange={setQ} />
-          {(kind === 'action' || kind === 'rfi') && ['all', 'overdue', 'week'].map(k => (
-            <button key={k} type="button" aria-pressed={due === k} onClick={() => go({ due: k })}
+          {(kind === 'action' || kind === 'rfi') && ['all', 'overdue', 'week', 'latest'].map(k => (
+            <button key={k} type="button" aria-pressed={due === k} onClick={() => go({ due: k })} title={k === 'latest' ? 'Added in the last 7 days, newest first' : undefined}
               className={cx('min-h-11 px-3 border font-mono text-[12px] cursor-pointer', due === k ? 'bg-surface-hi border-accent text-accent' : 'bg-transparent border-line-strong text-muted hover:text-text-2')}>
-              {{ all: 'Any due date', overdue: 'Overdue', week: 'Due this week' }[k]}
+              {{ all: 'Any due date', overdue: 'Overdue', week: 'Due this week', latest: 'Latest' }[k]}
             </button>
           ))}
           {preset.bic && <Badge tone="info" className="py-1.5">BIC = {preset.bic}</Badge>}

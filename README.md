@@ -24,7 +24,7 @@ See `.env.example`. `NOTION_TOKEN` is required; the integration needs access to 
 
 ## Rules
 - "Axiom" never appears as a BIC / raised-by / owner value — the DM's value is **DM**. Mappers rewrite it and writes reject it.
-- Programme and delivery dates are only set in the Scheduling Tool. Nothing in the Hub writes them.
+- Programme dates are only set on the **Programme** page (`/programme`), which runs the Scheduling Tool's engine (`hub-core/programme/`). It writes the 8 Adj date properties, Reissue Reason, Manual DT Start, Programme-driven, Date of Instruction, acceleration and project periods — never a Plan or Actual property. No other page writes programme dates.
 - UI: tokens in `src/styles/tokens.css`, components in `src/components/ui/`. Pages don't define their own colours.
 
 Build notes and open items: `HUB-V2.md`. Original brief: `docs/hub-cockpit-build-prompt.md`.
