@@ -1,7 +1,12 @@
-// Drawings: the Master Drawing Schedule, with each issue's submit date and grade.
+// Drawings: the Master Drawing Schedule, with every revision issued in each
+// stage — actual issue date and grade from the Drawing Flow (Submissions), or
+// forecast from the programme where nothing is recorded (hub-core/drawingRevs.js).
 import { TrackerPage, fmtDate } from './TrackerPage.jsx';
 import { StatusPill } from '../components/ui/table.jsx';
-import { Badge } from '../components/ui/index.js';
+import { Badge, cx } from '../components/ui/index.js';
+import { buildProgramme } from '../../hub-core/programme/adapter.js';
+import { buildDrawingRevs, revText } from '../../hub-core/drawingRevs.js';
+import { londonToday } from '../../hub-core/derive.js';
 
 const TONE = {
   'First Issue': 'info', 'DT Review': 'muted', 'DM Review': 'accent', 'Client Review': 'accent', 'Approval Updates': 'info',
@@ -10,12 +15,60 @@ const TONE = {
 };
 const OPEN = { has: s => s !== 'Complete' };
 const gradeTone = g => (g === 'A' || g === 'Approved' ? 'ok' : g === 'B' ? 'accent' : g === 'C' || g === 'Rejected' ? 'danger' : 'muted');
-const stage = (submitted, grade, gradeDate) => (
-  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-    <span className="font-mono text-[12px] text-text-2">{fmtDate(submitted) || '—'}</span>
-    {grade && <Badge tone={gradeTone(grade)} title={gradeDate ? `Graded ${fmtDate(gradeDate)}` : undefined}>{grade}</Badge>}
-  </span>
-);
+const gradeLabel = g => (g === 'Signed off' ? 'Signed' : g === 'QA Rejected' ? 'Rej' : g);
+
+// Revisions per drawing, built once per snapshot set
+const revCache = new WeakMap();
+function revsFor(ctx) {
+  const key = ctx.data.drawings;
+  if (!revCache.has(key)) {
+    const live = new Set(ctx.data.projects.filter(p => /^in progress$/i.test(p.status || '')).map(p => p.id));
+    const entries = buildProgramme(ctx.data, { today: londonToday(), include: t => live.has(t.projectId) });
+    const programme = new Map(entries.map(e => [e.row.id, e]));
+    revCache.set(key, buildDrawingRevs({ drawings: ctx.data.drawings, submissions: ctx.data.submissions || [], programme, today: londonToday() }));
+  }
+  return revCache.get(key);
+}
+
+function RevList({ entries, today }) {
+  if (entries === null) return <span className="font-mono text-[12px] text-muted">N/A</span>;
+  if (!entries?.length) return <span className="font-mono text-[12px] text-muted">—</span>;
+  return (
+    <span className="flex flex-col gap-1">
+      {entries.map((e, i) => {
+        const fcIssue = e.issued.kind === 'fc';
+        const overdue = fcIssue && e.issued.date && e.issued.date < today;
+        const tip = [e.source === 'schedule' && 'From the drawing schedule (before the Drawing Flow)', overdue && 'Forecast issue date has passed', e.note].filter(Boolean).join(' · ');
+        return (
+          <span key={i} className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px]" title={tip || undefined}>
+            <span className={cx('w-8 shrink-0', fcIssue ? 'text-muted' : 'text-text')}>{e.rev || '—'}</span>
+            <span className={cx(overdue ? 'italic text-danger' : fcIssue ? 'italic text-muted' : 'text-text-2')} title={fcIssue ? 'Forecast issue' : 'Issued'}>
+              {e.issued.date ? fmtDate(e.issued.date) : <span className="not-italic">{e.note || 'TBC'}</span>}
+            </span>
+            {e.result && <>
+              <span className="text-muted" aria-hidden="true">→</span>
+              {e.result.grade
+                ? <Badge tone={gradeTone(e.result.grade)} title={e.result.date ? `Returned ${fmtDate(e.result.date)}` : undefined}>{gradeLabel(e.result.grade)}</Badge>
+                : null}
+              <span className={cx(e.result.kind === 'fc' ? 'italic text-muted' : 'text-text-2')} title={e.result.kind === 'fc' ? 'Forecast return' : 'Returned'}>
+                {e.result.date ? fmtDate(e.result.date) : ''}
+              </span>
+            </>}
+            {e.inFlight && e.issued.date && <span className="text-[11px] text-info">{e.note}</span>}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+const lastDate = es => (es || []).reduce((m, e) => [e.issued.date, e.result?.date].reduce((a, b) => (b && b > a ? b : a), m), '');
+const stageCol = (ctx, key, label, width = 230) => ({
+  key, label, width,
+  sortValue: r => lastDate(revsFor(ctx).get(r.id)?.[key]),
+  render: r => <RevList entries={revsFor(ctx).get(r.id)?.[key]} today={londonToday()} />,
+  csv: r => (revsFor(ctx).get(r.id)?.[key] || []).map(revText).join(' | '),
+});
 
 const columns = ctx => [
   { key: 'title', label: 'Dwg no', width: 200, render: r => <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[13px] text-info no-underline hover:underline whitespace-nowrap">{r.title || '—'}</a> },
@@ -24,10 +77,10 @@ const columns = ctx => [
   { key: 'stage', label: 'Stage', width: 120, sortValue: r => r.stage, render: r => <span className="font-mono text-[12px] text-text-2">{r.stage?.split(' - ')[0] || '—'}</span> },
   { key: 'rev', label: 'Rev', width: 70, cellClassName: 'font-mono text-[12px] text-text-2' },
   { key: 'type', label: 'Type', width: 100, cellClassName: 'text-text-2' },
-  { key: 's4', label: 'S4', width: 150, sortValue: r => r.s4.submitted, render: r => stage(r.s4.submitted, r.s4.status, r.s4.statusDate), csv: r => [r.s4.submitted, r.s4.status].filter(Boolean).join(' ') },
-  { key: 's5', label: 'S5', width: 150, sortValue: r => r.s5.submitted, render: r => stage(r.s5.submitted, r.s5.status, r.s5.statusDate), csv: r => [r.s5.submitted, r.s5.status].filter(Boolean).join(' ') },
-  { key: 'c01', label: 'C01 / A4.5', width: 150, sortValue: r => r.c01.submitted, render: r => stage(r.c01.submitted, r.c01.signOff && 'Signed', r.c01.signOff), csv: r => [r.c01.submitted, r.c01.signOff && `signed ${r.c01.signOff}`].filter(Boolean).join(' ') },
-  { key: 'prd', label: 'PRD', width: 130, sortValue: r => r.prd.scheduled, render: r => stage(r.prd.scheduled, r.prd.status, r.prd.statusDate), csv: r => [r.prd.scheduled, r.prd.status].filter(Boolean).join(' ') },
+  stageCol(ctx, 's4', 'S4'),
+  stageCol(ctx, 's5', 'S5'),
+  stageCol(ctx, 'c01', 'A4.5'),
+  stageCol(ctx, 'prd', 'PRD', 200),
   { key: 'item', label: 'Item', width: 200, sortValue: r => ctx.itemOf(r)?.title, render: r => <span className="text-text-2">{ctx.itemOf(r)?.title || '—'}</span>, csv: r => ctx.itemOf(r)?.title },
   { key: 'project', label: 'Project', width: 170, sortValue: r => ctx.projects.get(ctx.projectOf(r)), render: r => <span className="text-text-2">{ctx.projects.get(ctx.projectOf(r)) || '—'}</span>, csv: r => ctx.projects.get(ctx.projectOf(r)) },
 ];
@@ -55,6 +108,7 @@ export default function DrawingsPage() {
       searchText={(r, ctx) => [r.title, r.name, r.status, r.rev, ctx.itemOf(r)?.title].filter(Boolean).join(' ')}
       initialSort={{ key: 'title', dir: 'asc' }}
       filename="drawings.csv"
+      extraDbs={['submissions', 'variations', 'rfis']}
     />
   );
 }
