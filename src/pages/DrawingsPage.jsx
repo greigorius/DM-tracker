@@ -40,10 +40,10 @@ function RevList({ entries, today }) {
         const overdue = fcIssue && e.issued.date && e.issued.date < today;
         const tip = [e.source === 'schedule' && 'From the drawing schedule (before the Drawing Flow)', overdue && 'Forecast issue date has passed', e.note].filter(Boolean).join(' · ');
         return (
-          <span key={i} className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px]" title={tip || undefined}>
-            <span className={cx('w-8 shrink-0', fcIssue ? 'text-muted' : 'text-text')}>{e.rev || '—'}</span>
+          <span key={i} className="flex items-center gap-1 whitespace-nowrap font-mono text-[11.5px]" title={tip || undefined}>
+            <span className={cx('w-7 shrink-0', fcIssue ? 'text-muted' : 'text-text')}>{e.rev || '—'}</span>
             <span className={cx(overdue ? 'italic text-danger' : fcIssue ? 'italic text-muted' : 'text-text-2')} title={fcIssue ? 'Forecast issue' : 'Issued'}>
-              {e.issued.date ? fmtDate(e.issued.date) : <span className="not-italic">{e.note || 'TBC'}</span>}
+              {e.issued.date ? fmtDate(e.issued.date) : <span className="not-italic">{e.inFlight ? '—' : e.note || 'TBC'}</span>}
             </span>
             {e.result && <>
               <span className="text-muted" aria-hidden="true">→</span>
@@ -54,7 +54,7 @@ function RevList({ entries, today }) {
                 {e.result.date ? fmtDate(e.result.date) : ''}
               </span>
             </>}
-            {e.inFlight && e.issued.date && <span className="text-[11px] text-info">{e.note}</span>}
+            {e.inFlight && <Badge tone="info" title={e.note}>{e.note === 'In QA' ? 'QA' : 'To issue'}</Badge>}
           </span>
         );
       })}
@@ -63,7 +63,7 @@ function RevList({ entries, today }) {
 }
 
 const lastDate = es => (es || []).reduce((m, e) => [e.issued.date, e.result?.date].reduce((a, b) => (b && b > a ? b : a), m), '');
-const stageCol = (ctx, key, label, width = 230) => ({
+const stageCol = (ctx, key, label, width = 210) => ({
   key, label, width,
   sortValue: r => lastDate(revsFor(ctx).get(r.id)?.[key]),
   render: r => <RevList entries={revsFor(ctx).get(r.id)?.[key]} today={londonToday()} />,
@@ -71,16 +71,33 @@ const stageCol = (ctx, key, label, width = 230) => ({
 });
 
 const columns = ctx => [
-  { key: 'title', label: 'Dwg no', width: 200, render: r => <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[13px] text-info no-underline hover:underline whitespace-nowrap">{r.title || '—'}</a> },
-  { key: 'name', label: 'Title', render: r => <span className="min-w-[200px] inline-block">{r.name || '—'}</span> },
-  { key: 'status', label: 'Status', width: 160, render: r => <StatusPill status={r.status} tone={TONE[r.status]} /> },
-  { key: 'stage', label: 'Stage', width: 120, sortValue: r => r.stage, render: r => <span className="font-mono text-[12px] text-text-2">{r.stage?.split(' - ')[0] || '—'}</span> },
-  { key: 'rev', label: 'Rev', width: 70, cellClassName: 'font-mono text-[12px] text-text-2' },
-  { key: 'type', label: 'Type', width: 100, cellClassName: 'text-text-2' },
+  // Number, title and (when not a drawing) type in one column; the current rev
+  // is the last one in the stage columns
+  {
+    key: 'title', label: 'Drawing', width: 230,
+    render: r => (
+      <span className="flex flex-col gap-0.5 min-w-[200px] max-w-[260px]">
+        <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-info no-underline hover:underline break-all">{r.title || '—'}</a>
+        {r.name && <span className="text-[13px] text-text-2 leading-snug">{r.name}</span>}
+        {r.type && r.type !== 'Drawing' && <span><Badge>{r.type}</Badge></span>}
+      </span>
+    ),
+    csv: r => [r.title, r.name, r.type !== 'Drawing' && r.type].filter(Boolean).join(' — '),
+  },
+  {
+    key: 'status', label: 'Status', width: 130, sortValue: r => r.status,
+    render: r => (
+      <span className="flex flex-col items-start gap-1">
+        <StatusPill status={r.status} tone={TONE[r.status]} />
+        <span className="font-mono text-[11px] text-muted">{[r.stage?.split(' - ')[0], r.rev].filter(Boolean).join(' · ')}</span>
+      </span>
+    ),
+    csv: r => [r.status, r.stage?.split(' - ')[0], r.rev].filter(Boolean).join(' '),
+  },
   stageCol(ctx, 's4', 'S4'),
   stageCol(ctx, 's5', 'S5'),
   stageCol(ctx, 'c01', 'A4.5'),
-  stageCol(ctx, 'prd', 'PRD', 200),
+  stageCol(ctx, 'prd', 'PRD', 180),
   { key: 'item', label: 'Item', width: 200, sortValue: r => ctx.itemOf(r)?.title, render: r => <span className="text-text-2">{ctx.itemOf(r)?.title || '—'}</span>, csv: r => ctx.itemOf(r)?.title },
   { key: 'project', label: 'Project', width: 170, sortValue: r => ctx.projects.get(ctx.projectOf(r)), render: r => <span className="text-text-2">{ctx.projects.get(ctx.projectOf(r)) || '—'}</span>, csv: r => ctx.projects.get(ctx.projectOf(r)) },
 ];
@@ -105,7 +122,7 @@ export default function DrawingsPage() {
       openLabel="Not complete"
       columns={columns}
       groupings={GROUPINGS}
-      searchText={(r, ctx) => [r.title, r.name, r.status, r.rev, ctx.itemOf(r)?.title].filter(Boolean).join(' ')}
+      searchText={(r, ctx) => [r.title, r.name, r.status, r.rev, r.type, ctx.itemOf(r)?.title].filter(Boolean).join(' ')}
       initialSort={{ key: 'title', dir: 'asc' }}
       filename="drawings.csv"
       extraDbs={['submissions', 'variations', 'rfis']}
