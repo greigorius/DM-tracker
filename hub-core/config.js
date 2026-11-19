@@ -16,12 +16,16 @@ export const DATA_SOURCES = {
   activity:    process.env.NOTION_DS_ACTIVITY    || '755b96a3-28af-4577-a135-52396e3b3395',
   meetings:    process.env.NOTION_DS_MEETINGS    || 'c558b84a-dd77-410e-9722-290a7a841e70',
   finishes:    process.env.NOTION_DS_FINISHES    || 'de9687b3-9daa-44e7-ab1f-aa4ba00067f4',
+  programme:   process.env.NOTION_DS_PROGRAMME   || '41d210e4-582e-813f-8dc3-000b6027aedf',
 };
 
 export const DB_KEYS = Object.keys(DATA_SOURCES);
 
+// Programme Dates DB (baselines, forecasts, actuals per item × stage)
+export const PROGRAMME_DS = DATA_SOURCES.programme;
+
 // Order matters for sync-now with a time budget: most-used first.
-export const SYNC_ORDER = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'drawings', 'activity', 'meetings', 'finishes', 'clients', 'todo'];
+export const SYNC_ORDER = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'drawings', 'activity', 'meetings', 'finishes', 'clients', 'todo', 'programme'];
 
 export const GAP_MS = 350;                 // gap between Notion queries
 export const BLOB_STORE = 'hub';
