@@ -363,6 +363,41 @@ export const mappers = {
     email: v(page, 'Email'),
     capacity: v(page, 'Weekly Capacity (hrs)'),
   }),
+
+  // Programme Dates DB (spec claude/programme-baseline-spec.md §3): one row per item × stage × baseline
+  programme: page => ({
+    ...base(page),
+    title: v(page, 'Name'),
+    itemIds: ids(page, 'Item'),
+    stage: v(page, 'Stage'),
+    current: !!v(page, 'Current'),
+    notRequired: !!v(page, 'Not Required'),
+    baseline: {
+      ref: v(page, 'Baseline Ref'), source: v(page, 'Baseline Source'), issued: day(v(page, 'Baseline Issued')),
+      sub: day(v(page, 'Baseline Submission')), appr: day(v(page, 'Baseline Approval')),
+      dtDays: v(page, 'Baseline DT Days'), dtStart: day(v(page, 'Baseline DT Start')), dtDel: day(v(page, 'Baseline DT Delivery')),
+    },
+    dtDays: v(page, 'DT Days'),
+    dtDaysUnverified: !!v(page, 'DT Days Unverified'),
+    forecast: {
+      dtStart: day(v(page, 'Forecast DT Start')), dtDel: day(v(page, 'Forecast DT Delivery')),
+      sub: day(v(page, 'Forecast Submission')), appr: day(v(page, 'Forecast Approval')),
+    },
+    actual: {
+      dtStart: day(v(page, 'Actual DT Start')), dtDel: day(v(page, 'Actual DT Delivery')),
+      sub: day(v(page, 'Actual Submission')), appr: day(v(page, 'Actual Approval')), grade: v(page, 'Actual Grade'),
+    },
+    installOverride: day(v(page, 'Install Override')),
+    coordDays: v(page, 'Coord Days'),
+    accReviewDays: v(page, 'Accel Review Days'),
+    accQaDays: v(page, 'Accel QA Days'),
+    manualDtStart: !!v(page, 'Manual DT Start'),
+    reissueReason: v(page, 'Reissue Reason'),
+    variance: v(page, 'Variance (days)'),
+    rag: v(page, 'RAG'),
+    note: v(page, 'Note'),
+    number: v(page, 'Programme ID'),
+  }),
 };
 
 export function mapPage(db, page) {

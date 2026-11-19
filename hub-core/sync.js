@@ -139,6 +139,14 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
     catch (err) { console.error('[sync] item BIC:', err.message); bic = { error: err.message }; }
   }
 
+  // Programme Dates forecasts (hub-core/programme/forecast-sync.js). Only writes when PROGRAMME_FORECAST=on.
+  let forecasts = null;
+  const { forecastMode, applyForecasts } = await import('./programme/forecast-sync.js');
+  if (forecastMode() === 'on' && Date.now() < deadline) {
+    try { forecasts = await applyForecasts({ deadline, max: 60 }); }
+    catch (err) { console.error('[sync] forecasts:', err.message); forecasts = { error: err.message }; }
+  }
+
   // Programme Adj dates (hub-core/programme/sync.js). Only writes when PROGRAMME_AUTO=on.
   let programme = null;
   const { programmeMode, applyProgramme } = await import('./programme/sync.js');
@@ -150,6 +158,7 @@ export async function runSync({ budgetMs = 22_000, forceFull = false, allowFull 
   meta.syncedAt = new Date().toISOString();
   meta.lastRun = { at: meta.syncedAt, ms: Date.now() - t0, results, skipped, needsFull,
     ...(bic && { bic: { written: bic.done?.length || 0, failed: bic.failed?.length || 0, remaining: bic.remaining, error: bic.error } }),
+    ...(forecasts && { forecasts: { written: forecasts.done?.length || 0, failed: forecasts.failed?.length || 0, remaining: forecasts.remaining, error: forecasts.error } }),
     ...(programme && { programme: { written: programme.done?.length || 0, failed: programme.failed?.length || 0, blocked: programme.blocked?.length || 0, remaining: programme.remaining, error: programme.error } }) };
   await store.setJSON(META_KEY, meta);
   return meta.lastRun;

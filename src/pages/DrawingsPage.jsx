@@ -1,10 +1,11 @@
 // Drawings: the Master Drawing Schedule, with every revision issued in each
 // stage — actual issue date and grade from the Drawing Flow (Submissions), or
-// forecast from the programme where nothing is recorded (hub-core/drawingRevs.js).
+// forecast where nothing is recorded, chained from the drawing's own latest actual
+// (hub-core/drawingRevs.js). Each stage shows the item's Current baseline (Programme
+// Dates) as a marker, coloured by RAG against the drawing's issue.
 import { TrackerPage, fmtDate } from './TrackerPage.jsx';
 import { StatusPill } from '../components/ui/table.jsx';
 import { Badge, cx } from '../components/ui/index.js';
-import { buildProgramme } from '../../hub-core/programme/adapter.js';
 import { buildDrawingRevs, revText } from '../../hub-core/drawingRevs.js';
 import { londonToday } from '../../hub-core/derive.js';
 
@@ -22,19 +23,35 @@ const revCache = new WeakMap();
 function revsFor(ctx) {
   const key = ctx.data.drawings;
   if (!revCache.has(key)) {
-    const live = new Set(ctx.data.projects.filter(p => /^in progress$/i.test(p.status || '')).map(p => p.id));
-    const entries = buildProgramme(ctx.data, { today: londonToday(), include: t => live.has(t.projectId) });
-    const programme = new Map(entries.map(e => [e.row.id, e]));
-    revCache.set(key, buildDrawingRevs({ drawings: ctx.data.drawings, submissions: ctx.data.submissions || [], programme, today: londonToday() }));
+    revCache.set(key, buildDrawingRevs({
+      drawings: ctx.data.drawings, submissions: ctx.data.submissions || [], programmeRows: ctx.data.programme || [],
+      tasks: ctx.data.tasks || [], projects: ctx.data.projects || [], today: londonToday(),
+    }));
   }
   return revCache.get(key);
 }
 
-function RevList({ entries, today }) {
+const RAG_CLASS = { Red: 'text-danger', Amber: 'text-accent', Green: 'text-ok', Done: 'text-muted' };
+function BaselineMark({ meta }) {
+  if (!meta?.baseline) return null;
+  const v = meta.variance;
+  const tip = `Baseline issue ${fmtDate(meta.baseline)}${v != null && meta.rag !== 'Done' ? ` · ${v > 0 ? `${v} WD late` : v < 0 ? `${-v} WD ahead` : 'on baseline'}` : ''}`;
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] text-muted" title={tip}>
+      <span className={cx('w-8 shrink-0', RAG_CLASS[meta.rag] || 'text-muted')} aria-label={meta.rag || undefined}>◆</span>
+      <span>BL {fmtDate(meta.baseline)}</span>
+      {meta.rag && meta.rag !== 'Done' && v ? <span className={RAG_CLASS[meta.rag]}>{v > 0 ? `+${v}` : v}</span> : null}
+      {meta.unverified ? <span className="text-accent" title="S4 DT Days not entered: provisional 10 WD">DT?</span> : null}
+    </span>
+  );
+}
+
+function RevList({ entries, today, meta }) {
   if (entries === null) return <span className="font-mono text-[12px] text-muted">N/A</span>;
   if (!entries?.length) return <span className="font-mono text-[12px] text-muted">—</span>;
   return (
     <span className="flex flex-col gap-1">
+      <BaselineMark meta={meta} />
       {entries.map((e, i) => {
         const fcIssue = e.issued.kind === 'fc';
         const overdue = fcIssue && e.issued.date && e.issued.date < today;
@@ -66,7 +83,7 @@ const lastDate = es => (es || []).reduce((m, e) => [e.issued.date, e.result?.dat
 const stageCol = (ctx, key, label, width = 230) => ({
   key, label, width,
   sortValue: r => lastDate(revsFor(ctx).get(r.id)?.[key]),
-  render: r => <RevList entries={revsFor(ctx).get(r.id)?.[key]} today={londonToday()} />,
+  render: r => <RevList entries={revsFor(ctx).get(r.id)?.[key]} meta={revsFor(ctx).get(r.id)?.meta?.[key]} today={londonToday()} />,
   csv: r => (revsFor(ctx).get(r.id)?.[key] || []).map(revText).join(' | '),
 });
 
@@ -108,7 +125,7 @@ export default function DrawingsPage() {
       searchText={(r, ctx) => [r.title, r.name, r.status, r.rev, ctx.itemOf(r)?.title].filter(Boolean).join(' ')}
       initialSort={{ key: 'title', dir: 'asc' }}
       filename="drawings.csv"
-      extraDbs={['submissions', 'variations', 'rfis']}
+      extraDbs={['submissions', 'programme']}
     />
   );
 }
