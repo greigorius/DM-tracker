@@ -17,6 +17,7 @@ export const DATA_SOURCES = {
   meetings:    process.env.NOTION_DS_MEETINGS    || 'c558b84a-dd77-410e-9722-290a7a841e70',
   finishes:    process.env.NOTION_DS_FINISHES    || 'de9687b3-9daa-44e7-ab1f-aa4ba00067f4',
   programme:   process.env.NOTION_DS_PROGRAMME   || '41d210e4-582e-813f-8dc3-000b6027aedf',
+  suppliers:   process.env.NOTION_DS_SUPPLIERS   || 'bb11fe40-adb3-4585-9bdd-d8c7967b365c',
 };
 
 export const DB_KEYS = Object.keys(DATA_SOURCES);
@@ -25,7 +26,7 @@ export const DB_KEYS = Object.keys(DATA_SOURCES);
 export const PROGRAMME_DS = DATA_SOURCES.programme;
 
 // Order matters for sync-now with a time budget: most-used first.
-export const SYNC_ORDER = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'drawings', 'activity', 'meetings', 'finishes', 'clients', 'todo', 'programme'];
+export const SYNC_ORDER = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'drawings', 'activity', 'meetings', 'finishes', 'clients', 'todo', 'programme', 'suppliers'];
 
 export const GAP_MS = 350;                 // gap between Notion queries
 export const BLOB_STORE = 'hub';
@@ -36,7 +37,7 @@ export const EVENTS_KEY = 'snap/events';
 export const MAX_EVENTS = 200;
 // Bump when a mapper gains fields: every snapshot built with an older version
 // is rebuilt in full on the next sync, so new fields appear on every row.
-export const MAPPER_VERSION = 10;
+export const MAPPER_VERSION = 16; // 15: supplier email/phone/items; 16: meetings // 13: Actions tracker fields on A&I + suppliers; 14: For Task / Waiting On
 export const SCHEMA_VERSION = 2;
 
 // "Axiom" is a hidden company: it must never surface as a BIC / sits-with /

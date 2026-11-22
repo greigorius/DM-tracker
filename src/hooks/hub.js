@@ -128,7 +128,7 @@ export function useCreateAction() {
     kind: 'action',
     db: 'actions',
     request: vars => api('/api/actions', { method: 'POST', body: vars }),
-    toRow: (v, id) => ({ id, title: v.text, type: v.type, bic: v.type === 'Note' ? null : v.bic, due: v.type === 'Note' ? null : v.due || null, blocks: !!v.blocks, done: false, itemIds: [v.itemId], createdAt: new Date().toISOString() }),
+    toRow: (v, id) => ({ id, title: v.text, type: v.type, bic: v.type === 'Note' ? null : v.bic, due: v.type === 'Note' ? null : v.due || null, blocks: !!v.blocks, done: false, itemIds: v.itemId ? [v.itemId] : [], companyIds: v.companyId ? [v.companyId] : [], contact: v.contact || null, trade: v.trade || [], nextAction: v.nextAction || null, closesWhen: v.closesWhen || null, chaseStatus: v.type === 'Note' ? null : v.chaseStatus || 'Open', personIds: v.personId ? [v.personId] : [], taskIds: [], source: 'Manual', received: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString() }),
     toEvent: (v, _row, boot) => tempEvent(v.type === 'Note' ? 'note' : 'action', v.text, v, boot, { blocking: v.type !== 'Note' && !!v.blocks }),
   });
 }
@@ -191,7 +191,11 @@ export function useUpdateRecord(db) {
       return { prev };
     },
     onError: (e, { id }, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); if (isGone(e)) dropRow(qc, db, id); },
-    onSuccess: ({ row }) => qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === row.id ? row : r)) })),
+    onSuccess: ({ row, released }) => {
+      qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: old.rows.map(r => (r.id === row.id ? row : r)) }));
+      // Closing a chase action puts the To Do it held back to Not Started
+      if (released?.length) qc.setQueryData(keys.snapshot('todo'), old => old && ({ ...old, rows: old.rows.map(r => released.find(x => x.id === r.id) || r) }));
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
   });
 }
@@ -209,6 +213,54 @@ export function useTrashRecord(db) {
     onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot(db), ctx.prev); },
     onSuccess: ({ row }, { restore }) => {
       if (restore) qc.setQueryData(keys.snapshot(db), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] }));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
+
+// Start a meeting (Meetings DB, Status In progress)
+export function useCreateMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: body => api('/api/meetings', { method: 'POST', body }),
+    onSuccess: ({ row }) => qc.setQueryData(keys.snapshot('meetings'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] })),
+  });
+}
+
+// New company in the Suppliers DB (Actions tracker company drop-downs)
+export function useCreateSupplier() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, contact }) => api('/api/suppliers', { method: 'POST', body: { name, contact } }),
+    onSuccess: ({ row }) => qc.setQueryData(keys.snapshot('suppliers'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] })),
+  });
+}
+
+// Create a project's Design Coordination item (Triage inbox, Item Tracker)
+export function useCreateCoordinationItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId }) => api('/api/items/coordination', { method: 'POST', body: { projectId } }),
+    onSuccess: ({ row }) => qc.setQueryData(keys.snapshot('tasks'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] })),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
+  });
+}
+
+// Convert a To Do task into an A&I action (the To Do goes to Notion Trash)
+export function useTaskToAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bic, keep = true }) => api(`/api/todo/${id}/to-action`, { method: 'POST', body: { bic, keep } }),
+    onMutate: async ({ id, keep = true }) => {
+      await qc.cancelQueries({ queryKey: keys.snapshot('todo') });
+      const prev = qc.getQueryData(keys.snapshot('todo'));
+      qc.setQueryData(keys.snapshot('todo'), old => old && ({ ...old, rows: keep ? old.rows.map(r => (r.id === id ? { ...r, status: 'Blocked' } : r)) : old.rows.filter(r => r.id !== id) }));
+      return { prev };
+    },
+    onError: (e, { id }, ctx) => { if (ctx?.prev) qc.setQueryData(keys.snapshot('todo'), ctx.prev); if (isGone(e)) dropRow(qc, 'todo', id); },
+    onSuccess: ({ row, task }) => {
+      qc.setQueryData(keys.snapshot('actions'), old => old && ({ ...old, rows: [...old.rows.filter(r => r.id !== row.id), row] }));
+      if (task) qc.setQueryData(keys.snapshot('todo'), old => old && ({ ...old, rows: old.rows.map(r => (r.id === task.id ? task : r)) }));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
   });
@@ -240,8 +292,11 @@ function applyLocal(db, row, set) {
   for (const [k, v] of Object.entries(set)) {
     if (k === 'dtId') { if (db === 'submissions' || db === 'tasks') r.dtIds = v ? [v] : []; else r.personIds = v ? [v] : []; }
     else if (k === 'personId') r.personIds = v ? [v] : [];
+    else if (k === 'companyId') r.companyIds = v ? [v] : [];
+    else if (db === 'actions' && k === 'done') { r.done = v; r.closedOn = v ? new Date().toISOString().slice(0, 10) : null; }
     else if (db === 'todo' && k === 'status') { r.status = v; r.done = v === 'Done'; }
     else if (k === 'instruction') r.dates.instruction = v;
+    else if (k === 'woRaised' && r.dates) r.dates.woRaised = v;
     else if (/Act$/.test(k) && r.dt) r.dt[k] = v;
     else r[k] = v;
   }

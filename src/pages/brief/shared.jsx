@@ -35,7 +35,7 @@ export function useStored(key, initial) {
   return [v, x => { setV(x); store.set(key, x); }];
 }
 
-export const BRIEF_DBS = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'activity', 'meetings', 'drawings'];
+export const BRIEF_DBS = ['tasks', 'actions', 'rfis', 'variations', 'submissions', 'projects', 'team', 'activity', 'meetings', 'drawings', 'suppliers'];
 
 // All snapshot rows the Brief tab needs, narrowed to one project when set.
 export function useBriefData(projectId) {

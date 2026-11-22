@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { Badge, cx } from '../../components/ui/index.js';
 
 export const ctl = 'min-h-11 px-3 bg-ground border border-line-strong text-text text-[14px] outline-none focus:border-accent';
-export function Sel({ value, onChange, options, blank = '—', label }) {
+export function Sel({ value, onChange, options, blank = '—', label, className }) {
   return (
-    <select aria-label={label} value={value ?? ''} onChange={e => onChange(e.target.value)} className={cx(ctl, 'cursor-pointer max-w-[260px]')}>
+    <select aria-label={label} value={value ?? ''} onChange={e => onChange(e.target.value)} className={cx(ctl, 'cursor-pointer max-w-[260px]', className)}>
       <option value="">{blank}</option>
       {options.map(o => (typeof o === 'string' ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>))}
     </select>

@@ -16,6 +16,15 @@ function useStored(key, initial) {
   const [v, setV] = useState(() => store.get(key, initial));
   return [v, x => { setV(x); store.set(key, x); }];
 }
+// Multi-select of status badges, kept per tracker like the other filters.
+function useStoredList(key) {
+  const [v, setV] = useState(() => {
+    try { const a = JSON.parse(store.get(key, '[]')); return Array.isArray(a) ? a : []; } catch { return []; }
+  });
+  return [v, x => { setV(x); store.set(key, JSON.stringify(x)); }];
+}
+const NO_STATUS = 'No status';
+const PICKED = '__picked';
 
 const DEFAULT_GROUPINGS = [
   { value: 'item', label: 'Group: Item', key: r => r.itemIds?.[0] ?? null, name: (k, ctx) => ctx.items.get(k)?.title || 'No item',
@@ -30,7 +39,13 @@ export function TrackerPage({
   const { data, isPending } = useSnapshots([db, 'tasks', 'projects', 'team', ...extraDbs]);
   const [project, setProject] = useStored(`hub.${id}.project`, 'all');
   const [status, setStatus] = useStored(`hub.${id}.status`, 'open');
+  const [picked, setPicked] = useStoredList(`hub.${id}.picked`);
   const [groupKey, setGroupKey] = useStored(`hub.${id}.group`, defaultGroup);
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const togglePicked = s => setPicked(pickedSet.has(s) ? picked.filter(x => x !== s) : [...picked, s]);
+  const clearPicked = () => setPicked([]);
+  // Choosing from the Status dropdown replaces any badge selection.
+  const onStatusSelect = v => { if (v === PICKED) return; setPicked([]); setStatus(v); };
   const [q, setQ] = useState('');
 
   const ctx = useMemo(() => {
@@ -61,17 +76,21 @@ export function TrackerPage({
     return all.filter(r => {
       if (project !== 'all' && ctx.projectOf(r) !== project) return false;
       const s = statusOf(r);
-      if (status === 'open' && !openStatuses.has(s)) return false;
-      if (status !== 'open' && status !== 'all' && s !== status) return false;
+      if (pickedSet.size > 0) {
+        if (!pickedSet.has(s || NO_STATUS)) return false;
+      } else {
+        if (status === 'open' && !openStatuses.has(s)) return false;
+        if (status !== 'open' && status !== 'all' && s !== status) return false;
+      }
       if (needle && !searchText(r, ctx).toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [all, project, status, q, ctx, statusOf, openStatuses, searchText]);
+  }, [all, project, status, pickedSet, q, ctx, statusOf, openStatuses, searchText]);
 
   const counts = useMemo(() => {
     const m = new Map();
     for (const r of all.filter(r => project === 'all' || ctx.projectOf(r) === project)) {
-      const s = statusOf(r) || 'No status';
+      const s = statusOf(r) || NO_STATUS;
       m.set(s, (m.get(s) || 0) + 1);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
@@ -88,7 +107,10 @@ export function TrackerPage({
     <>
       <SearchBox value={q} onChange={setQ} />
       <ToolbarSelect label="Project" value={project} onChange={setProject} options={[{ value: 'all', label: 'All projects' }, ...projectOptions]} />
-      <ToolbarSelect label="Status" value={status} onChange={setStatus} options={[{ value: 'open', label: openLabel }, { value: 'all', label: 'All statuses' }, ...statuses]} />
+      <ToolbarSelect label="Status" value={picked.length ? PICKED : status} onChange={onStatusSelect} options={[
+        ...(picked.length ? [{ value: PICKED, label: picked.length === 1 ? picked[0] : `${picked.length} statuses` }] : []),
+        { value: 'open', label: openLabel }, { value: 'all', label: 'All statuses' }, ...statuses,
+      ]} />
       <ToolbarSelect label="Group by" value={groupKey} onChange={setGroupKey} options={[...groupings.map(g => ({ value: g.value, label: g.label })), { value: 'none', label: 'No grouping' }]} />
       {groupKey !== 'none' && <>
         <ToolbarButton onClick={expandAll}>Expand all</ToolbarButton>
@@ -103,12 +125,32 @@ export function TrackerPage({
     <PageShell title={title} subtitle={subtitle} toolbar={toolbar}>
       {headerExtra?.(rows, ctx)}
       {counts.length > 0 && (
-        <div className="flex flex-wrap gap-2" aria-label="Status summary">
-          {counts.map(([s, n]) => (
-            <button key={s} type="button" onClick={() => setStatus(s)} className="bg-transparent border-0 p-0 cursor-pointer">
-              <Badge tone={statusTone(s)} className="py-1.5 px-2">{s} · {n}</Badge>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+          {counts.map(([s, n]) => {
+            const on = pickedSet.has(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={on}
+                onClick={() => togglePicked(s)}
+                className={`bg-transparent border-0 p-0 cursor-pointer transition-opacity ${picked.length && !on ? 'opacity-45 hover:opacity-80' : ''}`}
+              >
+                <Badge tone={statusTone(s)} className={`py-2 px-2.5 sm:py-1.5 sm:px-2 ${on ? 'bg-surface-hi border-current outline outline-1 outline-current' : ''}`}>
+                  {on && <span aria-hidden="true" className="mr-1">✓</span>}{s} · {n}
+                </Badge>
+              </button>
+            );
+          })}
+          {picked.length > 0 && (
+            <button
+              type="button"
+              onClick={clearPicked}
+              className="bg-transparent border-0 px-1 py-2 sm:py-1 cursor-pointer font-mono text-[11px] uppercase tracking-[0.08em] text-muted hover:text-text underline underline-offset-2"
+            >
+              Clear selection
             </button>
-          ))}
+          )}
         </div>
       )}
 
