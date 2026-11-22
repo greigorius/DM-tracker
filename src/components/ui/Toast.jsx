@@ -24,7 +24,12 @@ export function ToastProvider({ children }) {
         {toasts.map(t => (
           <div key={t.id} className={cx('bg-surface-hi border border-line border-l-4 px-4 py-3 flex items-center gap-3 text-[14px]', t.tone === 'danger' ? 'border-l-danger' : 'border-l-ok')}>
             <span className={cx('flex-1 min-w-0', t.tone === 'danger' ? 'text-danger' : 'text-text')}>{t.message}</span>
-            {t.action && (
+            {t.action?.onClick && (
+              <button type="button" onClick={() => { t.action.onClick(); dismiss(t.id); }} className="bg-transparent border-0 p-0 font-mono text-[12px] uppercase tracking-[0.08em] text-accent min-h-11 inline-flex items-center cursor-pointer">
+                {t.action.label}
+              </button>
+            )}
+            {t.action?.href && (
               <a href={t.action.href} target="_blank" rel="noreferrer" className="font-mono text-[12px] uppercase tracking-[0.08em] text-accent no-underline min-h-11 inline-flex items-center">
                 {t.action.label}
               </a>

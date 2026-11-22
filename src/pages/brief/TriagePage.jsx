@@ -11,6 +11,8 @@ import { addDays, OPEN_RFI_STATUSES } from '../../../hub-core/derive.js';
 import { TeamFixes, useTeamIssues } from './TeamFixes.jsx';
 import { ctl, Sel, DateIn, Check, Mini, ItemPicker } from './controls.jsx';
 import { BicReview } from './BicReview.jsx';
+import { StatusReview } from './StatusReview.jsx';
+import { ItemPosition, PositionSummary } from './ItemPosition.jsx';
 import { FixCard } from './FixCard.jsx';
 import { Duplicates, useDuplicatePairs } from './Duplicates.jsx';
 import { duplicateIds } from '../../../hub-core/duplicates.js';
@@ -31,6 +33,7 @@ const TABS = [
   { id: 'fixes', label: 'Data fixes', kind: 'fixes' },
   { id: 'team', label: 'Team', kind: 'team' },
   { id: 'bic', label: 'Ball in court', kind: 'bic' },
+  { id: 'status', label: 'Item status', kind: 'status' },
 ];
 const DB_OF = { action: 'actions', item: 'tasks', rfi: 'rfis', var: 'variations' };
 // Cockpit count cards land here with ?filter=<key>
@@ -244,6 +247,12 @@ function Strip({ kind, row, d, drafts, lookups, onSaved, onTrash }) {
           )}
         </span>
       </div>
+      {kind === 'item' && (
+        <div className="mt-2 pt-3 border-t border-line">
+          <p className="m-0 mb-2 font-mono text-[11px] text-muted">What sets this item’s status. These fields save as soon as you change them.</p>
+          <ItemPosition itemId={row.id} d={d} lookups={lookups} />
+        </div>
+      )}
     </div>
   );
 }
@@ -276,6 +285,7 @@ function Row({ kind, row, d, open, onToggle, selected, onSelect, drafts, lookups
           <span className="min-w-0">
             <span className={cx('block text-[14px]', dirty && 'text-accent')}>{title || 'Untitled'}</span>
             <span className="block mt-0.5 font-mono text-[11px] text-muted break-words sm:truncate">{meta.filter(Boolean).join(' · ')}</span>
+            {kind === 'item' && <PositionSummary itemId={row.id} d={d} className="mt-1" />}
           </span>
         </button>
         {/* Phone: badges sit under the title (indented to it); wider screens: on the right */}
@@ -477,12 +487,12 @@ export default function TriagePage() {
   return (
     <div className="flex flex-col gap-4">
       <Tabs label="Triage lists" value={tab} onChange={id => go({ tab: id })} tabs={TABS.map(x => ({
-        id: x.id, label: x.kind === 'fixes' || x.kind === 'bic' ? x.label : x.kind === 'team' ? `${x.label}${teamErrors ? ` · ${teamErrors}` : ''}` : x.kind === 'dupes' ? `${x.label} · ${dupPairs.length}` : `${x.label} · ${(lists[x.id] || []).length}`,
+        id: x.id, label: x.kind === 'fixes' || x.kind === 'bic' || x.kind === 'status' ? x.label : x.kind === 'team' ? `${x.label}${teamErrors ? ` · ${teamErrors}` : ''}` : x.kind === 'dupes' ? `${x.label} · ${dupPairs.length}` : `${x.label} · ${(lists[x.id] || []).length}`,
       }))} />
 
       {undo && <UndoBar undo={undo} onClose={() => setUndo(null)} />}
 
-      {!['fixes', 'team', 'bic', 'dupes'].includes(tab) && (
+      {!['fixes', 'team', 'bic', 'status', 'dupes'].includes(tab) && (
         <div className="flex flex-wrap items-center gap-2">
           <SearchBox value={q} onChange={setQ} />
           {(kind === 'action' || kind === 'rfi') && ['all', 'overdue', 'week', 'latest'].map(k => (
@@ -498,7 +508,7 @@ export default function TriagePage() {
 
       {selectable && selectedRows.length > 0 && <BulkBar kind={kind} rows={selectedRows} d={d} lookups={lookups} onDone={() => setSel(new Set())} />}
 
-      {tab === 'dupes' ? <Duplicates d={d} /> : tab === 'fixes' ? <DataFixes d={d} /> : tab === 'team' ? <TeamFixes d={d} /> : tab === 'bic' ? <BicReview project={projectFilter || ''} /> : (
+      {tab === 'dupes' ? <Duplicates d={d} /> : tab === 'fixes' ? <DataFixes d={d} /> : tab === 'team' ? <TeamFixes d={d} /> : tab === 'bic' ? <BicReview project={projectFilter || ''} /> : tab === 'status' ? <StatusReview project={projectFilter || ''} d={d} /> : (
         <Card>
           {rows.length === 0 ? <p className="m-0 p-6 text-center text-[14px] text-muted">Nothing here.</p> : (
             <ul className="m-0 p-0 list-none">

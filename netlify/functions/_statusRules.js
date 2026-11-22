@@ -80,7 +80,14 @@ export function statusFromSubmission(s) {
   if (status === 'Rejected') return stage === 'PRD' ? 'Production Updates' : 'DT Review'
   if (status === 'Issued') return stage === 'PRD' ? 'In Production' : 'Client Review'
   if (status === 'Schedule') return 'Schedule'
-  if (status === 'Graded') return stage === 'A4.5' && grade === 'Approved' ? 'Schedule' : 'Approval Updates'
+  if (status === 'Graded') {
+    // A4.5 and PRD are signed off Approved/Rejected, as Drawing Flow writes at send-grade-emails:
+    // A4.5 Approved → Schedule (signed off; the Production tab decides what comes next),
+    // PRD Approved → In Production (factory / supplier signed the sketch off; no as-built),
+    // Rejected → DT Review for both.
+    if (stage === 'A4.5' || stage === 'PRD') return grade === 'Approved' ? (stage === 'PRD' ? 'In Production' : 'Schedule') : 'DT Review'
+    return 'Approval Updates'
+  }
   return null
 }
 
@@ -94,9 +101,17 @@ export function latestSubmission(subs) {
   return best ? best.s : null
 }
 
+// Drawing Flow's Production tab writes Production Stage on the drawing after sign-off.
+export const PRODUCTION_STAGE_STATUS = {
+  'Awaiting Supply Drawings': 'Schedule', 'To Be Scheduled': 'Schedule', 'Awaiting Install': 'Schedule',
+  'In Production': 'In Production', 'Awaiting As Built': 'As Built Updates', 'Complete': 'Complete',
+}
+
 /**
  * Drawing Status.
- * d: { current, submissions: [...], rfis: [...] } — rfis linked to this drawing.
+ * d: { current, submissions: [...], rfis: [...], productionStage } — rfis linked to this drawing.
+ * After sign-off, Production Stage (set on the Drawing Flow Production tab) decides the
+ * status, unless an as-built submission is in flight, which then speaks for the drawing.
  * Returns { status, reason, fromFlow, stage }.
  */
 export function drawingStatus(d, today) {
@@ -106,6 +121,9 @@ export function drawingStatus(d, today) {
 
   if (rfis.some((r) => rfiHolds(r, today))) return { status: 'On Hold', reason: 'Stop-work RFI open on this drawing', fromFlow: !!base, stage: latest?.stage ?? null, held: true }
   if (latest?.blocked) return { status: 'On Hold', reason: 'Blocked in Drawing Flow', fromFlow: true, stage: latest.stage, held: true }
+
+  const ps = PRODUCTION_STAGE_STATUS[d.productionStage]
+  if (ps && latest?.stage !== 'AB') return { status: ps, reason: `Production Stage: ${d.productionStage}`, fromFlow: true, stage: latest?.stage ?? null }
 
   if (!base) return { status: d.current || null, reason: 'No Drawing Flow history', fromFlow: false, stage: null }
 
@@ -140,7 +158,14 @@ export function itemStatus(item, drawings, held) {
   const ds = drawings || []
   const flow = ds.filter((d) => d.fromFlow).length
   const complete = ds.filter((d) => d.status === 'Complete').length
-  const prd = ds.some((d) => (d.stage === 'PRD' || d.stage === 'AB') && (d.status === 'In Production' || d.status === 'Complete'))
+  // Drawings with no status and no Drawing Flow history (sketch slots never issued) don't
+  // hold an item open: Design Complete needs every drawing that is in play to be Complete.
+  const inPlay = ds.filter((d) => d.status || d.fromFlow).length
+  // The works order is out once any drawing is in production or past it: a PRD issued or
+  // signed off, an as-built, or a Production Stage of In Production / Awaiting As Built / Complete.
+  const prd = ds.some((d) => ['In Production', 'As Built Updates'].includes(d.status)
+    || ((d.stage === 'PRD' || d.stage === 'AB') && d.status === 'Complete')
+    || ['In Production', 'Awaiting Install', 'Awaiting As Built', 'Complete'].includes(d.productionStage))
   const sched = ds.some((d) => !!d.schedProdActual)
   const woSignal = !!item.woRaised || prd || sched
   const evidence = flow > 0 || !!item.woRaised
@@ -151,7 +176,7 @@ export function itemStatus(item, drawings, held) {
     base = mapped === ITEM.TODO && item.dtStart
       ? { status: ITEM.PROGRESS, reason: 'DT has started' }
       : { status: mapped, reason: 'No Drawing Flow history: kept from current status' }
-  } else if (woSignal && ds.length > 0 && complete === ds.length) {
+  } else if (woSignal && inPlay > 0 && complete === inPlay) {
     base = { status: ITEM.COMPLETE, reason: 'Works order raised, all drawings complete' }
   } else if (woSignal) {
     base = { status: ITEM.PRODUCTION, reason: item.woRaised ? 'Works order raised' : 'Production issue or schedule date found' }

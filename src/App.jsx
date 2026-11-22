@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ROUTES, pages } from './routes.jsx';
 
-const { briefLayout: BriefLayout, dailyBrief: DailyBrief, triage: TriagePage } = pages;
+const { briefLayout: BriefLayout, dailyBrief: DailyBrief, brief: BriefPage, triage: TriagePage, inbox: InboxPage } = pages;
 import Cockpit from './pages/Cockpit.jsx';
 import { SkeletonRows } from './components/ui/index.js';
 
@@ -38,11 +38,15 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Cockpit />} />
-          <Route element={<BriefLayout title="Brief" subtitle="What’s next, upcoming and past due" />}>
-            <Route path="/brief" element={<DailyBrief />} />
+          <Route element={<BriefLayout title="Brief" subtitle="My day and the latest movements across the Hub" />}>
+            <Route path="/brief" element={<BriefPage />} />
+            <Route path="/brief/classic" element={<DailyBrief />} />
           </Route>
-          <Route element={<BriefLayout title="Triage" subtitle="Act on anything across the Hub" />}>
-            <Route path="/triage" element={<TriagePage />} />
+          <Route element={<BriefLayout title="Triage" subtitle="Records with no item: link or file each one" />}>
+            <Route path="/triage" element={<InboxPage />} />
+          </Route>
+          <Route element={<BriefLayout title="Triage lists" subtitle="The old tabbed lists, until the Item Tracker replaces them" />}>
+            <Route path="/triage/lists" element={<TriagePage />} />
           </Route>
           {ROUTES.map(([path, Page]) => <Route key={path} path={path} element={<Page />} />)}
 
@@ -53,11 +57,15 @@ export default function App() {
           <Route path="/project/:projectId" element={<ProjectRedirect />} />
           <Route path="/client/:clientId" element={<Navigate to="/programme" replace />} />
           <Route path="/scheduling" element={<Navigate to="/programme" replace />} />
-          <Route path="/trackers/task-schedule" element={<KeepQuery to="/trackers/tasks" />} />
-          <Route path="/tasks" element={<KeepQuery to="/trackers/tasks" />} />
-          <Route path="/team" element={<KeepQuery to="/trackers/team" />} />
+          <Route path="/trackers/task-schedule" element={<KeepQuery to="/workspace/team" />} />
+          <Route path="/tasks" element={<KeepQuery to="/workspace/team" />} />
+          <Route path="/team" element={<KeepQuery to="/workspace/team" />} />
           <Route path="/drawings" element={<KeepQuery to="/trackers/drawings" />} />
-          <Route path="/trackers" element={<Navigate to="/trackers/item-schedule" replace />} />
+          <Route path="/trackers" element={<Navigate to="/trackers/actions" replace />} />
+          <Route path="/workspace" element={<Navigate to="/workspace/items" replace />} />
+          <Route path="/trackers/item-schedule" element={<KeepQuery to="/workspace/items" />} />
+          <Route path="/trackers/team" element={<KeepQuery to="/workspace/team" />} />
+          <Route path="/trackers/tasks" element={<KeepQuery to="/workspace/team" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

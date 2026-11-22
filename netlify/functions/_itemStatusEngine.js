@@ -135,8 +135,9 @@ export async function computeStatuses(opts = {}) {
   for (const pg of drawingPages) {
     const p = pg.properties, id = cleanId(pg.id), item = rel(p, 'Item')[0]
     const current = sel(p, 'Drawing Status'), locked = !!p['Lock Status']?.checkbox
+    const productionStage = sel(p, 'Production Stage')
     const subs = subsByDrawing.get(id) || [], drfis = rfisByDrawing.get(id) || []
-    const r = drawingStatus({ current, submissions: subs, rfis: drfis }, today)
+    const r = drawingStatus({ current, submissions: subs, rfis: drfis, productionStage }, today)
     if (r.held && item) {
       const number = title(p, 'Drawing Number')
       const rfi = drfis.find((x) => rfiHolds(x, today))
@@ -150,7 +151,7 @@ export async function computeStatuses(opts = {}) {
     row.changed = !locked && !!row.proposed && row.proposed !== row.current
     drawingRows.push(row)
     if (!drawingsByItem.has(item)) drawingsByItem.set(item, [])
-    drawingsByItem.get(item).push({ status: row.proposed, fromFlow: row.fromFlow, stage: row.stage, schedProdActual: row.schedProdActual })
+    drawingsByItem.get(item).push({ status: row.proposed, fromFlow: row.fromFlow, stage: row.stage, schedProdActual: row.schedProdActual, productionStage })
   }
 
   const itemRows = items.map((i) => {

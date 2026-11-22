@@ -37,7 +37,11 @@ test('drawing status from the latest submission', () => {
   assert.equal(m('S5', 'Graded', 'QA Rejected'), 'DT Review')
   assert.equal(m('S4', 'Issued'), 'Client Review')
   assert.equal(m('S4', 'Graded', 'B'), 'Approval Updates')
-  assert.equal(m('A4.5', 'Graded', 'Rejected'), 'Approval Updates')
+  assert.equal(m('A4.5', 'Graded', 'Rejected'), 'DT Review')
+  assert.equal(m('A4.5', 'Graded', 'Approved'), 'Schedule')
+  assert.equal(m('PRD', 'Graded', 'Approved'), 'In Production')
+  assert.equal(m('PRD', 'Graded', 'Rejected'), 'DT Review')
+  assert.equal(m('AB', 'Complete', 'Approved'), 'Complete')
   assert.equal(m('A4.5', 'Schedule', 'Approved'), 'Schedule')
   assert.equal(m('PRD', 'Issued'), 'In Production')
   assert.equal(m('PRD', 'Rejected'), 'Production Updates')
@@ -93,4 +97,28 @@ test('legacy mapping', () => {
   assert.equal(legacyItemStatus('PC Approved'), ITEM.PROGRESS)
   assert.equal(legacyItemStatus('Set Up'), ITEM.TODO)
   assert.equal(legacyItemStatus(undefined), ITEM.TODO)
+})
+
+test('blank, never-issued drawings do not hold an item open', async () => {
+  const { itemStatus, ITEM } = await import('../netlify/functions/_statusRules.js')
+  const ds = [{ status: 'Complete', fromFlow: true, stage: 'AB' }, { status: null, fromFlow: false, stage: null }]
+  assert.equal(itemStatus({ current: 'In Production' }, ds, false).status, ITEM.COMPLETE)
+  assert.equal(itemStatus({ current: 'In Production' }, [...ds, { status: 'In Production', fromFlow: true, stage: 'PRD' }], false).status, ITEM.PRODUCTION)
+})
+
+test('Production Stage from the Drawing Flow Production tab sets the drawing and item', () => {
+  const signed = { stage: 'A4.5', status: 'Graded', grade: 'Approved', submitted: '2026-06-04' }
+  assert.equal(drawingStatus({ submissions: [signed] }, '2026-11-20').status, 'Schedule', 'signed off, not decided')
+  assert.equal(drawingStatus({ submissions: [signed], productionStage: 'To Be Scheduled' }, '2026-11-20').status, 'Schedule')
+  assert.equal(drawingStatus({ submissions: [signed], productionStage: 'In Production' }, '2026-11-20').status, 'In Production')
+  assert.equal(drawingStatus({ submissions: [signed], productionStage: 'Awaiting As Built' }, '2026-11-20').status, 'As Built Updates')
+  const ab = { stage: 'AB', status: 'Submitted', submitted: '2026-11-21' }
+  assert.equal(drawingStatus({ submissions: [signed, ab], productionStage: 'Awaiting As Built' }, '2026-11-22').status, 'As Built Updates', 'an as-built in flight speaks for the drawing')
+  assert.equal(drawingStatus({ submissions: [signed, { ...ab, status: 'Complete', grade: 'Approved' }], productionStage: 'Awaiting As Built' }, '2026-11-22').status, 'Complete', 'AB Approved closes it')
+  const dw = (productionStage, status) => ({ status, fromFlow: true, stage: 'A4.5', productionStage })
+  assert.equal(itemStatus({ current: 'In Progress' }, [dw(null, 'Schedule')], false).status, ITEM.PROGRESS, 'signed off but not scheduled')
+  assert.equal(itemStatus({ current: 'In Progress' }, [dw('In Production', 'In Production')], false).status, ITEM.PRODUCTION, 'scheduled or outsourced')
+  assert.equal(itemStatus({ current: 'In Progress' }, [dw('Awaiting As Built', 'As Built Updates')], false).status, ITEM.PRODUCTION, 'site-only / installed')
+  assert.equal(itemStatus({ current: 'In Progress' }, [dw('Complete', 'Complete')], false).status, ITEM.COMPLETE)
+  assert.equal(itemStatus({ current: 'In Progress' }, [dw('Awaiting Install', 'Schedule')], false).status, ITEM.PRODUCTION, 'install only: supplied by others')
 })

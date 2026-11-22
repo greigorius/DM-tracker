@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { inboxRecords, INBOX_DBS, FIELD_LABEL } from './items/inbox.js';
 import { ArrowRight } from 'lucide-react';
 import {
   AppHeader, SectionLabel, Card, Button, TypeTag, SkeletonRows,
@@ -12,7 +13,7 @@ import {
 } from '../components/ui/index.js';
 import {
   useBootstrap, useCreateAction, useCreateRfi, useCreateVariation, useUpdateItem,
-  prefetchSnapshots,
+  prefetchSnapshots, useSnapshots,
 } from '../hooks/hub.js';
 import { TOOLS, TOOL_SNAPSHOT, schedulingLink } from '../config/tools.js';
 import { preloadRoute } from '../routes.jsx';
@@ -266,11 +267,17 @@ function JustLogged({ boot, loading }) {
   const items = useMemo(() => new Map((boot?.lookups.items || []).map(i => [i.id, i.name])), [boot]);
   const rows = (boot?.justLogged || []).slice(0, 6);
   const logUrl = import.meta.env.VITE_URL_ACTIVITY_LOG;
+  // Logged rows still missing what they need to be filed point to the Inbox
+  const { data: snaps } = useSnapshots(INBOX_DBS);
+  const gaps = useMemo(() => new Map(inboxRecords(snaps).map(r => [r.row.id, r.missing])), [snaps]);
 
   return (
     <Card className="flex flex-col min-w-0" aria-labelledby="logged-label">
       <div className="px-4 pt-4">
-        <SectionLabel right={logUrl && <a href={logUrl} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-text-2 hover:text-accent no-underline">Activity log →</a>}>
+        <SectionLabel right={<span className="flex gap-3">
+          {gaps.size > 0 && <Link to="/triage" className="font-mono text-[12px] text-accent no-underline hover:underline">Inbox · {gaps.size} to file →</Link>}
+          {logUrl && <a href={logUrl} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-text-2 hover:text-accent no-underline">Activity log →</a>}
+        </span>}>
           <span id="logged-label">Just logged</span>
         </SectionLabel>
       </div>
@@ -288,6 +295,7 @@ function JustLogged({ boot, loading }) {
                 <div className="mt-1 font-mono text-[11px] text-muted truncate">
                   {[projects.get(e.projectId), items.get(e.itemId), e.source, e.pending ? 'saving…' : timeAgo(e.at)].filter(Boolean).join(' · ')}
                 </div>
+                {gaps.get(e.refId) && <Link to="/triage" className="mt-1 inline-block font-mono text-[11px] text-danger no-underline hover:underline">Needs {gaps.get(e.refId).map(k => FIELD_LABEL[k]).join(' · ')} → Inbox</Link>}
               </div>
             </li>
           ))}
@@ -341,7 +349,7 @@ export default function Cockpit() {
         <LaunchTiles boot={boot} />
         <nav aria-label="Legacy pages" className="font-mono text-[12px] text-muted flex flex-wrap items-center gap-x-5">
           <span>Also in the Hub:</span>
-          {[['/trackers/tasks', 'Tasks'], ['/trackers/item-schedule', 'Item schedule'], ['/trackers/finishes-schedule', 'Finishes'], ['/trackers/drawings', 'Drawing register'], ['/programme?tab=table', 'Programme']].map(([to, l]) => (
+          {[['/workspace/team', 'Team'], ['/workspace/items', 'Items'], ['/trackers/finishes-schedule', 'Finishes'], ['/trackers/drawings', 'Drawing register'], ['/programme?tab=table', 'Programme']].map(([to, l]) => (
             <Link key={to} to={to} onMouseEnter={() => preloadRoute(to)} className="text-text-2 hover:text-accent no-underline min-h-11 inline-flex items-center">{l}</Link>
           ))}
         </nav>

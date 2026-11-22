@@ -190,11 +190,13 @@ export const mappers = {
     bic: party(v(page, 'Ball in Court')),
     stopsWork: v(page, 'Stops Work'),
     itemIds: ids(page, 'Related Item(s)'),
+    drawingIds: ids(page, 'Drawing'),
     raised: day(v(page, 'Date Raised')),
     due: day(v(page, 'Response Due')),
     responded: day(v(page, 'Date Responded')),
     closed: day(v(page, 'Date Closed')),
     answered: !!v(page, 'Response'),
+    meetingIds: ids(page, 'Meeting'),
   }),
 
   variations: page => {
@@ -215,6 +217,7 @@ export const mappers = {
       decision: day(v(page, 'Decision Date')),
       addedDays: v(page, 'Added Days'),
       pauseOverride: v(page, 'Pause Override'),
+      meetingIds: ids(page, 'Meeting'),
     };
   },
 
@@ -250,6 +253,8 @@ export const mappers = {
     itemIds: ids(page, 'Item'),
     lockStatus: v(page, 'Lock Status'),
     noClientApproval: v(page, 'No Client Approval'),
+    // Set by the Drawing Flow Production tab after sign-off (read by the status rules)
+    productionStage: v(page, 'Production Stage'),
     // Actuals only. Planned dates come from the Tasks DB, where the Scheduling Tool writes them.
     s4: { submitted: day(v(page, 'S4 Submit Date (Actual)')), status: v(page, 'S4 Status'), statusDate: day(v(page, 'S4 Status Date')) },
     s5: { submitted: day(v(page, 'S5 Submit Date (Actual)')), status: v(page, 'S5 Status'), statusDate: day(v(page, 'S5 Status Date')) },
@@ -274,6 +279,17 @@ export const mappers = {
     received: day(v(page, 'Received')),
     log: v(page, 'Response Log'),
     taskIds: ids(page, 'Task'),
+    // Actions tracker (close-out) fields
+    companyIds: ids(page, 'Company'),
+    contact: v(page, 'Contact'),
+    chaseStatus: v(page, 'Chase Status'),
+    chaseBy: day(v(page, 'Chase By')),
+    nextAction: v(page, 'Next Action'),
+    closesWhen: v(page, 'Closes When'),
+    trade: v(page, 'Trade') || [],
+    closedOn: day(v(page, 'Closed On')),
+    forTaskIds: ids(page, 'For Task'), // chase action holding up a To Do
+    meetingIds: ids(page, 'Meeting'),
   }),
 
   todo: page => ({
@@ -293,6 +309,7 @@ export const mappers = {
     rfiIds: ids(page, 'Related RFI'),
     vcIds: ids(page, 'Related Variation'),
     actionIds: ids(page, 'From Action'),
+    waitingIds: ids(page, 'Waiting On'), // open chase actions holding this task up
   }),
 
   projects: page => ({
@@ -326,7 +343,16 @@ export const mappers = {
   meetings: page => ({
     ...base(page),
     title: v(page, 'Name'),
-    itemIds: ids(page, 'Items'),
+    itemIds: ids(page, 'Items'), // items discussed
+    date: day(v(page, 'Date')),
+    projectIds: ids(page, 'Project'),
+    type: v(page, 'Meeting Type'),
+    summary: v(page, 'Summary'),
+    status: v(page, 'Status'),
+    number: v(page, 'Meeting ID'),
+    actionIds: ids(page, 'Actions'),
+    rfiIds: ids(page, 'RFIs'),
+    vcIds: ids(page, 'Variations'),
   }),
 
   finishes: page => ({
@@ -354,6 +380,16 @@ export const mappers = {
     projectIds: ids(page, 'Project'),
     notes: v(page, 'Notes'),
     comments: v(page, 'Comments'),
+  }),
+
+  suppliers: page => ({
+    ...base(page),
+    title: v(page, 'Supplier Name'),
+    category: v(page, 'Category') || [],
+    contact: v(page, 'Contact Person'),
+    email: v(page, 'Email'),
+    phone: v(page, 'Phone'),
+    itemIds: ids(page, 'Items'),
   }),
 
   team: page => ({

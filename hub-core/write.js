@@ -88,28 +88,36 @@ async function create(db, properties) {
 
 // ── Note / Action → Actions & Info ───────────────────────────────────────────
 export async function createAction(body) {
-  const { itemId, type = 'Action', text: t, bic, due, blocks } = body || {};
+  const { itemId, type = 'Action', text: t, bic, due, blocks, companyId, personId, contact, trade, nextAction, closesWhen, chaseStatus, meetingId } = body || {};
   if (!t?.trim()) throw bad('Text is required');
   if (!['Action', 'Note'].includes(type)) throw bad('Type must be Action or Note');
   const isNote = type === 'Note';
   const props = {
     Note: { title: text(t.trim()) },
     Type: sel(type),
-    Items: rel([itemId]),
+    Items: rel(itemId ? [itemId] : []),
     Source: sel('Manual'),
     Received: date(londonToday()),
     'Blocks Item': { checkbox: !isNote && !!blocks },
+    ...(meetingId && { Meeting: rel([meetingId]), Source: sel('Meeting') }),
   };
   if (!isNote) {
     props['Ball in Court'] = sel(noHidden(bic || 'DM', 'Ball in Court'));
     if (due) props.Due = date(due);
+    if (companyId) props.Company = rel([companyId]);
+    if (personId) props.Person = rel([personId]);
+    if (contact) props.Contact = { rich_text: text(contact) };
+    if (trade?.length) props.Trade = { multi_select: trade.map(name => ({ name })) };
+    if (nextAction) props['Next Action'] = { rich_text: text(nextAction) };
+    if (closesWhen) props['Closes When'] = { rich_text: text(closesWhen) };
+    props['Chase Status'] = sel(chaseStatus || 'Open');
   }
   return create('actions', props);
 }
 
 // ── RFI ──────────────────────────────────────────────────────────────────────
 export async function createRfi(body) {
-  const { itemId, question, bic, due } = body || {};
+  const { itemId, question, bic, due, meetingId } = body || {};
   if (!question?.trim()) throw bad('Question is required');
   noHidden(bic, 'Ball in Court');
   let rows = await snapshotRows('rfis');
@@ -127,6 +135,7 @@ export async function createRfi(body) {
     'RFI Status': sel(toDm ? 'Raise' : 'Open'),
     'Date Raised': date(londonToday()),
     'Related Item(s)': rel([itemId]),
+    ...(meetingId && { Meeting: rel([meetingId]) }),
   };
   if (!toDm) props['TBC by'] = sel(bic);
   if (due) props['Response Due'] = date(due);
@@ -135,7 +144,7 @@ export async function createRfi(body) {
 
 // ── Variation (VC number comes from the Notion unique ID: VC-0001…) ─────────
 export async function createVariation(body) {
-  const { itemId, description, raisedBy } = body || {};
+  const { itemId, description, raisedBy, meetingId } = body || {};
   if (!description?.trim()) throw bad('Description is required');
   return create('variations', {
     'Variation Description': { title: text(description.trim()) },
@@ -143,6 +152,57 @@ export async function createVariation(body) {
     'Variation Status': sel('Awaiting Design Info'),
     'Change Request Date': date(londonToday()),
     Items: rel([itemId]),
+    ...(meetingId && { Meeting: rel([meetingId]) }),
+  });
+}
+
+// ── Meeting (Item Tracker spec §6) ────────────────────────────────────────────
+// POST /api/meetings { projectId, type, date? } → a Meetings page, Status In progress.
+export async function createMeeting(body = {}) {
+  const { projectId, type = 'Design team' } = body;
+  if (!projectId) throw bad('Project is required');
+  const project = (await snapshotRows('projects'))?.find(p => p.id === projectId);
+  const when = body.date || londonToday();
+  const [y, m, dd] = when.split('-');
+  const num = (project?.title || '').match(/^\s*([\w-]+?\d{3,4})\b/)?.[1] || project?.title || 'Project';
+  return create('meetings', {
+    Name: { title: text(`${num} · ${type} · ${dd}-${m}-${y.slice(2)}`) },
+    Date: date(when),
+    Project: rel([projectId]),
+    'Meeting Type': sel(type),
+    Status: sel('In progress'),
+  });
+}
+
+// ── Supplier (Suppliers DB) — Actions tracker company drop-downs ───────────
+// POST /api/suppliers { name, contact? } → new Supplier - Database page.
+// Refuses a name that already exists (case-insensitive) and returns that row instead.
+export async function createSupplier(body) {
+  const name = String(body?.name || '').trim();
+  if (!name) throw bad('Company name is required');
+  noHidden(name, 'company');
+  const existing = (await snapshotRows('suppliers') || []).find(s => !s.archived && (s.title || '').trim().toLowerCase() === name.toLowerCase());
+  if (existing) return { row: existing, existed: true };
+  const props = { 'Supplier Name': { title: text(name) } };
+  if (body?.contact) props['Contact Person'] = { rich_text: text(String(body.contact).trim()) };
+  return create('suppliers', props);
+}
+
+// ── Design Coordination item (Item Tracker spec §5.1) ──────────────────────
+// POST /api/items/coordination { projectId } → creates 000-{Project Number}-Design Coordination.
+// Refuses if the project already has an item named "Design Coordination".
+export async function createCoordinationItem(body) {
+  const { projectId } = body || {};
+  if (!projectId) throw bad('Project is required');
+  const project = (await snapshotRows('projects'))?.find(p => p.id === projectId);
+  if (!project) throw bad('Unknown project');
+  const num = (project.title || '').match(/^\s*(\d{2}-\d{3,4})/)?.[1];
+  if (!num) throw bad(`Can't find a project number at the start of "${project.title}"`);
+  const existing = (await snapshotRows('tasks') || []).filter(t => !t.archived && t.projectId === projectId && /design\s*co-?ordination/i.test(t.title || ''));
+  if (existing.length) throw bad(`${project.title} already has ${existing.map(t => t.title).join(', ')}`, 409);
+  return create('tasks', {
+    'Item Name': { title: text(`000-${num}-Design Coordination`) },
+    Projects: rel([projectId]),
   });
 }
 
@@ -177,10 +237,16 @@ const FIELD_MAP = {
     title: ['Note', 'title'], // description: a manual fix to a meeting / email transcription
     bic: ['Ball in Court', 'select'], dtId: ['Person', 'rel1'], due: ['Due', 'date'], itemIds: ['Items', 'rel'],
     done: ['Checked', 'check'], blocks: ['Blocks Item', 'check'],
+    type: ['Type', 'select'], // Note ↔ Action (Item Tracker)
+    // Actions tracker (close-out)
+    companyId: ['Company', 'rel1'], contact: ['Contact', 'text'], chaseStatus: ['Chase Status', 'select'], chaseBy: ['Chase By', 'date'],
+    nextAction: ['Next Action', 'text'], closesWhen: ['Closes When', 'text'], trade: ['Trade', 'multi'], received: ['Received', 'date'],
+    meetingIds: ['Meeting', 'rel'],
   },
   tasks: {
     status: ['Item Status', 'status'], bic: ['Ball In Court', 'select'], dtId: ['Person', 'rel1'],
     blocker: ['Blocker', 'multi'], blockerNote: ['Blocker Note', 'text'], lockStatus: ['Lock Status', 'check'],
+    woRaised: ['WO Raised', 'date'], // the In Production signal (not a Scheduling Tool date)
     // Inputs the Scheduling Tool reads (never its calculated dates):
     instruction: ['Date of Instruction', 'date'], holdDays: ['Hold Days', 'number'],
     s4StartAct: ['1st DT Start (Actual)', 'date'], s4DelAct: ['1st DT Delivery (Actual)', 'date'],
@@ -192,8 +258,8 @@ const FIELD_MAP = {
     responded: ['Date Responded', 'date'], due: ['Response Due', 'date'], itemIds: ['Related Item(s)', 'rel'],
   },
   variations: {
-    status: ['Variation Status', 'select'], decision: ['Decision Date', 'date'], addedDays: ['Added Days', 'number'],
-    pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'],
+    status: ['Variation Status', 'select'], requested: ['Change Request Date', 'date'], decision: ['Decision Date', 'date'], addedDays: ['Added Days', 'number'],
+    pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'], type: ['Variation Type', 'select'],
   },
   submissions: { dtId: ['DT', 'rel1'] },
   todo: {
@@ -201,7 +267,7 @@ const FIELD_MAP = {
     start: ['Start Date', 'date'], end: ['End Date (Manual)', 'date'], hours: ['Task Hours (Est)', 'number'],
     changeTask: ['Change Task', 'check'], vcIds: ['Related Variation', 'rel'], rfiIds: ['Related RFI', 'rel'],
   },
-  meetings: { itemIds: ['Items', 'rel'] },
+  meetings: { itemIds: ['Items', 'rel'], status: ['Status', 'select'], summary: ['Summary', 'text'], date: ['Date', 'date'], type: ['Meeting Type', 'select'] },
   team: { email: ['Email', 'email'], role: ['Role', 'select'], capacity: ['Weekly Capacity (hrs)', 'number'] },
 };
 // Until Task Done is deleted, a To Do Status write also ticks/unticks it so old
@@ -240,16 +306,24 @@ export async function updateRecord(db, id, body) {
     if (!spec) throw bad(`Field ${field} can't be edited on ${db}`);
     if (PARTY_FIELDS.has(field)) noHidden(value, field);
     if (spec[1] === 'title' && !String(value ?? '').trim()) throw bad('The description can\'t be empty');
+    if (db === 'actions' && field === 'type' && !['Action', 'Note'].includes(value)) throw bad('Type must be Action or Note');
     if (db === 'todo' && field === 'status' && value && !['Not Started', 'In Progress', 'Blocked', 'Done'].includes(value)) throw bad(`Unknown status ${value}`);
     if (db === 'team' && field === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) throw bad('That email address doesn’t look right');
     props[spec[0]] = toProp(spec[1], value);
   }
   if (db === 'todo' && 'status' in set && mirrorTaskDone()) props['Task Done'] = { checkbox: set.status === 'Done' };
   const prev = (await snapshotRows(db))?.find(r => r.id === id) || null;
-  if (db === 'actions' && (chase || 'due' in set)) {
-    const next = 'due' in set ? set.due : prev?.due;
-    const line = `${londonToday()} — ${chase ? `chased: ${chase}` : 'due moved'}${next ? ` (next ${next})` : ''}`;
-    props['Response Log'] = { rich_text: text(prev?.log ? `${line}\n${prev.log}` : line) };
+  if (db === 'actions' && 'done' in set) props['Closed On'] = date(set.done ? londonToday() : null);
+  if (db === 'actions') {
+    // Dated change log: chase notes, due moves and the tracker's chase fields
+    const lines = [];
+    if (chase) lines.push(`chased: ${chase}`);
+    if ('due' in set) lines.push(`due moved${set.due ? ` (next ${set.due})` : ' (cleared)'}`);
+    if ('bic' in set && set.bic !== prev?.bic) lines.push(`ball in court → ${set.bic || 'none'}`);
+    if ('chaseStatus' in set && set.chaseStatus !== prev?.chaseStatus) lines.push(`status → ${set.chaseStatus || 'none'}`);
+    if ('done' in set && !!set.done !== !!prev?.done) lines.push(set.done ? 'closed' : 'reopened');
+    if ('companyId' in set && set.companyId !== prev?.companyIds?.[0]) lines.push('company changed');
+    if (lines.length) props['Response Log'] = { rich_text: text([`${londonToday()} — ${lines.join('; ')}`, prev?.log].filter(Boolean).join('\n')) };
   }
   if (!Object.keys(props).length) throw bad('Nothing to update');
   const page = await updatePage(db, id, { properties: props });
@@ -257,7 +331,8 @@ export async function updateRecord(db, id, body) {
   const store = await patchSnapshot(db, row);
   const events = db === 'tasks' ? eventsForItemChange(prev, row, 'Triage') : [];
   await logEvents(store, events);
-  return { row, events };
+  const released = db === 'actions' && set.done === true && row.forTaskIds?.length ? await releaseTasks(row) : [];
+  return { row, events, released };
 }
 
 // POST /api/records/:db/:id/trash | /restore — Notion Trash keeps pages 30 days.
@@ -319,15 +394,86 @@ export async function actionToTask(id, body = {}) {
   const line = `${londonToday()} — moved to Tasks (${ref})`;
   const aPage = await updatePage('actions', id, { properties: {
     Checked: { checkbox: true },
+    'Closed On': date(londonToday()),
     Task: rel([task.id]),
     'Response Log': { rich_text: text(action.log ? `${line}\n${action.log}` : line) },
   } });
   const actionRow = mapPage('actions', aPage);
   const store = await patchSnapshot('actions', actionRow);
+  if (actionRow.forTaskIds?.length) await releaseTasks(actionRow);
 
   const event = eventForNewRow('todo', task, await itemsIndex(), 'Triage');
   if (event) await logEvents(store, [event]);
   return { row: task, action: actionRow, event };
+}
+
+// ── To Do task → action ──────────────────────────────────────────────────────
+// POST /api/todo/:id/to-action  { bic?, keep = true }
+// keep (default): the To Do stays (DT work and its hours estimate), set to
+//   Blocked, and a chase action is created linked to it (A&I "For Task" ↔
+//   To Do "Waiting On"). Closing the last open chase action puts the task back
+//   to Not Started (releaseTasks below).
+// keep = false: the To Do is replaced: the action is created from it and the
+//   To Do goes to Notion Trash (restorable for 30 days).
+export async function taskToAction(id, body = {}) {
+  const live = await withRetry(() => notion().pages.retrieve({ page_id: id })).catch(err => { if (isGone(err)) return null; throw err; });
+  if (!live || live.archived || live.in_trash) {
+    await dropFromSnapshot('todo', id);
+    throw bad('This task was archived or deleted in Notion, so it has been removed from the Hub.', 410);
+  }
+  const task = mapPage('todo', live);
+  if (!task.title) throw bad('The task has no description');
+  const keep = body.keep !== false;
+  const bic = noHidden(body.bic || 'DT', 'Ball in Court');
+  const ref = task.number != null ? `TD-${String(task.number).padStart(3, '0')}` : 'a To Do task';
+  const line = keep
+    ? `${londonToday()} — chase raised for ${ref} (task kept, set to Blocked)`
+    : `${londonToday()} — converted from ${ref}${task.hours ? ` (est ${task.hours} h)` : ''}${task.changeTask ? ', variation work' : ''}`;
+  const props = {
+    Note: { title: text(body.title?.trim() || task.title) },
+    Type: sel('Action'),
+    Source: sel('Manual'),
+    Items: rel(task.itemIds || []),
+    Received: date(keep ? londonToday() : task.start || londonToday()),
+    'Ball in Court': sel(bic),
+    'Chase Status': sel('Open'),
+    'Blocks Item': { checkbox: !keep && task.status === 'Blocked' },
+    From: { rich_text: text(ref) },
+    'Response Log': { rich_text: text(line) },
+  };
+  if (task.end) props.Due = date(task.end);
+  if (keep) props['For Task'] = rel([id]);
+  else if (task.personIds?.[0]) props.Person = rel([task.personIds[0]]);
+  const res = await create('actions', props);
+  if (!keep) {
+    await withRetry(() => notion().pages.update({ page_id: id, in_trash: true }));
+    await dropFromSnapshot('todo', id);
+    return { ...res, removed: id };
+  }
+  const tPage = await updatePage('todo', id, { properties: { Status: sel('Blocked'), ...(mirrorTaskDone() && { 'Task Done': { checkbox: false } }) } });
+  const taskRow = mapPage('todo', tPage);
+  await patchSnapshot('todo', taskRow);
+  return { ...res, task: taskRow };
+}
+
+// When a chase action closes: any To Do it was holding up goes back to
+// Not Started, unless it's no longer Blocked or another open chase still holds it.
+async function releaseTasks(action) {
+  const out = [];
+  for (const tid of action.forTaskIds || []) {
+    try {
+      const others = (await snapshotRows('actions') || []).filter(a => a.id !== action.id && !a.archived && !a.done && (a.forTaskIds || []).includes(tid));
+      if (others.length) continue;
+      const page = await withRetry(() => notion().pages.retrieve({ page_id: tid }));
+      const t = mapPage('todo', page);
+      if (t.status !== 'Blocked') continue;
+      const upd = await updatePage('todo', tid, { properties: { Status: sel('Not Started') } });
+      const row = mapPage('todo', upd);
+      await patchSnapshot('todo', row);
+      out.push(row);
+    } catch (err) { console.error('[hub] release task', tid, err.message); }
+  }
+  return out;
 }
 
 // ── Duplicate actions ────────────────────────────────────────────────────────

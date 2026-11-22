@@ -3,28 +3,29 @@ import { useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSnapshots } from '../../hooks/hub.js';
 import { teamIssues, teamErrorCount } from '../../../hub-core/team.js';
+import { inboxRecords, INBOX_DBS } from '../../pages/items/inbox.js';
 import { preloadRoute } from '../../routes.jsx';
 import { cx } from './primitives.jsx';
 
-// Top level: where you act (Triage), dates (Programme), registers (Trackers)
-// and reports. Sections with `tabs` show them as a second row.
+// Top level (workspace spec §2): log (Cockpit), file (Inbox), read (Brief),
+// work (Workspace), chase (Actions), dates (Programme), registers and reports. Sections with `tabs` show them as a second row.
 export const NAV = [
   { to: '/', label: 'Cockpit', end: true },
   {
-    to: '/triage', label: 'Triage', match: ['/triage', '/brief'],
-    tabs: [{ to: '/triage', label: 'Triage' }, { to: '/brief', label: 'Brief' }],
+    to: '/triage', label: 'Inbox', match: ['/triage'],
+    tabs: [{ to: '/triage', label: 'Inbox', end: true }, { to: '/triage/lists', label: 'Old lists' }],
   },
+  { to: '/brief', label: 'Brief', match: ['/brief'] },
+  { to: '/workspace/items', label: 'Workspace', match: ['/workspace'] },
+  { to: '/trackers/actions', label: 'Actions', match: ['/trackers/actions'] },
   { to: '/programme', label: 'Programme', match: ['/programme'] },
   {
-    to: '/trackers/item-schedule', label: 'Trackers', match: ['/trackers'],
+    to: '/trackers/drawings', label: 'Registers', match: ['/trackers'],
     tabs: [
-      { to: '/trackers/item-schedule', label: 'Items' },
       { to: '/trackers/drawings', label: 'Drawings' },
-      { to: '/trackers/tasks', label: 'Tasks' },
-      { to: '/trackers/team', label: 'Team' },
-      { to: '/trackers/finishes-schedule', label: 'Finishes' },
       { to: '/trackers/rfis', label: 'RFIs' },
       { to: '/trackers/variations', label: 'Variations' },
+      { to: '/trackers/finishes-schedule', label: 'Finishes' },
     ],
   },
   { to: '/reports', label: 'Reports', match: ['/reports'] },
@@ -50,8 +51,15 @@ const subCls = active => cx(
   active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text-2',
 );
 
+// Records with no item: what the Triage inbox still has to link or file
+function useInboxCount() {
+  const { data } = useSnapshots(INBOX_DBS);
+  return inboxRecords(data).length;
+}
+
 export function HubNav() {
   const teamErrors = useTeamErrorCount();
+  const inbox = useInboxCount();
   const { pathname } = useLocation();
   const section = NAV.find(n => inSection(n, pathname));
   // On a phone the rows scroll sideways: keep the current tab in view
@@ -66,6 +74,9 @@ export function HubNav() {
           <NavLink key={n.to} to={n.to} className={() => linkCls(n === section)} aria-current={n === section ? 'page' : undefined}
             onMouseEnter={() => preloadRoute(n.to)} onFocus={() => preloadRoute(n.to)}>
             {n.label}
+            {n.to === '/triage' && inbox > 0 && (
+              <span className="ml-1 px-1 border border-accent/50 text-accent font-mono text-[10px] leading-4 tabular-nums" title={`${inbox} records still to file`}>{inbox}</span>
+            )}
             {n.to === '/triage' && teamErrors > 0 && (
               <span className="ml-1 px-1 border border-danger/50 text-danger font-mono text-[10px] leading-4 tabular-nums" title={`${teamErrors} Team errors in Triage`}>{teamErrors}</span>
             )}
@@ -76,7 +87,7 @@ export function HubNav() {
         <div className="border-t border-line bg-bar">
           <div className="mx-auto max-w-[1440px] px-4 sm:px-6 flex items-stretch overflow-x-auto" role="navigation" aria-label={section.label}>
             {section.tabs.map(t => (
-              <NavLink key={t.to} to={t.to} className={({ isActive }) => subCls(isActive)} onMouseEnter={() => preloadRoute(t.to)} onFocus={() => preloadRoute(t.to)}>
+              <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => subCls(isActive)} onMouseEnter={() => preloadRoute(t.to)} onFocus={() => preloadRoute(t.to)}>
                 {t.label}
               </NavLink>
             ))}
