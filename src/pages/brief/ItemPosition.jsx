@@ -85,13 +85,14 @@ function VcLine({ v, holding, lookups, t }) {
     <li className={cx('flex flex-col gap-1 pl-3 border-l-2', holding ? 'border-danger' : 'border-line')}>
       <span className="text-[14px]">
         <Ext href={v.url}>{[v.code, v.title].filter(Boolean).join(' ') || 'Untitled variation'}</Ext>{' '}
-        {holding ? <Badge tone="danger">Holding</Badge> : <Badge tone={pauses ? 'accent' : 'muted'}>{pauses ? 'Pauses (not active)' : 'Logged only'}</Badge>}
+        {holding ? <Badge tone="danger">Holding</Badge> : <Badge tone={pauses ? 'accent' : 'muted'}>{pauses ? 'Pauses (not active)' : 'Logged only · doesn’t take the item’s ball in court'}</Badge>}
         <span className="font-mono text-[12px] text-muted">{[v.type || 'No type', v.bic && `BIC ${v.bic}`].filter(Boolean).map(x => ` · ${x}`).join('')}</span>
       </span>
       <span className="flex flex-wrap items-center gap-2">
         <Sel label="Variation status" value={v.status} onChange={x => save(v.id, { status: x || null })} blank="No status" options={lookups.vcStatuses || []} />
         <Sel label="Pause override" value={v.pauseOverride} onChange={x => save(v.id, { pauseOverride: x || null })}
           blank={v.type ? `By type: ${byType ? 'pauses' : 'doesn’t pause'}` : 'By type (no type)'} options={lookups.vcPause || ['Pauses', 'Does not pause']} />
+        <Lbl>Sits with</Lbl><Sel label="Variation sits with (TBC by)" value={(v.tbcBy || [])[0] || ''} onChange={x => save(v.id, { tbcBy: x ? [x] : [] })} blank="Sits with…" options={lookups.vcTbcBy || []} />
         <Lbl>Requested</Lbl><DateIn label="Change request date" value={v.requested} onChange={x => save(v.id, { requested: x || null })} />
         <Lbl>Decided</Lbl><DateIn label="Decision date" value={v.decision} onChange={x => save(v.id, { decision: x || null })} />
         {!v.decision && <Mini onClick={() => save(v.id, { decision: t })}>Today</Mini>}

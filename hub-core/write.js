@@ -259,7 +259,7 @@ const FIELD_MAP = {
   },
   variations: {
     status: ['Variation Status', 'select'], requested: ['Change Request Date', 'date'], decision: ['Decision Date', 'date'], addedDays: ['Added Days', 'number'],
-    pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'], type: ['Variation Type', 'select'],
+    pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'], type: ['Variation Type', 'select'], tbcBy: ['TBC by', 'multi'],
   },
   submissions: { dtId: ['DT', 'rel1'] },
   todo: {
@@ -273,7 +273,7 @@ const FIELD_MAP = {
 // Until Task Done is deleted, a To Do Status write also ticks/unticks it so old
 // Notion views stay right. Set TODO_MIRROR_TASK_DONE=off once it's gone.
 const mirrorTaskDone = () => process.env.TODO_MIRROR_TASK_DONE !== 'off';
-const PARTY_FIELDS = new Set(['bic', 'tbcBy', 'raisedBy']);
+const PARTY_FIELDS = new Set(['bic', 'raisedBy']);
 
 function toProp(kind, value) {
   switch (kind) {
@@ -305,6 +305,7 @@ export async function updateRecord(db, id, body) {
     const spec = map[field];
     if (!spec) throw bad(`Field ${field} can't be edited on ${db}`);
     if (PARTY_FIELDS.has(field)) noHidden(value, field);
+    if (field === 'tbcBy') (Array.isArray(value) ? value : [value]).forEach(x => noHidden(x, field));
     if (spec[1] === 'title' && !String(value ?? '').trim()) throw bad('The description can\'t be empty');
     if (db === 'actions' && field === 'type' && !['Action', 'Note'].includes(value)) throw bad('Type must be Action or Note');
     if (db === 'todo' && field === 'status' && value && !['Not Started', 'In Progress', 'Blocked', 'Done'].includes(value)) throw bad(`Unknown status ${value}`);

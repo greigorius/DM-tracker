@@ -8,7 +8,8 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { Card, Badge, SkeletonRows, cx } from '../../components/ui/index.js';
 import { SearchBox } from '../../components/ui/table.jsx';
 import { useSnapshots, useBootstrap } from '../../hooks/hub.js';
-import { addDays, isOpenRfi } from '../../../hub-core/derive.js';
+import { addDays, isOpenRfi, isOpenAction, DONE_ITEM_STATUSES } from '../../../hub-core/derive.js';
+import { rfiHolds, variationHolds } from '../../../netlify/functions/_statusRules.js';
 import { fmtDay, useStored, latestSubmissions } from './shared.jsx';
 
 const VIEWS = [{ id: 'day', label: 'My day' }, { id: 'moves', label: 'Latest movements' }];
@@ -54,7 +55,27 @@ function useBriefModel(d, todo, events, project) {
       rfis: d.rfis.filter(r => isOpenRfi(r) && ((r.due && r.due < t) || r.status === 'Raise'))
         .map(r => ({ ...r, ...base(r, r.itemIds, [r.tbcBy]), who: r.tbcBy || 'not issued', when: r.due || r.raised })),
     };
-    for (const k of Object.keys(day)) day[k].sort((a, b) => String(a.when || '9').localeCompare(String(b.when || '9')));
+    // Blocked items: status Blocked or a Blocker set, or held by a blocking
+    // action, a stop-work RFI or a variation that pauses the item
+    const why = new Map();
+    const add = (id, r) => { if (!id) return; if (!why.has(id)) why.set(id, []); why.get(id).push(r); };
+    for (const i of d.items) {
+      if (DONE_ITEM_STATUSES.has(i.status)) continue;
+      if (i.status === 'Blocked') add(i.id, { kind: 'Status', text: i.blockerNote || 'Item status Blocked' });
+      for (const b of i.blocker || []) add(i.id, { kind: 'Blocker', text: b });
+    }
+    for (const a of d.actions) if (isOpenAction(a) && a.blocks) for (const id of a.itemIds || []) add(id, { kind: 'Action', text: a.title, who: [a.bic, who(a)].filter(Boolean).join(' · '), url: a.url });
+    for (const r of d.rfis) if (rfiHolds({ stopsWork: r.stopsWork, status: r.status, raised: r.raised, created: (r.createdAt || '').slice(0, 10), responded: r.responded, closed: r.closed }, t))
+      for (const id of r.itemIds || []) add(id, { kind: 'RFI', text: `RFI-${String(r.number ?? '?').padStart(3, '0')} ${r.title || ''}`, who: r.tbcBy, url: r.url });
+    for (const v of d.variations) if (variationHolds({ type: v.type, override: v.pauseOverride, status: v.status, requestDate: v.requested, decisionDate: v.decision }, t))
+      for (const id of v.itemIds || []) add(id, { kind: 'Variation', text: `${v.code || 'VC'} ${v.title || ''}`, who: v.bic, url: v.url });
+    day.blocked = [...why].map(([id, reasons]) => {
+      const it = items.get(id);
+      if (!it || it.archived || DONE_ITEM_STATUSES.has(it.status) || (project && it.projectId !== project)) return null;
+      return { id, url: it.url, title: it.title, status: it.status, bic: it.bic, reasons, when: '', ...base({ title: it.title }, [id], reasons.map(x => `${x.text} ${x.who || ''}`)) };
+    }).filter(Boolean).sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
+
+    for (const k of Object.keys(day)) if (k !== 'blocked') day[k].sort((a, b) => String(a.when || '9').localeCompare(String(b.when || '9')));
 
     // ── Latest movements ──
     const mv = [];
@@ -152,12 +173,37 @@ export default function BriefPage() {
       {view === 'day' ? (
         <>
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[13px] text-muted">
+            <span><b className="text-[20px] text-danger mr-1 tabular-nums">{g.blocked.length}</b>items blocked</span>
             <span><b className="text-[20px] text-danger mr-1 tabular-nums">{g.overdue.length}</b>overdue with me</span>
             <span><b className="text-[20px] text-accent mr-1 tabular-nums">{g.dueSoon.length}</b>due in 2 days</span>
             <span><b className="text-[20px] text-info mr-1 tabular-nums">{g.reviews.length}</b>drawings to review</span>
             <span><b className="text-[20px] text-text mr-1 tabular-nums">{g.chases.length}</b>to chase</span>
             <span><b className="text-[20px] text-ok mr-1 tabular-nums">{g.tasks.length}</b>DT tasks due / blocked</span>
           </div>
+          <Card className="p-0 overflow-hidden">
+            <h2 className={cx('m-0 flex items-baseline justify-between px-4 py-3 border-b border-line font-mono text-[12px] font-medium uppercase tracking-[0.12em]', g.blocked.length ? 'text-danger' : 'text-muted')}>
+              Blocked items and what's blocking them<span className="text-muted">{g.blocked.length}</span>
+            </h2>
+            {g.blocked.length ? (
+              <ul className="m-0 p-0 list-none max-h-[420px] overflow-y-auto">
+                {g.blocked.map(r => (
+                  <li key={r.id} className="grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-2 border-b border-line last:border-b-0">
+                    <span className="flex flex-col min-w-0">
+                      {itemLink(r.itemId, r.title)}
+                      <span className="font-mono text-[11px] text-muted truncate">{[r.project, r.status, r.bic && `BIC ${r.bic}`].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    <span className="flex flex-col gap-0.5 min-w-0">
+                      {r.reasons.map((x, i) => (
+                        <span key={i} className="text-[13px] truncate"><Badge tone={x.kind === 'Status' || x.kind === 'Blocker' ? 'muted' : 'danger'}>{x.kind}</Badge>{' '}
+                          {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline">{x.text}</a> : <span className="text-text-2">{x.text}</span>}
+                          {x.who && <span className="font-mono text-[11px] text-muted"> · {x.who}</span>}</span>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="m-0 px-4 py-3 text-[13px] text-muted">Nothing blocked.</p>}
+          </Card>
           <div className="grid gap-4 lg:grid-cols-2">
             <Group title="Overdue with me" tone="text-danger" rows={g.overdue} empty="Nothing overdue." render={r => <Line r={r} right={<When date={r.due} today={t} />} />} />
             <Group title="Due in the next 2 days" tone="text-accent" rows={g.dueSoon} empty="Nothing due." render={r => <Line r={r} right={<When date={r.due} today={t} />} />} />
