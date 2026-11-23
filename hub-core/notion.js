@@ -69,6 +69,7 @@ export async function retrieveSchemaOptions() {
     vcRaisedBy: await opts('variations', 'Raised By'),
     vcStatuses: await opts('variations', 'Variation Status'),
     vcPause: await opts('variations', 'Pause Override'),
+    vcTbcBy: await opts('variations', 'TBC by'),
     fetchedAt: new Date().toISOString(),
   };
 }

@@ -136,6 +136,7 @@ export function buildLookups(s, schema = {}) {
     rfiStatuses: cleanOptions(schema.rfiStatuses).length ? cleanOptions(schema.rfiStatuses) : ['Raise', 'Open', 'Close Out', 'Closed'],
     vcStatuses: cleanOptions(schema.vcStatuses).length ? cleanOptions(schema.vcStatuses) : ['Awaiting Design Info', 'Awaiting Instruction', 'Instruction Received', 'Declined', 'Withdrawn'],
     vcPause: cleanOptions(schema.vcPause),
+    vcTbcBy: cleanOptions(schema.vcTbcBy).length ? cleanOptions(schema.vcTbcBy) : ['Client', 'Architect', 'Contractor', 'Consultant', 'Project Team', 'Supplier'],
     nextVc: Math.max(0, ...(s.variations || []).map(v => v.number || 0)) + 1,
     nextRfi: Math.max(0, ...(s.rfis || []).map(r => r.number || 0)) + 1,
   };

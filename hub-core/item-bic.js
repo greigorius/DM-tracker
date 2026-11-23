@@ -4,7 +4,10 @@
 // Priority, first match wins:
 //   1. Lock Status ticked            → leave alone (manual override)
 //   2. Item closed                   → clear
-//   3. Open variation                → the variation's BIC (an open VC blocks the item)
+//   3. Open variation that pauses    → the variation's BIC. A variation that
+//                                      doesn't pause (Pause Override "Does not pause",
+//                                      or a type that doesn't pause) is only logged:
+//                                      it doesn't take the item's ball in court
 //   4. Open stop-work RFI            → the RFI's BIC / TBC by
 //   5. Open action with Blocks Item  → the action's BIC
 //   6. Drawings                      → holder of each drawing's latest submission;
@@ -17,6 +20,8 @@ import { DONE_ITEM_STATUSES, OPEN_RFI_STATUSES } from './derive.js';
 export const MIXED = 'Mixed';
 // Only explicit open statuses count: a variation with no status is a data fix, not a blocker.
 const OPEN_VC = new Set(['Awaiting Design Info', 'Awaiting Instruction']);
+const PAUSE_TYPES = new Set(['Design Change', 'Scope Change']); // same as _statusRules
+export const vcPauses = v => v.pauseOverride === 'Pauses' || (!v.pauseOverride && PAUSE_TYPES.has(v.type));
 // Submissions that no longer sit with anyone.
 const TERMINAL_SUB = new Set(['Complete']);
 
@@ -35,7 +40,7 @@ export function bicContext({ submissions = [], variations = [], rfis = [], actio
   }
   const subs = new Map(), vcs = new Map(), rfiStop = new Map(), blockers = new Map();
   for (const s of latest.values()) if (!TERMINAL_SUB.has(s.status)) for (const i of s.itemIds || []) push(subs, i, s);
-  for (const v of variations) if (!v.archived && OPEN_VC.has(v.status)) for (const i of v.itemIds || []) push(vcs, i, v);
+  for (const v of variations) if (!v.archived && OPEN_VC.has(v.status) && vcPauses(v)) for (const i of v.itemIds || []) push(vcs, i, v);
   for (const r of rfis) if (!r.archived && r.stopsWork && OPEN_RFI_STATUSES.has(r.status)) for (const i of r.itemIds || []) push(rfiStop, i, r);
   for (const a of actions) if (!a.archived && !a.done && a.blocks && a.type !== 'Note') for (const i of a.itemIds || []) push(blockers, i, a);
   return { subs, vcs, rfiStop, blockers };
@@ -50,7 +55,7 @@ export function deriveItemBic(item, ctx) {
   if (item.lockStatus) return { skip: 'Lock Status ticked' };
   if (DONE_ITEM_STATUSES.has(item.status)) return { bic: null, reason: `Item ${item.status}`, source: 'status' };
 
-  const vc = one(holders((ctx.vcs.get(item.id) || []).map(v => v.bic)), 'Open variation', 'variation');
+  const vc = one(holders((ctx.vcs.get(item.id) || []).map(v => v.bic)), 'Open variation (pauses)', 'variation');
   if (vc) return vc;
   const rfi = one(holders((ctx.rfiStop.get(item.id) || []).map(r => r.bic || r.tbcBy)), 'Stop-work RFI', 'rfi');
   if (rfi) return rfi;

@@ -9,9 +9,14 @@ const d = (it, snaps = {}) => deriveItemBic(it, bicContext(snaps));
 test('lock status leaves it alone', () => assert.ok(d(item({ lockStatus: true })).skip));
 test('closed items are cleared', () => assert.equal(d(item({ status: 'Design Complete', bic: 'DT' })).bic, null));
 
-test('open variation beats drawings', () => {
-  const r = d(item(), { variations: [{ id: 'v', itemIds: ['i1'], status: 'Awaiting Instruction', bic: 'Project Team' }], submissions: [sub('s', 'd1', 'DT')] });
+test('open variation that pauses beats drawings', () => {
+  const r = d(item(), { variations: [{ id: 'v', itemIds: ['i1'], status: 'Awaiting Instruction', type: 'Design Change', bic: 'Project Team' }], submissions: [sub('s', 'd1', 'DT')] });
   assert.deepEqual([r.bic, r.source], ['Project Team', 'variation']);
+});
+test('open variation that does not pause is only logged: drawings decide', () => {
+  const logged = { id: 'v', itemIds: ['i1'], status: 'Awaiting Instruction', type: 'Scope Change', pauseOverride: 'Does not pause', bic: 'Project Team' };
+  assert.equal(d(item(), { variations: [logged], submissions: [sub('s', 'd1', 'DT')] }).bic, 'DT');
+  assert.equal(d(item(), { variations: [{ ...logged, type: 'Altered for Buildability', pauseOverride: null }], submissions: [sub('s', 'd1', 'DT')] }).bic, 'DT');
 });
 test('variation with no status is ignored', () => {
   assert.equal(d(item(), { variations: [{ id: 'v', itemIds: ['i1'], status: null, bic: 'Client' }], submissions: [sub('s', 'd1', 'DT')] }).bic, 'DT');

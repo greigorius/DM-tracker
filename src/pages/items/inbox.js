@@ -1,6 +1,7 @@
 // Triage inbox (workspace spec §3): every open record that isn't fully filed.
 // A record leaves the inbox once it has everything it needs:
-//   Action    item · ball in court · responsible (to match BIC) · due
+//   Action    item · ball in court · due · responsible where BIC needs one
+//             (a person for DT/DM/DC, a company for Supplier)
 //   Note      item
 //   To-do     item · person · end date · est hours
 //   RFI       item · TBC by · response due
@@ -18,7 +19,7 @@ export function missingOf(db, kind, r) {
   if (!has(r.itemIds)) m.push('item');
   if (db === 'actions' && kind === 'Action') {
     if (!r.bic) m.push('bic');
-    else {
+    else if (partyFor(r.bic).required) {
       const p = partyFor(r.bic);
       const ok = p.kind === 'person' ? has(r.personIds) : p.kind === 'company' ? has(r.companyIds) : has(r.contact);
       if (!ok) m.push('responsible');
