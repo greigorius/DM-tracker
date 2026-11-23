@@ -55,25 +55,61 @@ function useBriefModel(d, todo, events, project) {
       rfis: d.rfis.filter(r => isOpenRfi(r) && ((r.due && r.due < t) || r.status === 'Raise'))
         .map(r => ({ ...r, ...base(r, r.itemIds, [r.tbcBy]), who: r.tbcBy || 'not issued', when: r.due || r.raised })),
     };
-    // Blocked items: status Blocked or a Blocker set, or held by a blocking
-    // action, a stop-work RFI or a variation that pauses the item
-    const why = new Map();
-    const add = (id, r) => { if (!id) return; if (!why.has(id)) why.set(id, []); why.get(id).push(r); };
-    for (const i of d.items) {
-      if (DONE_ITEM_STATUSES.has(i.status)) continue;
-      if (i.status === 'Blocked') add(i.id, { kind: 'Status', text: i.blockerNote || 'Item status Blocked' });
-      for (const b of i.blocker || []) add(i.id, { kind: 'Blocker', text: b });
+    // Blocked items (spec §4): every open item that is Blocked, has a Blocker
+    // tag, or is held by a blocking action, a stop-work RFI, a pausing
+    // variation or a blocked DT task. Each reason is resolved to the actual
+    // records behind it (RFI no., VC no., action, task, supplier), grouped
+    // under the tag that names it.
+    const late = () => ''; // lateness shows as its own red flag
+    const rfiRef = r => `RFI-${String(r.number ?? '?').padStart(3, '0')}`;
+    const tdRef = x => (x.number != null ? `TD-${String(x.number).padStart(3, '0')}` : 'Task');
+    const recA = a => ({ id: a.id, kind: 'Action', ref: a.blocks ? 'Blocks' : 'Action', text: a.title || '(no text)', url: a.url,
+      who: [a.bic, who(a), a.contact && sup.get(a.companyIds?.[0]) ? a.contact : null].filter(Boolean).join(' · '), when: a.due && `due ${fmtDay(a.due)}${late(a.due)}`, late: !!(a.due && a.due < t) });
+    const recR = r => ({ id: r.id, kind: 'RFI', ref: rfiRef(r), text: r.title || '', url: r.url, who: [r.status, r.tbcBy && `TBC ${r.tbcBy}`].filter(Boolean).join(' · '),
+      when: r.due ? `due ${fmtDay(r.due)}${late(r.due)}` : 'no response date', late: !!(r.due && r.due < t), stop: r.stopsWork });
+    const recV = v => ({ id: v.id, kind: 'Variation', ref: v.code || 'VC', text: v.title || '', url: v.url,
+      who: [v.status, v.bic && `with ${v.bic}`, v.type].filter(Boolean).join(' · '), when: v.requested && `raised ${fmtDay(v.requested)}` });
+    const recT = x => ({ id: x.id, kind: 'Task', ref: tdRef(x), text: x.title || '', url: x.url, who: [x.status, d.personName(x.personIds?.[0])].filter(Boolean).join(' · '),
+      when: x.end && `end ${fmtDay(x.end)}${late(x.end)}`, late: !!(x.end && x.end < t) });
+    const on = (rows, id) => rows.filter(r => (r.itemIds || []).includes(id));
+    const openVcs = d.variations.filter(v => !v.archived && ['Awaiting Design Info', 'Awaiting Instruction'].includes(v.status));
+    const openRfis = d.rfis.filter(isOpenRfi);
+    const openActs = d.actions.filter(isOpenAction);
+    const openTodos = todo.filter(x => !x.archived && !x.done);
+    const holdsR = r => rfiHolds({ stopsWork: r.stopsWork, status: r.status, raised: r.raised, created: (r.createdAt || '').slice(0, 10), responded: r.responded, closed: r.closed }, t);
+    const holdsV = v => variationHolds({ type: v.type, override: v.pauseOverride, status: v.status, requestDate: v.requested, decisionDate: v.decision }, t);
+    // Which records a Blocker tag points at
+    const forTag = (tag, id) => {
+      const x = tag.toLowerCase();
+      if (/instruction/.test(x)) return on(openVcs, id).filter(v => v.status === 'Awaiting Instruction').map(recV);
+      if (/design info/.test(x)) return [...on(openVcs, id).filter(v => v.status === 'Awaiting Design Info').map(recV), ...on(openActs, id).filter(a => a.bic && a.bic !== 'DM' && a.bic !== 'DT').map(recA)];
+      if (/rfi/.test(x)) return on(openRfis, id).map(recR);
+      if (/supplier/.test(x)) return [...on(openActs, id).filter(a => a.bic === 'Supplier').map(recA), ...on(openRfis, id).filter(r => /supplier/i.test(r.tbcBy || '')).map(recR)];
+      const party = ['client', 'architect', 'consultant', 'contractor', 'site', 'production'].find(p => x.includes(p));
+      if (party) return [...on(openActs, id).filter(a => (a.bic || '').toLowerCase() === party).map(recA), ...on(openRfis, id).filter(r => (r.tbcBy || '').toLowerCase().includes(party)).map(recR)];
+      if (/dt|drawing|task/.test(x)) return on(openTodos, id).map(recT);
+      return on(openActs, id).filter(a => a.bic && a.bic !== 'DM').map(recA);
+    };
+    const blocked = [];
+    for (const it of d.items) {
+      if (it.archived || DONE_ITEM_STATUSES.has(it.status) || (project && it.projectId !== project)) continue;
+      const groups = [];
+      const used = new Set();
+      const take = recs => recs.filter(r => !used.has(r.id) && used.add(r.id));
+      for (const tag of it.blocker || []) groups.push({ label: tag, tag: true, recs: take(forTag(tag, it.id)) });
+      const direct = [
+        ...on(openActs, it.id).filter(a => a.blocks).map(recA),
+        ...on(openRfis, it.id).filter(holdsR).map(r => ({ ...recR(r), ref: `${rfiRef(r)} stop work` })),
+        ...on(d.variations, it.id).filter(holdsV).map(v => ({ ...recV(v), ref: `${v.code || 'VC'} pauses` })),
+        ...on(openTodos, it.id).filter(x => x.status === 'Blocked').map(recT),
+      ];
+      const rest = take(direct);
+      if (rest.length) groups.push({ label: it.blocker?.length ? 'Also holding it' : 'Holding it', recs: rest });
+      if (!groups.length && it.status !== 'Blocked') continue;
+      blocked.push({ id: it.id, url: it.url, title: it.title, status: it.status, bic: it.bic, note: it.blockerNote, groups, when: '',
+        ...base({ title: it.title }, [it.id], groups.flatMap(g => [g.label, ...g.recs.map(r => `${r.ref} ${r.text} ${r.who}`)])) });
     }
-    for (const a of d.actions) if (isOpenAction(a) && a.blocks) for (const id of a.itemIds || []) add(id, { kind: 'Action', text: a.title, who: [a.bic, who(a)].filter(Boolean).join(' · '), url: a.url });
-    for (const r of d.rfis) if (rfiHolds({ stopsWork: r.stopsWork, status: r.status, raised: r.raised, created: (r.createdAt || '').slice(0, 10), responded: r.responded, closed: r.closed }, t))
-      for (const id of r.itemIds || []) add(id, { kind: 'RFI', text: `RFI-${String(r.number ?? '?').padStart(3, '0')} ${r.title || ''}`, who: r.tbcBy, url: r.url });
-    for (const v of d.variations) if (variationHolds({ type: v.type, override: v.pauseOverride, status: v.status, requestDate: v.requested, decisionDate: v.decision }, t))
-      for (const id of v.itemIds || []) add(id, { kind: 'Variation', text: `${v.code || 'VC'} ${v.title || ''}`, who: v.bic, url: v.url });
-    day.blocked = [...why].map(([id, reasons]) => {
-      const it = items.get(id);
-      if (!it || it.archived || DONE_ITEM_STATUSES.has(it.status) || (project && it.projectId !== project)) return null;
-      return { id, url: it.url, title: it.title, status: it.status, bic: it.bic, reasons, when: '', ...base({ title: it.title }, [id], reasons.map(x => `${x.text} ${x.who || ''}`)) };
-    }).filter(Boolean).sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
+    day.blocked = blocked.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
 
     for (const k of Object.keys(day)) if (k !== 'blocked') day[k].sort((a, b) => String(a.when || '9').localeCompare(String(b.when || '9')));
 
@@ -187,16 +223,28 @@ export default function BriefPage() {
             {g.blocked.length ? (
               <ul className="m-0 p-0 list-none max-h-[420px] overflow-y-auto">
                 {g.blocked.map(r => (
-                  <li key={r.id} className="grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-2 border-b border-line last:border-b-0">
-                    <span className="flex flex-col min-w-0">
-                      {itemLink(r.itemId, r.title)}
-                      <span className="font-mono text-[11px] text-muted truncate">{[r.project, r.status, r.bic && `BIC ${r.bic}`].filter(Boolean).join(' · ')}</span>
-                    </span>
+                  <li key={r.id} className="grid lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] gap-x-6 gap-y-2 px-4 py-3 border-b border-line last:border-b-0">
                     <span className="flex flex-col gap-0.5 min-w-0">
-                      {r.reasons.map((x, i) => (
-                        <span key={i} className="text-[13px] truncate"><Badge tone={x.kind === 'Status' || x.kind === 'Blocker' ? 'muted' : 'danger'}>{x.kind}</Badge>{' '}
-                          {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline">{x.text}</a> : <span className="text-text-2">{x.text}</span>}
-                          {x.who && <span className="font-mono text-[11px] text-muted"> · {x.who}</span>}</span>
+                      {itemLink(r.itemId, r.title)}
+                      <span className="font-mono text-[11px] text-muted">{[r.project, r.status, r.bic && `BIC ${r.bic}`].filter(Boolean).join(' · ')}</span>
+                      {r.note && <span className="text-[12px] text-text-2">{r.note}</span>}
+                    </span>
+                    <span className="flex flex-col gap-1.5 min-w-0">
+                      {!r.groups.length && <span className="text-[13px] text-muted">Status Blocked, with no Blocker tag or linked record: add what it's waiting on.</span>}
+                      {r.groups.map(gr => (
+                        <span key={gr.label} className="flex flex-col gap-0.5">
+                          <span className={cx('font-mono text-[11px] uppercase tracking-[0.08em]', gr.tag ? 'text-text-2' : 'text-danger')}>{gr.label}</span>
+                          {gr.recs.length ? gr.recs.map(x => (
+                            <span key={x.id} className="grid grid-cols-[minmax(84px,auto)_minmax(0,1fr)] gap-2 text-[13px] items-baseline">
+                              <Badge tone={x.kind === 'RFI' ? 'info' : x.kind === 'Task' ? 'ok' : x.kind === 'Variation' ? 'accent' : x.ref === 'Blocks' ? 'danger' : 'muted'} className="justify-center">{x.ref}</Badge>
+                              <span className="min-w-0">
+                                {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline">{x.text}</a> : x.text}
+                                <span className="font-mono text-[11px] text-muted">{[x.who, x.when].filter(Boolean).map(v => ` · ${v}`).join('')}</span>
+                                {x.late && <span className="font-mono text-[11px] text-danger"> · late</span>}
+                              </span>
+                            </span>
+                          )) : <span className="text-[12px] text-accent">Nothing linked on this item yet: add the RFI, variation or action it's waiting on</span>}
+                        </span>
                       ))}
                     </span>
                   </li>
