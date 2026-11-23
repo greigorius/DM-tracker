@@ -11,6 +11,10 @@
 #                               /api/records/:db/:id/trash|restore
 #                         PATCH /api/items/:id, /api/records/:db/:id
 #                         POST  /api/team/email/preview|send, /api/item-bic/apply
+#                         POST  /api/meetings, /api/suppliers, /api/todo/:id/to-action, /api/item-status/apply
+#                         GET   /api/programme/plan · POST /api/programme/apply
+#                         PATCH /api/programme/items/:id, /api/programme/projects/:id
+#                         GET   /api/item-status/plan
 #                         GET   /api/item-bic/plan
 #   sync-snapshots        scheduled, every 5 minutes
 #   sync-full-background  nightly / first-run full rebuild
