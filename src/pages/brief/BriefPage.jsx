@@ -7,9 +7,10 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Card, Badge, SkeletonRows, cx } from '../../components/ui/index.js';
 import { SearchBox } from '../../components/ui/table.jsx';
-import { useSnapshots, useBootstrap } from '../../hooks/hub.js';
+import { useSnapshots, useBootstrap, useUpdateRecord } from '../../hooks/hub.js';
 import { addDays, isOpenRfi, isOpenAction, DONE_ITEM_STATUSES } from '../../../hub-core/derive.js';
 import { rfiHolds, variationHolds } from '../../../netlify/functions/_statusRules.js';
+import { vcPauses } from '../../../hub-core/item-bic.js';
 import { fmtDay, useStored, latestSubmissions } from './shared.jsx';
 
 const VIEWS = [{ id: 'day', label: 'My day' }, { id: 'moves', label: 'Latest movements' }];
@@ -81,8 +82,9 @@ function useBriefModel(d, todo, events, project) {
     // Which records a Blocker tag points at
     const forTag = (tag, id) => {
       const x = tag.toLowerCase();
-      if (/instruction/.test(x)) return on(openVcs, id).filter(v => v.status === 'Awaiting Instruction').map(recV);
-      if (/design info/.test(x)) return [...on(openVcs, id).filter(v => v.status === 'Awaiting Design Info').map(recV), ...on(openActs, id).filter(a => a.bic && a.bic !== 'DM' && a.bic !== 'DT').map(recA)];
+      // Only variations that pause the item block it; logged-only ones are reported as a stale tag
+      if (/instruction/.test(x)) return on(openVcs, id).filter(v => v.status === 'Awaiting Instruction' && vcPauses(v)).map(recV);
+      if (/design info/.test(x)) return [...on(openVcs, id).filter(v => v.status === 'Awaiting Design Info' && vcPauses(v)).map(recV), ...on(openActs, id).filter(a => a.bic && a.bic !== 'DM' && a.bic !== 'DT').map(recA)];
       if (/rfi/.test(x)) return on(openRfis, id).map(recR);
       if (/supplier/.test(x)) return [...on(openActs, id).filter(a => a.bic === 'Supplier').map(recA), ...on(openRfis, id).filter(r => /supplier/i.test(r.tbcBy || '')).map(recR)];
       const party = ['client', 'architect', 'consultant', 'contractor', 'site', 'production'].find(p => x.includes(p));
@@ -91,12 +93,19 @@ function useBriefModel(d, todo, events, project) {
       return on(openActs, id).filter(a => a.bic && a.bic !== 'DM').map(recA);
     };
     const blocked = [];
+    const staleTags = [];
     for (const it of d.items) {
       if (it.archived || DONE_ITEM_STATUSES.has(it.status) || (project && it.projectId !== project)) continue;
       const groups = [];
       const used = new Set();
       const take = recs => recs.filter(r => !used.has(r.id) && used.add(r.id));
-      for (const tag of it.blocker || []) groups.push({ label: tag, tag: true, recs: take(forTag(tag, it.id)) });
+      const stale = [];
+      for (const tag of it.blocker || []) {
+        const recs = take(forTag(tag, it.id));
+        const logged = /instruction|design info/i.test(tag) ? on(openVcs, it.id).filter(v => !vcPauses(v) && (/instruction/i.test(tag) ? v.status === 'Awaiting Instruction' : v.status === 'Awaiting Design Info')) : [];
+        if (!recs.length && logged.length) stale.push({ tag, recs: logged.map(recV) }); // tag only backed by variations that don't pause
+        else groups.push({ label: tag, tag: true, recs });
+      }
       const direct = [
         ...on(openActs, it.id).filter(a => a.blocks).map(recA),
         ...on(openRfis, it.id).filter(holdsR).map(r => ({ ...recR(r), ref: `${rfiRef(r)} stop work` })),
@@ -105,13 +114,17 @@ function useBriefModel(d, todo, events, project) {
       ];
       const rest = take(direct);
       if (rest.length) groups.push({ label: it.blocker?.length ? 'Also holding it' : 'Holding it', recs: rest });
-      if (!groups.length && it.status !== 'Blocked') continue;
-      blocked.push({ id: it.id, url: it.url, title: it.title, status: it.status, bic: it.bic, note: it.blockerNote, groups, when: '',
+      if (!groups.length && it.status !== 'Blocked') {
+        if (stale.length) staleTags.push({ id: it.id, url: it.url, title: it.title, status: it.status, blocker: it.blocker, stale, ...base({ title: it.title }, [it.id], stale.flatMap(x => x.recs.map(r => `${r.ref} ${r.text}`))) });
+        continue;
+      }
+      blocked.push({ id: it.id, url: it.url, title: it.title, status: it.status, bic: it.bic, note: it.blockerNote, groups, stale, blocker: it.blocker, when: '',
         ...base({ title: it.title }, [it.id], groups.flatMap(g => [g.label, ...g.recs.map(r => `${r.ref} ${r.text} ${r.who}`)])) });
     }
     day.blocked = blocked.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
+    day.staleTags = staleTags.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true }));
 
-    for (const k of Object.keys(day)) if (k !== 'blocked') day[k].sort((a, b) => String(a.when || '9').localeCompare(String(b.when || '9')));
+    for (const k of Object.keys(day)) if (!['blocked', 'staleTags'].includes(k)) day[k].sort((a, b) => String(a.when || '9').localeCompare(String(b.when || '9')));
 
     // ── Latest movements ──
     const mv = [];
@@ -156,6 +169,25 @@ function Group({ title, tone, rows, render, empty }) {
       {rows.length ? <ul className="m-0 p-0 list-none max-h-[360px] overflow-y-auto">{rows.map(r => <li key={r.id} className="px-4 py-2 border-b border-line last:border-b-0 flex flex-col gap-0.5">{render(r)}</li>)}</ul>
         : <p className="m-0 px-4 py-3 text-[13px] text-muted">{empty}</p>}
     </Card>
+  );
+}
+
+// A Blocker tag backed only by logged-only variations, with a one-click clear
+function StaleTag({ item, st }) {
+  const save = useUpdateRecord('tasks');
+  const [done, setDone] = useState(false);
+  const clear = () => save.mutate({ id: item.id, set: { blocker: (item.blocker || []).filter(b => b !== st.tag) } }, { onSuccess: () => setDone(true) });
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-accent">
+        {st.tag} · not blocking
+        {done ? <span className="normal-case tracking-normal text-ok">tag cleared</span>
+          : <button type="button" onClick={clear} disabled={save.isPending} className="min-h-7 px-2 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi normal-case tracking-normal cursor-pointer">Clear tag</button>}
+      </span>
+      {st.recs.map(x => (
+        <span key={x.id} className="text-[12px] text-muted"><Badge tone="muted">{x.ref}</Badge> {x.text} <span className="font-mono text-[11px]">· doesn't pause</span></span>
+      ))}
+    </span>
   );
 }
 
@@ -210,6 +242,7 @@ export default function BriefPage() {
         <>
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[13px] text-muted">
             <span><b className="text-[20px] text-danger mr-1 tabular-nums">{g.blocked.length}</b>items blocked</span>
+            {g.staleTags.length > 0 && <span><b className="text-[20px] text-accent mr-1 tabular-nums">{g.staleTags.length}</b>tags to clear</span>}
             <span><b className="text-[20px] text-danger mr-1 tabular-nums">{g.overdue.length}</b>overdue with me</span>
             <span><b className="text-[20px] text-accent mr-1 tabular-nums">{g.dueSoon.length}</b>due in 2 days</span>
             <span><b className="text-[20px] text-info mr-1 tabular-nums">{g.reviews.length}</b>drawings to review</span>
@@ -231,6 +264,7 @@ export default function BriefPage() {
                     </span>
                     <span className="flex flex-col gap-1.5 min-w-0">
                       {!r.groups.length && <span className="text-[13px] text-muted">Status Blocked, with no Blocker tag or linked record: add what it's waiting on.</span>}
+                      {r.stale?.map(st => <StaleTag key={st.tag} item={r} st={st} />)}
                       {r.groups.map(gr => (
                         <span key={gr.label} className="flex flex-col gap-0.5">
                           <span className={cx('font-mono text-[11px] uppercase tracking-[0.08em]', gr.tag ? 'text-text-2' : 'text-danger')}>{gr.label}</span>
@@ -252,6 +286,22 @@ export default function BriefPage() {
               </ul>
             ) : <p className="m-0 px-4 py-3 text-[13px] text-muted">Nothing blocked.</p>}
           </Card>
+          {g.staleTags.length > 0 && (
+            <Card className="p-0 overflow-hidden">
+              <h2 className="m-0 flex items-baseline justify-between px-4 py-3 border-b border-line font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-accent">
+                Tagged as blocked, but nothing is blocking them<span className="text-muted">{g.staleTags.length}</span>
+              </h2>
+              <p className="m-0 px-4 pt-2 text-[12px] text-muted">Their Blocker tag only points at variations that don't pause the item, so they're not counted as blocked. Clear the tag if that's right.</p>
+              <ul className="m-0 p-0 list-none max-h-[320px] overflow-y-auto">
+                {g.staleTags.map(r => (
+                  <li key={r.id} className="grid lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] gap-x-6 gap-y-1 px-4 py-2 border-b border-line last:border-b-0">
+                    <span className="flex flex-col min-w-0">{itemLink(r.itemId, r.title)}<span className="font-mono text-[11px] text-muted">{[r.project, r.status].filter(Boolean).join(' · ')}</span></span>
+                    <span className="flex flex-col gap-1">{r.stale.map(st => <StaleTag key={st.tag} item={r} st={st} />)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <div className="grid gap-4 lg:grid-cols-2">
             <Group title="Overdue with me" tone="text-danger" rows={g.overdue} empty="Nothing overdue." render={r => <Line r={r} right={<When date={r.due} today={t} />} />} />
             <Group title="Due in the next 2 days" tone="text-accent" rows={g.dueSoon} empty="Nothing due." render={r => <Line r={r} right={<When date={r.due} today={t} />} />} />
