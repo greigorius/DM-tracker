@@ -9,6 +9,7 @@ import { PageShell, Card, Badge, SkeletonRows, cx, useToast } from '../../compon
 import { ToolbarSelect, SearchBox } from '../../components/ui/table.jsx';
 import { useBootstrap, useSnapshots, useUpdateRecord, useActionToTask, useCreateAction, useTaskToAction } from '../../hooks/hub.js';
 import { useStored } from '../brief/shared.jsx';
+import { DateIn } from '../brief/controls.jsx';
 import { londonToday } from '../../../hub-core/derive.js';
 import { AI_STATUSES, TASK_STATUSES, TRADES, GROUPS, VIEWS, GROUP_BY, SORTS, DEFAULT_FILTER, buildRows, matches, dates, isOver, dueSoon, daysBetween } from './model.js';
 import { exportActions } from './excel.js';
@@ -108,7 +109,7 @@ function Row({ r, ctx, open, onToggle, groupBy }) {
           </> : <Pill label="Person" value={r.personId || ''} fallback={r.person || 'Not in Team DB'} options={[{ value: '', label: 'Unassigned' }, ...people]} tone={r.personId ? 'text-text' : 'text-muted'} onChange={v => save({ personId: v || null })} />}
         </span>
         <span className="hidden lg:flex flex-col gap-0.5">
-          <input type="date" aria-label="Due" value={r.due || ''} onChange={e => save(isA ? { due: e.target.value || null } : { end: e.target.value || null })}
+          <DateIn label="Due" value={r.due} onChange={v => save(isA ? { due: v || null } : { end: v || null })}
             className="bg-transparent border-0 p-0 font-mono text-[12px] text-text cursor-pointer outline-none" />
           {dueBadge}
         </span>
@@ -125,7 +126,7 @@ function Row({ r, ctx, open, onToggle, groupBy }) {
           {/* Small screens: the columns above, here */}
           <div className="contents lg:hidden">
             {isA && <Lbl>Ball in court<Pill label="Ball in court" value={r.bic} options={lookups.actionBic || []} onChange={setBic} /></Lbl>}
-            <Lbl>Due<input type="date" value={r.due || ''} onChange={e => save(isA ? { due: e.target.value || null } : { end: e.target.value || null })} className={ctl} /></Lbl>
+            <Lbl>Due<DateIn label="Due" value={r.due} onChange={v => save(isA ? { due: v || null } : { end: v || null })} className={ctl} /></Lbl>
             <Lbl>Status<Pill label="Status" value={r.status} options={isA ? AI_STATUSES : TASK_STATUSES} disabled={r.moved} onChange={setStatus} /></Lbl>
             {isA && <Lbl>Responsible{resp}</Lbl>}
           </div>
@@ -145,8 +146,8 @@ function Row({ r, ctx, open, onToggle, groupBy }) {
           </Lbl>
           {isA ? <>
             <Lbl className="col-span-2">Responsible ({r.bic || 'set ball in court'})<Responsible row={{ ...r.raw, id: r.id }} team={team} suppliers={suppliers} save={save} /></Lbl>
-            <Lbl>Raised<input type="date" value={r.raised || ''} onChange={e => save({ received: e.target.value || null })} className={ctl} /></Lbl>
-            <Lbl>Chase by<input type="date" value={r.chaseBy || ''} onChange={e => save({ chaseBy: e.target.value || null })} className={ctl} /></Lbl>
+            <Lbl>Raised<DateIn label="Raised" value={r.raised} onChange={v => save({ received: v || null })} className={ctl} /></Lbl>
+            <Lbl>Chase by<DateIn label="Chase by" value={r.chaseBy} onChange={v => save({ chaseBy: v || null })} className={ctl} /></Lbl>
             <Lbl className="col-span-2">Next action<Text label="Next action" value={r.nextAction} onSave={t => save({ nextAction: t || null })} /></Lbl>
             <Lbl className="col-span-2">Closes when<Text label="Closes when" value={r.closesWhen} onSave={t => save({ closesWhen: t || null })} /></Lbl>
             <Lbl className="col-span-2 lg:col-span-3">Trade
@@ -178,7 +179,7 @@ function Row({ r, ctx, open, onToggle, groupBy }) {
             </div>
           </> : <>
             <Lbl>Person<Pill label="Person" value={r.personId || ''} options={[{ value: '', label: 'Unassigned' }, ...people]} onChange={v => save({ personId: v || null })} /></Lbl>
-            <Lbl>Start<input type="date" value={r.start || ''} onChange={e => save({ start: e.target.value || null })} className={ctl} /></Lbl>
+            <Lbl>Start<DateIn label="Start" value={r.start} onChange={v => save({ start: v || null })} className={ctl} /></Lbl>
             <Lbl>Est hours<input type="number" min="0" step="0.5" defaultValue={r.hours ?? ''} onBlur={e => { const n = e.target.value; if (String(n) !== String(r.hours ?? '')) save({ hours: n }); }} className={ctl} /></Lbl>
             <Lbl>Variation work
               <label className="min-h-9 inline-flex items-center gap-2 normal-case tracking-normal text-[13px] text-text-2 cursor-pointer">
