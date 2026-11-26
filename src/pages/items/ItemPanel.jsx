@@ -229,6 +229,7 @@ export function ItemPanel({ item, d, prog, todos, lookups, bicCtx, isCoord, onCl
         <div className="flex flex-col gap-1.5 p-4 bg-surface">
           <span className="section-label text-[11px]">DT</span>
           <Sel label="Assigned DT" value={item.dtIds?.[0] || ''} onChange={v => save(item.id, { dtId: v || null }, 'DT updated')} blank="Unassigned" options={d.dts.map(x => ({ value: x.id, label: x.name }))} />
+          {(() => { const others = d.drawingDts(item.id).filter(id => !item.dtIds?.includes(id)); return others.length ? <span className="text-[12px] text-muted">Also drawing: {others.map(d.personName).filter(Boolean).join(', ')}</span> : null; })()}
         </div>
         {prog?.next && (
           <div className="flex flex-col gap-1.5 p-4 bg-surface">

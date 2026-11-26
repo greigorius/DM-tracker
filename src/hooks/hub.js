@@ -290,7 +290,7 @@ export function useActionToTask() {
 function applyLocal(db, row, set) {
   const r = { ...row, dates: row.dates && { ...row.dates }, dt: row.dt && { ...row.dt } };
   for (const [k, v] of Object.entries(set)) {
-    if (k === 'dtId') { if (db === 'submissions' || db === 'tasks') r.dtIds = v ? [v] : []; else r.personIds = v ? [v] : []; }
+    if (k === 'dtId') { if (db === 'submissions' || db === 'tasks' || db === 'drawings') r.dtIds = v ? [v] : []; else r.personIds = v ? [v] : []; }
     else if (k === 'personId') r.personIds = v ? [v] : [];
     else if (k === 'companyId') r.companyIds = v ? [v] : [];
     else if (db === 'actions' && k === 'done') { r.done = v; r.closedOn = v ? new Date().toISOString().slice(0, 10) : null; }

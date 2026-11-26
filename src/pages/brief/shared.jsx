@@ -66,6 +66,13 @@ export function useBriefData(projectId) {
     })();
     const stages = stagesFor(s.tasks, s.drawings, s.submissions);
     const drawnBy = drawnByFor(s.submissions);
+    // Every DT on an item: the item's own DT (who started it) plus any DT
+    // assigned to one of its drawings
+    const bareId = id => String(id || '').replace(/-/g, '');
+    const dwgDts = new Map();
+    for (const x of s.drawings || []) if (!x.archived) for (const iid of x.itemIds || []) for (const pid of x.dtIds || []) {
+      const k = bareId(iid); if (!dwgDts.has(k)) dwgDts.set(k, new Set()); dwgDts.get(k).add(pid);
+    }
     return {
       isPending, today, ...f, all: s,
       items_: items, team, projects, projectOptions,
@@ -74,6 +81,8 @@ export function useBriefData(projectId) {
       personName: id => team.get(id)?.title || '',
       stageOf: id => stages.get(id) || null,
       drawnBy: id => drawnByIds(drawnBy, id),
+      drawingDts: id => [...(dwgDts.get(bareId(id)) || [])],
+      itemDts: it => [...new Set([...(it?.dtIds || []), ...(dwgDts.get(bareId(it?.id)) || [])])],
       dts: s.team.filter(t => t.role === 'DT').map(t => ({ id: t.id, name: t.title })).sort((a, b) => a.name.localeCompare(b.name)),
       openActions: f.actions.filter(isOpenAction),
       openRfis: f.rfis.filter(isOpenRfi),

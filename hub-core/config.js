@@ -37,7 +37,7 @@ export const EVENTS_KEY = 'snap/events';
 export const MAX_EVENTS = 200;
 // Bump when a mapper gains fields: every snapshot built with an older version
 // is rebuilt in full on the next sync, so new fields appear on every row.
-export const MAPPER_VERSION = 16; // 15: supplier email/phone/items; 16: meetings // 13: Actions tracker fields on A&I + suppliers; 14: For Task / Waiting On
+export const MAPPER_VERSION = 17; // 17: drawing DT; 15: supplier email/phone/items; 16: meetings // 13: Actions tracker fields on A&I + suppliers; 14: For Task / Waiting On
 export const SCHEMA_VERSION = 3; // 3: variation TBC by options
 
 // "Axiom" is a hidden company: it must never surface as a BIC / sits-with /

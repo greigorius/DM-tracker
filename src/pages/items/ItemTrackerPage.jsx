@@ -97,13 +97,14 @@ export default function ItemTrackerPage() {
   const coordIds = useMemo(() => new Set([...coord.values()].map(c => c.item?.id).filter(Boolean)), [coord]);
   const idx = useIndex(d, todos);
 
+  const itemDts = d.itemDts;
   const needle = q.trim().toLowerCase();
   const rows = useMemo(() => d.all.tasks.filter(i => {
     if (i.archived || !i.projectId) return false;
     if (project && i.projectId !== project) return false;
     if (!project && !prog.live.has(i.projectId)) return false;
     if (!showClosed && CLOSED.has(i.status) && !coordIds.has(i.id)) return false;
-    if (dt && !(i.dtIds || []).includes(dt)) return false;
+    if (dt && !itemDts(i).includes(dt)) return false; // item DT or a DT on one of its drawings
     const x = idx(i.id);
     if (hasOpen === 'rfis' && !x.rfis) return false;
     if (hasOpen === 'pausing' && !x.pausing) return false;
@@ -112,7 +113,7 @@ export default function ItemTrackerPage() {
     if (since && !(x.changed && x.changed.slice(0, 10) >= since)) return false;
     if (needle && !(i.title || '').toLowerCase().includes(needle)) return false;
     return true;
-  }), [d.all.tasks, project, prog.live, showClosed, coordIds, dt, hasOpen, since, needle, idx]);
+  }), [d.all.tasks, project, prog.live, showClosed, coordIds, dt, hasOpen, since, needle, idx, itemDts]);
 
   // Group by project; the Design Coordination item is pinned first
   const groups = useMemo(() => {

@@ -251,6 +251,7 @@ export const mappers = {
     rev: v(page, 'Rev'),
     type: v(page, 'Dwg No. Assigned'),
     itemIds: ids(page, 'Item'),
+    dtIds: ids(page, 'DT'), // the DT drawing this sheet (item-level DT = the DT who started the item)
     lockStatus: v(page, 'Lock Status'),
     noClientApproval: v(page, 'No Client Approval'),
     // Set by the Drawing Flow Production tab after sign-off (read by the status rules)
