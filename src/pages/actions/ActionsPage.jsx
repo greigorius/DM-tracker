@@ -273,7 +273,11 @@ export default function ActionsPage() {
     setParams(p => { const n = new URLSearchParams(p); n.delete('company'); return n; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
-  const setF = (patch, keepView) => { setStored(JSON.stringify({ ...f, ...patch })); if (!keepView) setView(''); };
+  // Opened from the Brief with ?open=<id>: show just that action / task, expanded
+  const focus = params.get('open') || '';
+  useEffect(() => { if (focus) setOpenIds(o => (o.has(focus) ? o : new Set(o).add(focus))); }, [focus]);
+  const clearFocus = () => setParams(p => { const n = new URLSearchParams(p); n.delete('open'); return n; }, { replace: true });
+  const setF = (patch, keepView) => { clearFocus(); setStored(JSON.stringify({ ...f, ...patch })); if (!keepView) setView(''); };
 
   const rows = useMemo(() => buildRows({ actions: s.actions, todo: s.todo, tasks: s.tasks, suppliers: s.suppliers, team: s.team, projects: s.projects }), [s]);
   const suppliers = useMemo(() => s.suppliers.filter(x => !x.archived).map(x => ({ value: x.id, label: x.title || 'Untitled' })).sort((a, b) => a.label.localeCompare(b.label)), [s.suppliers]);
@@ -283,16 +287,16 @@ export default function ActionsPage() {
   const ctx = { d, lookups, suppliers, people, items, team: s.team, projects: live, toast };
 
   const scope = useMemo(() => rows.filter(r => !f.project || r.projectId === f.project), [rows, f.project]);
-  const vis = useMemo(() => scope.filter(r => matches(r, f, d)).sort(SORTS[sort] || SORTS.due), [scope, f, d, sort]);
+  const vis = useMemo(() => (focus ? rows.filter(r => r.id === focus) : scope.filter(r => matches(r, f, d)).sort(SORTS[sort] || SORTS.due)), [focus, rows, scope, f, d, sort]);
   const key = (GROUP_BY.find(g => g.value === groupBy) || GROUP_BY[0]).key;
   const groups = useMemo(() => {
-    if (!groupBy) return [['', vis]];
+    if (!groupBy || focus) return [['', vis]];
     const m = new Map();
     for (const r of vis) { const k = key(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
     return [...m].sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
-  }, [vis, groupBy, key]);
+  }, [vis, groupBy, key, focus]);
 
-  const pickView = v => { setView(v.id); setStored(JSON.stringify({ ...DEFAULT_FILTER, project: f.project, ...v.f })); if (v.by !== undefined) setGroupBy(v.by); };
+  const pickView = v => { clearFocus(); setView(v.id); setStored(JSON.stringify({ ...DEFAULT_FILTER, project: f.project, ...v.f })); if (v.by !== undefined) setGroupBy(v.by); };
   const open = vis.filter(r => !r.closed);
   const toggle = id => setOpenIds(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -357,8 +361,14 @@ export default function ActionsPage() {
         <span><b className="text-[20px] text-text mr-1 tabular-nums">{scope.filter(r => r.closed && r.closedOn && r.closedOn >= d.weekAgo).length}</b>closed in the last 7 days</span>
       </div>
 
+      {focus && (
+        <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-surface-hi border border-accent text-[13px] text-text-2">
+          <span>Showing the one record you opened from the Brief.</span>
+          <button type="button" onClick={clearFocus} className="min-h-9 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface font-mono text-[12px] cursor-pointer">Show all actions</button>
+        </div>
+      )}
       {isPending ? <Card className="p-4"><SkeletonRows rows={10} /></Card> : !vis.length ? (
-        <Card className="p-8 text-center text-[14px] text-muted">Nothing matches these filters.</Card>
+        <Card className="p-8 text-center text-[14px] text-muted">{focus ? 'That record is no longer in the tracker (archived or a note).' : 'Nothing matches these filters.'}</Card>
       ) : (
         <Card className="p-0 overflow-hidden">
           <div className="hidden lg:grid items-center gap-x-3 pr-2 py-2 grid-cols-[4px_84px_minmax(0,1fr)_140px_170px_120px_130px_28px] border-b border-line font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
