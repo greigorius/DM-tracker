@@ -1,5 +1,5 @@
 // Small form controls shared by the Triage tabs (rows, bulk bars, fix cards).
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Badge, cx } from '../../components/ui/index.js';
 
 export const ctl = 'min-h-11 px-3 bg-ground border border-line-strong text-text text-[14px] outline-none focus:border-accent';
@@ -11,7 +11,27 @@ export function Sel({ value, onChange, options, blank = '—', label, className 
     </select>
   );
 }
-export const DateIn = ({ value, onChange, label }) => <input type="date" aria-label={label} value={value || ''} onChange={e => onChange(e.target.value)} className={ctl} />;
+// Date box that saves when you leave it (click away, Tab or Enter), not on every
+// change, so the browser's picker stays open until you've chosen the date.
+// Esc puts the old date back.
+export function DateIn({ value, onChange, label, className }) {
+  const [draft, setDraft] = useState(null); // null = not editing, show the saved value
+  const cancel = useRef(false);
+  const shown = draft ?? (value || '');
+  const commit = () => {
+    if (!cancel.current && draft !== null && draft !== (value || '')) onChange(draft);
+    cancel.current = false;
+    setDraft(null);
+  };
+  return (
+    <input type="date" aria-label={label} value={shown} onChange={e => setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') { cancel.current = true; e.currentTarget.blur(); }
+      }}
+      className={className ?? ctl} />
+  );
+}
 export const Mini = ({ children, ...p }) => <button type="button" className="min-h-11 px-3 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] cursor-pointer" {...p}>{children}</button>;
 
 export function ItemPicker({ d, value, onChange, required = true }) {

@@ -23,6 +23,12 @@ const KIND = {
   task: { label: 'Task', tone: 'ok' }, done: { label: 'Task done', tone: 'muted' },
   status: { label: 'Status', tone: 'info' }, bic: { label: 'BIC', tone: 'info' }, date: { label: 'Dates', tone: 'muted' }, log: { label: 'Log', tone: 'muted' },
 };
+// Actions and DT tasks open in the Actions tracker (editable there); RFIs,
+// variations and drawings have no Hub editor yet, so they still open Notion.
+const hubTo = id => `/actions?open=${id}`;
+const RecLink = ({ to, url, className, children }) => (to
+  ? <Link to={to} className={className}>{children}</Link>
+  : url ? <a href={url} target="_blank" rel="noreferrer" className={className}>{children}</a> : <span className={className}>{children}</span>);
 const itemLink = (id, label) => (id ? <Link to={`/workspace/items?item=${id}`} className="text-info no-underline hover:underline">{label}</Link> : <span className="text-muted">{label}</span>);
 
 function useBriefModel(d, todo, events, project) {
@@ -45,14 +51,14 @@ function useBriefModel(d, todo, events, project) {
     const open = d.openActions;
     const mine = open.filter(a => a.bic === 'DM');
     const day = {
-      overdue: mine.filter(a => a.due && a.due < t).map(a => ({ ...a, ...base(a, a.itemIds), when: a.due })),
-      dueSoon: mine.filter(a => a.due && a.due >= t && a.due <= soon).map(a => ({ ...a, ...base(a, a.itemIds), when: a.due })),
+      overdue: mine.filter(a => a.due && a.due < t).map(a => ({ ...a, hub: hubTo(a.id), ...base(a, a.itemIds), when: a.due })),
+      dueSoon: mine.filter(a => a.due && a.due >= t && a.due <= soon).map(a => ({ ...a, hub: hubTo(a.id), ...base(a, a.itemIds), when: a.due })),
       reviews: latestSubmissions(d.submissions).filter(x => x.bic === 'DM' && x.status !== 'Complete')
         .map(x => ({ ...x, ...base(x, x.itemIds, (x.drawingIds || []).map(id => drawingNo.get(id))), when: x.bicSince || x.createdAt?.slice(0, 10) })),
       chases: open.filter(a => a.bic && a.bic !== 'DM' && ((a.chaseBy && a.chaseBy <= t) || (a.due && a.due < t)))
-        .map(a => ({ ...a, ...base(a, a.itemIds, [who(a), a.bic]), who: who(a), when: a.chaseBy && a.chaseBy <= t ? a.chaseBy : a.due })),
+        .map(a => ({ ...a, hub: hubTo(a.id), ...base(a, a.itemIds, [who(a), a.bic]), who: who(a), when: a.chaseBy && a.chaseBy <= t ? a.chaseBy : a.due })),
       tasks: todo.filter(x => !x.archived && !x.done && inScope(x.itemIds) && ((x.end && x.end <= soon) || x.status === 'Blocked'))
-        .map(x => ({ ...x, ...base(x, x.itemIds, [d.personName(x.personIds?.[0])]), who: d.personName(x.personIds?.[0]) || 'Unassigned', when: x.end })),
+        .map(x => ({ ...x, hub: hubTo(x.id), ...base(x, x.itemIds, [d.personName(x.personIds?.[0])]), who: d.personName(x.personIds?.[0]) || 'Unassigned', when: x.end })),
       rfis: d.rfis.filter(r => isOpenRfi(r) && ((r.due && r.due < t) || r.status === 'Raise'))
         .map(r => ({ ...r, ...base(r, r.itemIds, [r.tbcBy]), who: r.tbcBy || 'not issued', when: r.due || r.raised })),
     };
@@ -64,13 +70,13 @@ function useBriefModel(d, todo, events, project) {
     const late = () => ''; // lateness shows as its own red flag
     const rfiRef = r => `RFI-${String(r.number ?? '?').padStart(3, '0')}`;
     const tdRef = x => (x.number != null ? `TD-${String(x.number).padStart(3, '0')}` : 'Task');
-    const recA = a => ({ id: a.id, kind: 'Action', ref: a.blocks ? 'Blocks' : 'Action', text: a.title || '(no text)', url: a.url,
+    const recA = a => ({ id: a.id, hub: a.type === 'Note' ? null : hubTo(a.id), kind: 'Action', ref: a.blocks ? 'Blocks' : 'Action', text: a.title || '(no text)', url: a.url,
       who: [a.bic, who(a), a.contact && sup.get(a.companyIds?.[0]) ? a.contact : null].filter(Boolean).join(' · '), when: a.due && `due ${fmtDay(a.due)}${late(a.due)}`, late: !!(a.due && a.due < t) });
     const recR = r => ({ id: r.id, kind: 'RFI', ref: rfiRef(r), text: r.title || '', url: r.url, who: [r.status, r.tbcBy && `TBC ${r.tbcBy}`].filter(Boolean).join(' · '),
       when: r.due ? `due ${fmtDay(r.due)}${late(r.due)}` : 'no response date', late: !!(r.due && r.due < t), stop: r.stopsWork });
     const recV = v => ({ id: v.id, kind: 'Variation', ref: v.code || 'VC', text: v.title || '', url: v.url,
       who: [v.status, v.bic && `with ${v.bic}`, v.type].filter(Boolean).join(' · '), when: v.requested && `raised ${fmtDay(v.requested)}` });
-    const recT = x => ({ id: x.id, kind: 'Task', ref: tdRef(x), text: x.title || '', url: x.url, who: [x.status, d.personName(x.personIds?.[0])].filter(Boolean).join(' · '),
+    const recT = x => ({ id: x.id, hub: hubTo(x.id), kind: 'Task', ref: tdRef(x), text: x.title || '', url: x.url, who: [x.status, d.personName(x.personIds?.[0])].filter(Boolean).join(' · '),
       when: x.end && `end ${fmtDay(x.end)}${late(x.end)}`, late: !!(x.end && x.end < t) });
     const on = (rows, id) => rows.filter(r => (r.itemIds || []).includes(id));
     const openVcs = d.variations.filter(v => !v.archived && ['Awaiting Design Info', 'Awaiting Instruction'].includes(v.status));
@@ -128,15 +134,16 @@ function useBriefModel(d, todo, events, project) {
 
     // ── Latest movements ──
     const mv = [];
-    const push = (kind, at, r, itemIds, summary, extra) => { if (at) mv.push({ id: `${kind}:${r.id}:${at}`, kind, at, url: r.url, summary, ...base({ title: summary }, itemIds, extra) }); };
+    const push = (kind, at, r, itemIds, summary, extra) => { if (at) mv.push({ id: `${kind}:${r.id}:${at}`, kind, at, url: r.url, hub: r.hub, summary, ...base({ title: summary }, itemIds, extra) }); };
     for (const x of d.submissions) {
       const dw = (x.drawingIds || []).map(id => drawingNo.get(id)).filter(Boolean);
       push('submission', x.createdAt, x, x.itemIds, `${x.title || dw.join(', ')} submitted${x.stage ? ` (${x.stage})` : ''}`, dw);
       if (x.grade && x.reviewed) push('returned', x.reviewed, x, x.itemIds, `${x.title || dw.join(', ')} returned: grade ${x.grade}`, dw);
     }
     for (const a of d.actions) {
-      push(a.type === 'Note' ? 'note' : 'action', a.createdAt, a, a.itemIds, a.title || '(no text)', [who(a), a.bic]);
-      if (a.done && a.closedOn) push('closed', a.closedOn, a, a.itemIds, `Closed: ${a.title || ''}`, [who(a)]);
+      const ah = a.type === 'Note' ? a : { ...a, hub: hubTo(a.id) };
+      push(a.type === 'Note' ? 'note' : 'action', a.createdAt, ah, a.itemIds, a.title || '(no text)', [who(a), a.bic]);
+      if (a.done && a.closedOn) push('closed', a.closedOn, ah, a.itemIds, `Closed: ${a.title || ''}`, [who(a)]);
     }
     for (const r of d.rfis) {
       const ref = `RFI-${String(r.number ?? '?').padStart(3, '0')}`;
@@ -149,8 +156,9 @@ function useBriefModel(d, todo, events, project) {
     }
     for (const x of todo) {
       if (x.archived || !inScope(x.itemIds)) continue;
-      push('task', x.createdAt, x, x.itemIds, x.title || '(task)', [d.personName(x.personIds?.[0])]);
-      if (x.done) push('done', x.editedAt, x, x.itemIds, `Done: ${x.title || ''}`, [d.personName(x.personIds?.[0])]);
+      const xh = { ...x, hub: hubTo(x.id) };
+      push('task', x.createdAt, xh, x.itemIds, x.title || '(task)', [d.personName(x.personIds?.[0])]);
+      if (x.done) push('done', x.editedAt, xh, x.itemIds, `Done: ${x.title || ''}`, [d.personName(x.personIds?.[0])]);
     }
     for (const e of events) if (['status', 'bic', 'date'].includes(e.kind) && (!e.itemId || inScope([e.itemId]))) push(e.kind, e.at, { id: e.id, url: e.url, title: e.summary }, e.itemId ? [e.itemId] : [], e.summary);
     for (const x of d.activity) if (x.source !== 'A&I') push('log', x.at, x, x.itemIds, x.title || '');
@@ -194,7 +202,7 @@ function StaleTag({ item, st }) {
 const Line = ({ r, right, children }) => (
   <>
     <span className="flex justify-between gap-3 text-[14px]">
-      <a href={r.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline min-w-0 truncate">{children || r.title || '(no text)'}</a>
+      <RecLink to={r.hub} url={r.url} className="text-text no-underline hover:underline min-w-0 truncate">{children || r.title || '(no text)'}</RecLink>
       {right}
     </span>
     <span className="font-mono text-[11px] text-muted truncate">{itemLink(r.itemId, r.item || 'No item')}{r.project ? ` · ${r.project}` : ''}{r.who ? ` · ${r.who}` : ''}</span>
@@ -272,7 +280,7 @@ export default function BriefPage() {
                             <span key={x.id} className="grid grid-cols-[minmax(84px,auto)_minmax(0,1fr)] gap-2 text-[13px] items-baseline">
                               <Badge tone={x.kind === 'RFI' ? 'info' : x.kind === 'Task' ? 'ok' : x.kind === 'Variation' ? 'accent' : x.ref === 'Blocks' ? 'danger' : 'muted'} className="justify-center">{x.ref}</Badge>
                               <span className="min-w-0">
-                                {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-text no-underline hover:underline">{x.text}</a> : x.text}
+                                <RecLink to={x.hub} url={x.url} className="text-text no-underline hover:underline">{x.text}</RecLink>
                                 <span className="font-mono text-[11px] text-muted">{[x.who, x.when].filter(Boolean).map(v => ` · ${v}`).join('')}</span>
                                 {x.late && <span className="font-mono text-[11px] text-danger"> · late</span>}
                               </span>
@@ -329,7 +337,7 @@ export default function BriefPage() {
                   <li key={x.id} className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 px-4 py-2 border-b border-line last:border-b-0 items-start">
                     <Badge tone={KIND[x.kind]?.tone || 'muted'} className="justify-center">{KIND[x.kind]?.label || x.kind}</Badge>
                     <span className="flex flex-col gap-0.5 min-w-0">
-                      {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-[14px] text-text no-underline hover:underline truncate">{x.summary}</a> : <span className="text-[14px] truncate">{x.summary}</span>}
+                      <RecLink to={x.hub} url={x.url} className="text-[14px] text-text no-underline hover:underline truncate">{x.summary}</RecLink>
                       <span className="font-mono text-[11px] text-muted truncate">{itemLink(x.itemId, x.item || 'No item')}{x.project ? ` · ${x.project}` : ''}</span>
                     </span>
                   </li>
