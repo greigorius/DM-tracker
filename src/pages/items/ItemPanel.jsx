@@ -101,10 +101,12 @@ export function ActionRow({ a, itemId, lookups, today, team, suppliers }) {
   const isNote = a.type === 'Note';
   const overdue = !isNote && !a.done && a.due && a.due < today;
   const flip = () => save(a.id, isNote ? { type: 'Action', ...(!a.bic && { bic: 'DM' }) } : { type: 'Note' }, isNote ? 'Now an action' : 'Now a note');
-  const move = () => toTask.mutate({ id: a.id, task: { itemId: a.itemIds?.[0] || itemId } }, {
-    onSuccess: () => toast.show('Moved to Tasks · action closed'),
-    onError: e => toast.show(`Not moved: ${e.message}`, { tone: 'danger' }),
-  });
+  // mutateAsync, not mutate(…, callbacks): the row drops out of open-action
+  // lists as soon as it's ticked, and mutate's per-call callbacks never fire
+  // once the row has unmounted, so a failure reverted silently.
+  const move = () => toTask.mutateAsync({ id: a.id, task: { itemId: a.itemIds?.[0] || itemId } })
+    .then(r => toast.show(`Moved to Tasks${r?.row?.number != null ? ` (TD-${String(r.row.number).padStart(3, '0')})` : ''} · action closed`))
+    .catch(e => toast.show(`Not moved to Tasks: ${e.message}`, { tone: 'danger' }));
   return (
     <li className={cx('flex flex-col gap-1 pl-3 border-l-2', a.blocks && !a.done && !isNote ? 'border-danger' : isNote ? 'border-line' : 'border-accent', a.done && 'opacity-60')}>
       <span className="flex items-center gap-2">
@@ -123,7 +125,8 @@ export function ActionRow({ a, itemId, lookups, today, team, suppliers }) {
           <Check label="Blocks item" checked={a.blocks} onChange={v => save(a.id, { blocks: v })} />
           <Check label="Done" checked={a.done} onChange={v => save(a.id, { done: v })} />
         </>}
-        {!a.done && !a.taskIds?.length && (
+        {!a.done && !a.taskIds?.length && !(a.itemIds?.[0] || itemId) && <span className="text-accent" title="A To Do task has to sit on an item">Link an item to make it a task</span>}
+        {!a.done && !a.taskIds?.length && (a.itemIds?.[0] || itemId) && (
           <button type="button" onClick={move} disabled={toTask.isPending} className="min-h-11 px-3 inline-flex items-center gap-1.5 border border-line-strong bg-transparent text-text-2 hover:bg-surface-hi font-mono text-[12px] cursor-pointer">
             <ArrowRight size={13} aria-hidden="true" /> Task
           </button>
@@ -145,10 +148,9 @@ export function TodoRow({ t, people, actions, lookups }) {
   const [bic, setBic] = useState('DT');
   const [keep, setKeep] = useState(true);
   const waiting = actions.filter(a => !a.archived && !a.done && (a.forTaskIds || []).includes(t.id));
-  const convert = () => toAction.mutate({ id: t.id, bic, keep }, {
-    onSuccess: () => { setOpen(false); toast.show(keep ? 'Chase action raised; the task is Blocked until it closes' : 'Now an action; the To Do is in Notion Trash for 30 days'); },
-    onError: e => toast.show(`Not converted: ${e.message}`, { tone: 'danger' }),
-  });
+  const convert = () => toAction.mutateAsync({ id: t.id, bic, keep })
+    .then(() => { setOpen(false); toast.show(keep ? 'Chase action raised; the task is Blocked until it closes' : 'Now an action; the To Do is in Notion Trash for 30 days'); })
+    .catch(e => toast.show(`Not converted: ${e.message}`, { tone: 'danger' }));
   return (
     <li className={cx('flex flex-col gap-1 pl-3 border-l-2', t.done ? 'border-line opacity-60' : t.status === 'Blocked' ? 'border-danger' : 'border-ok')}>
       <InlineText key={`${t.id}:${t.title}`} value={t.title} label="To-do" onSave={v => save(t.id, { title: v })} />

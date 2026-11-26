@@ -25,7 +25,7 @@ const KIND = {
 };
 // Actions and DT tasks open in the Actions tracker (editable there); RFIs,
 // variations and drawings have no Hub editor yet, so they still open Notion.
-const hubTo = id => `/actions?open=${id}`;
+const hubTo = id => `/trackers/actions?open=${id}`;
 const RecLink = ({ to, url, className, children }) => (to
   ? <Link to={to} className={className}>{children}</Link>
   : url ? <a href={url} target="_blank" rel="noreferrer" className={className}>{children}</a> : <span className={className}>{children}</span>);
