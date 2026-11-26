@@ -65,13 +65,13 @@ function Row({ r, ctx, open, onToggle, groupBy }) {
   const dueBadge = over ? <Badge tone="danger">{daysBetween(r.due, d.today)}d late</Badge>
     : soon ? <Badge tone="accent">{r.due === d.today ? 'today' : `in ${daysBetween(d.today, r.due)}d`}</Badge>
       : !r.due && !r.closed ? <Badge tone="muted">no date</Badge> : null;
-  const convert = () => toAction.mutate({ id: r.id, bic: convBic, keep }, {
-    onSuccess: () => toast.show(keep ? `Chase action raised (sits with ${convBic}); ${r.ref} kept and set to Blocked until it closes` : `${r.ref} is now an action (sits with ${convBic}); the To Do is in Notion Trash for 30 days`, { ms: 8000 }),
-    onError: e => toast.show(`Not converted: ${e.message}`, { tone: 'danger' }),
-  });
-  const move = () => toTask.mutate({ id: r.id, task: { itemId: r.itemId } }, {
-    onSuccess: () => toast.show('Moved to Tasks · action closed'), onError: e => toast.show(`Not moved: ${e.message}`, { tone: 'danger' }),
-  });
+  // mutateAsync so the toast still shows after the row leaves the filtered list
+  const convert = () => toAction.mutateAsync({ id: r.id, bic: convBic, keep })
+    .then(() => toast.show(keep ? `Chase action raised (sits with ${convBic}); ${r.ref} kept and set to Blocked until it closes` : `${r.ref} is now an action (sits with ${convBic}); the To Do is in Notion Trash for 30 days`, { ms: 8000 }))
+    .catch(e => toast.show(`Not converted: ${e.message}`, { tone: 'danger' }));
+  const move = () => toTask.mutateAsync({ id: r.id, task: { itemId: r.itemId } })
+    .then(res => toast.show(`Moved to Tasks${res?.row?.number != null ? ` (TD-${String(res.row.number).padStart(3, '0')})` : ''} · action closed`))
+    .catch(e => toast.show(`Not moved to Tasks: ${e.message}`, { tone: 'danger', ms: 10000 }));
   // Project comes from the item: changing it means picking an item in the new project
   const [proj, setProj] = useState(r.projectId || '');
   const projItems = items.filter(i => i.projectId === proj);

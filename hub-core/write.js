@@ -262,6 +262,7 @@ const FIELD_MAP = {
     pauseOverride: ['Pause Override', 'select'], itemIds: ['Items', 'rel'], raisedBy: ['Raised By', 'select'], type: ['Variation Type', 'select'], tbcBy: ['TBC by', 'multi'],
   },
   submissions: { dtId: ['DT', 'rel1'] },
+  drawings: { dtId: ['DT', 'rel1'] },
   todo: {
     title: ['Item Description', 'title'], status: ['Status', 'select'], personIds: ['Person', 'rel'], personId: ['Person', 'rel1'], itemIds: ['Item', 'rel'],
     start: ['Start Date', 'date'], end: ['End Date (Manual)', 'date'], hours: ['Task Hours (Est)', 'number'],

@@ -60,7 +60,7 @@ export default function TeamLens() {
       }
     }
     for (const a of d.all.actions) if (!a.archived && !a.done && a.type !== 'Note' && inProject(a.itemIds)) for (const pid of a.personIds || []) { const r = get(pid); r.actions++; if (a.due && a.due < t) r.overdue++; }
-    for (const i of d.all.tasks) if (!i.archived && !CLOSED.has(i.status) && (!project || i.projectId === project)) for (const pid of i.dtIds || []) get(pid).items++;
+    for (const i of d.all.tasks) if (!i.archived && !CLOSED.has(i.status) && (!project || i.projectId === project)) for (const pid of d.itemDts(i)) get(pid).items++;
     return id => m.get(id) || { todos: 0, overdue: 0, est: 0, actions: 0, items: 0, blocked: 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.todo, d.all, project, t, twoWeeks]);
@@ -123,7 +123,8 @@ function PersonPeek({ p, d, todos, lookups, people, suppliers, project, onEmail 
   const inProject = ids => !project || d.items_.get(ids?.[0])?.projectId === project;
   const projectOf = ids => d.projects.get(d.items_.get(ids?.[0])?.projectId) || 'No project';
 
-  const items = d.all.tasks.filter(i => !i.archived && !CLOSED.has(i.status) && has(i.dtIds, p.id) && (!project || i.projectId === project)).sort(byTitle);
+  // Items they started (item DT) plus items where they're drawing a sheet
+  const items = d.all.tasks.filter(i => !i.archived && !CLOSED.has(i.status) && d.itemDts(i).includes(p.id) && (!project || i.projectId === project)).sort(byTitle);
   const myTodos = todos.filter(x => !x.archived && has(x.personIds, p.id) && inProject(x.itemIds) && (showDone || !x.done))
     .sort((a, b) => (a.done - b.done) || String(a.end || '9').localeCompare(String(b.end || '9')));
   const myActions = d.all.actions.filter(a => !a.archived && !a.done && a.type !== 'Note' && has(a.personIds, p.id) && inProject(a.itemIds))
@@ -160,7 +161,7 @@ function PersonPeek({ p, d, todos, lookups, people, suppliers, project, onEmail 
             {items.map(i => (
               <li key={i.id}><Link to={`/workspace/items?item=${i.id}`} className="flex flex-col gap-1 px-3 py-2 bg-surface border border-line hover:border-line-strong no-underline text-text">
                 <span className="text-[14px] font-medium truncate">{i.title}</span>
-                <span className="flex flex-wrap items-center gap-1.5"><StatusPill status={i.status} tone="muted" />{i.bic && <Badge tone="muted">{i.bic}</Badge>}<span className="font-mono text-[11px] text-muted truncate">{d.projects.get(i.projectId)}</span></span>
+                <span className="flex flex-wrap items-center gap-1.5"><StatusPill status={i.status} tone="muted" />{i.bic && <Badge tone="muted">{i.bic}</Badge>}{has(i.dtIds, p.id) ? <Badge tone="ok">Lead</Badge> : <span title={`Item DT: ${i.dtIds.map(d.personName).filter(Boolean).join(', ') || 'none'}`}><Badge tone="info">Drawings</Badge></span>}<span className="font-mono text-[11px] text-muted truncate">{d.projects.get(i.projectId)}</span></span>
               </Link></li>
             ))}
           </ul>

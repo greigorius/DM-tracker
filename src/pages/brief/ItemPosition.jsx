@@ -105,6 +105,8 @@ function VcLine({ v, holding, lookups, t }) {
 export function ItemPosition({ itemId, d, lookups = {} }) {
   const m = statusModel(d);
   const save = useSave('tasks');
+  const saveDwg = useSave('drawings');
+  const toast = useToast();
   const t = d.today;
   const row = d.all.tasks.find(x => bare(x.id) === bare(itemId));
   const it = m.items.get(bare(itemId));
@@ -112,6 +114,13 @@ export function ItemPosition({ itemId, d, lookups = {} }) {
   const ruled = new Map((m.drawingsOf.get(bare(itemId)) || []).map(x => [x.id, x]));
   const closedRfis = l.rfis.length - l.openRfis.length, decidedVcs = l.vcs.length - l.openVcs.length;
   if (!row) return null;
+  const dtOptions = (d.dts || []).map(x => ({ value: x.id, label: x.name }));
+  // A drawing's DT. The item keeps the DT who started it; if it has none yet,
+  // the first DT given a drawing becomes the item's DT too.
+  const assignDt = (x, v) => {
+    saveDwg(x.id, { dtId: v || null });
+    if (v && !row.dtIds?.length) { save(row.id, { dtId: v }); toast.show(`${d.personName(v) || 'DT'} set on ${x.title || 'the drawing'} and as the item's DT`); }
+  };
   return (
     <div className="flex flex-col gap-4 py-1">
       <Section title="Item status">
@@ -132,7 +141,7 @@ export function ItemPosition({ itemId, d, lookups = {} }) {
       <Section title={`Variations${decidedVcs ? ` · ${decidedVcs} decided not shown` : ''}`} empty={!l.openVcs.length}>
         <ul className="m-0 p-0 list-none flex flex-col gap-2">{l.openVcs.map(v => <VcLine key={v.id} v={v} holding={l.vcHold(v)} lookups={lookups} t={t} />)}</ul>
       </Section>
-      <Section title="Drawings (set by Drawing Flow, read-only here)" empty={!l.dws.length}>
+      <Section title="Drawings (status set by Drawing Flow; pick the DT drawing each one)" empty={!l.dws.length}>
         <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
           {l.dws.map(x => {
             const r = ruled.get(bare(x.id));
@@ -140,6 +149,7 @@ export function ItemPosition({ itemId, d, lookups = {} }) {
             return (
               <li key={x.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                 <Ext href={x.url}>{x.title || 'No number'}</Ext>
+                <Sel label={`DT for ${x.title || 'drawing'}`} value={x.dtIds?.[0] || ''} onChange={v => assignDt(x, v)} blank="DT…" options={dtOptions} />
                 {r && !x.lockStatus ? <Move from={x.status} to={r.proposed} /> : <St v={x.status} />}
                 {x.lockStatus && <Badge tone="muted">Locked</Badge>}
                 <span className="font-mono text-[12px] text-muted">
