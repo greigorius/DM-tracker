@@ -82,7 +82,8 @@ function useSorted(rows, columns, initial) {
 
 // Pass sort + onSort to control sorting from outside (rows arrive already sorted,
 // e.g. register views); otherwise the table sorts itself from initialSort.
-export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show.', rowTone, sort: ctlSort, onSort }) {
+// dense: tighter padding and headers that wrap, for wide registers
+export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show.', rowTone, sort: ctlSort, onSort, dense }) {
   const [selfSorted, selfSort, selfToggle] = useSorted(rows, columns, initialSort);
   const controlled = !!onSort;
   const sorted = controlled ? rows : selfSorted;
@@ -91,14 +92,14 @@ export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show
   if (!rows.length) return <p className="m-0 px-4 py-4 text-[14px] text-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-[14px]">
+      <table className={cx('w-full border-collapse', dense ? 'text-[13px]' : 'text-[14px]')}>
         <thead>
           <tr className="border-b border-line">
             {columns.map(c => {
               const active = sort?.key === c.key;
               return (
-                <th key={c.key} scope="col" className={cx('text-left font-normal p-0', c.className)} style={{ width: c.width }} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
-                  <button type="button" onClick={() => toggle(c.key)} className="w-full min-h-11 px-4 inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer section-label text-[11px] hover:text-text-2 whitespace-nowrap">
+                <th key={c.key} scope="col" className={cx('text-left font-normal p-0 align-bottom', c.className)} style={{ width: c.width, ...(dense && c.width && { maxWidth: c.width }) }} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                  <button type="button" onClick={() => toggle(c.key)} className={cx('w-full inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer section-label hover:text-text-2 text-left', dense ? 'min-h-10 px-2.5 py-1.5 text-[10px] tracking-[0.06em] leading-tight' : 'min-h-11 px-4 text-[11px] whitespace-nowrap')}>
                     {c.label}
                     {active && (sort.dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                   </button>
@@ -111,7 +112,7 @@ export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show
           {sorted.map(r => (
             <tr key={r.id} className={cx('border-b border-line last:border-b-0 hover:bg-surface-hi', rowTone?.(r) === 'danger' && 'text-danger')}>
               {columns.map(c => (
-                <td key={c.key} className={cx('px-4 py-2.5 align-top', c.cellClassName)}>
+                <td key={c.key} className={cx(dense ? 'px-2.5 py-2 align-top' : 'px-4 py-2.5 align-top', c.cellClassName)}>
                   {c.render ? c.render(r) : (r[c.key] ?? <span className="text-muted">—</span>)}
                 </td>
               ))}

@@ -10,7 +10,7 @@ function PageFallback() {
   return (
     <div className="hub">
       <div className="bg-bar border-b border-line h-16" />
-      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6"><SkeletonRows rows={8} /></div>
+      <div className="mx-auto max-w-[1920px] px-4 sm:px-6 py-6"><SkeletonRows rows={8} /></div>
     </div>
   );
 }

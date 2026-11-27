@@ -62,7 +62,7 @@ export function AppHeader({ title, subtitle }) {
 
   return (
     <header className="bg-bar border-b border-line">
-      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 min-h-16 flex flex-wrap items-center gap-x-5 gap-y-2 py-2">
+      <div className="mx-auto max-w-[1920px] px-4 sm:px-6 min-h-16 flex flex-wrap items-center gap-x-5 gap-y-2 py-2">
         <Link to="/" className="flex items-center gap-2.5 text-accent no-underline min-h-11" aria-label="Axiom DL Hub — Cockpit">
           <LogoMark className="w-7 h-7" />
           <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-text-2 hidden sm:inline">Axiom DL Hub</span>
@@ -99,7 +99,7 @@ export function PageShell({ title, subtitle, toolbar, children }) {
   return (
     <div className="hub">
       <AppHeader title={title} subtitle={subtitle} />
-      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6 flex flex-col gap-6">
+      <main className="mx-auto max-w-[1920px] px-4 sm:px-6 py-6 flex flex-col gap-6">
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
         {children}
       </main>

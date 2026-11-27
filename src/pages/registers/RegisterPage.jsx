@@ -361,7 +361,7 @@ export function RegisterPage({
       )}
 
       {isPending ? <Card className="p-4"><SkeletonRows rows={10} /></Card> : !groupField ? (
-        <Card><DataTable columns={cols} rows={sorted} sort={view.sort} onSort={onSort} empty="Nothing matches this view." /></Card>
+        <Card><DataTable dense columns={cols} rows={sorted} sort={view.sort} onSort={onSort} empty="Nothing matches this view." /></Card>
       ) : groups.length === 0 ? (
         <Card className="p-4 text-[14px] text-muted">Nothing matches this view.</Card>
       ) : groups.map(g => {
@@ -369,7 +369,7 @@ export function RegisterPage({
         return (
           <TableGroup key={g.key} title={g.label} count={`${g.rows.length}`} open={!closedGroups[g.key]} onToggle={() => setClosedGroups(c => ({ ...c, [g.key]: !c[g.key] }))}
             meta={open > 0 && <Badge tone="accent">{open} open</Badge>}>
-            <DataTable columns={cols} rows={g.rows} sort={view.sort} onSort={onSort} />
+            <DataTable dense columns={cols} rows={g.rows} sort={view.sort} onSort={onSort} />
           </TableGroup>
         );
       })}
