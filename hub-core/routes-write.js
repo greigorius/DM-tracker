@@ -1,6 +1,7 @@
 // Write routes: Notion writes that patch the snapshot, plus sync-now.
 import { createAction, createCoordinationItem, createSupplier, taskToAction, createMeeting, createRfi, createVariation, updateItem, updateRecord, trashRecord, actionToTask, mergeDuplicate, dismissDuplicate } from './write.js';
 import { runSync, triggerFullRebuild } from './sync.js';
+import { getViews, saveViews } from './views.js';
 import { previewTeamEmails, sendTeamEmails } from './team-email.js';
 import { getBicPlan, applyBic } from './item-bic-sync.js';
 import { getStatusPlan, applyStatus } from './item-status-sync.js';
@@ -21,6 +22,9 @@ export const writeRoutes = [
   ['POST', /^\/api\/records\/([a-z]+)\/([^/]+)\/restore\/?$/, ({ params }) => trashRecord(params[0], params[1], true)],
   ['POST', /^\/api\/duplicates\/merge\/?$/, ({ body }) => mergeDuplicate(body)],
   ['POST', /^\/api\/duplicates\/dismiss\/?$/, ({ body }) => dismissDuplicate(body)],
+  // Saved register views (Registers → Views menu)
+  ['GET', /^\/api\/views\/?$/, () => getViews()],
+  ['POST', /^\/api\/views\/?$/, ({ body }) => saveViews(body)],
   ['POST', /^\/api\/team\/email\/preview\/?$/, ({ body }) => previewTeamEmails(body)],
   ['POST', /^\/api\/team\/email\/send\/?$/, ({ body }) => sendTeamEmails(body)],
   ['GET', /^\/api\/item-bic\/plan\/?$/, () => getBicPlan()],

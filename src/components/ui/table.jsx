@@ -80,8 +80,14 @@ function useSorted(rows, columns, initial) {
   return [sorted, sort, toggle];
 }
 
-export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show.', rowTone }) {
-  const [sorted, sort, toggle] = useSorted(rows, columns, initialSort);
+// Pass sort + onSort to control sorting from outside (rows arrive already sorted,
+// e.g. register views); otherwise the table sorts itself from initialSort.
+export function DataTable({ columns, rows, initialSort, empty = 'Nothing to show.', rowTone, sort: ctlSort, onSort }) {
+  const [selfSorted, selfSort, selfToggle] = useSorted(rows, columns, initialSort);
+  const controlled = !!onSort;
+  const sorted = controlled ? rows : selfSorted;
+  const sort = controlled ? ctlSort : selfSort;
+  const toggle = controlled ? onSort : selfToggle;
   if (!rows.length) return <p className="m-0 px-4 py-4 text-[14px] text-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">

@@ -1,33 +1,44 @@
-import { TrackerPage, fmtDate } from './TrackerPage.jsx';
+import { RegisterPage } from './registers/RegisterPage.jsx';
+import { commonFields } from './registers/common.jsx';
 import { StatusPill } from '../components/ui/table.jsx';
 import { Badge } from '../components/ui/index.js';
+import { vcPauses } from '../../hub-core/item-bic.js';
 
 const OPEN = new Set(['Awaiting Design Info', 'Awaiting Instruction', null, undefined, '']);
 const TONE = { 'Awaiting Design Info': 'accent', 'Awaiting Instruction': 'accent', 'Instruction Received': 'ok', Declined: 'danger', Withdrawn: 'muted' };
 
-const columns = ctx => [
-  { key: 'number', label: 'VC', width: 104, sortValue: r => r.number,
-    render: r => <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[13px] text-accent no-underline hover:underline whitespace-nowrap">{r.code || 'VC'}</a>, csv: r => r.code },
-  { key: 'title', label: 'Description', render: r => <div className="min-w-[240px]">{r.title || '—'}</div> },
-  { key: 'status', label: 'Status', width: 190, render: r => <StatusPill status={r.status || 'No status'} tone={TONE[r.status] || 'muted'} /> },
-  { key: 'type', label: 'Type', width: 180, cellClassName: 'text-text-2' },
-  { key: 'raisedBy', label: 'Raised by', width: 120, cellClassName: 'text-text-2' },
-  { key: 'tbcBy', label: 'TBC by', width: 180, render: r => <span className="text-text-2">{r.tbcBy?.join(', ') || '—'}</span> },
-  { key: 'instructed', label: 'Instructed', width: 110, sortValue: r => (r.instructed ? 1 : 0),
-    render: r => (r.instructed ? <Badge tone="ok">Yes</Badge> : null), csv: r => (r.instructed ? 'Yes' : '') },
-  { key: 'requested', label: 'Requested', width: 116, render: r => <span className="font-mono text-[12px] text-text-2 whitespace-nowrap">{fmtDate(r.requested) || '—'}</span> },
-  { key: 'decision', label: 'Decision', width: 116, render: r => <span className="font-mono text-[12px] text-text-2 whitespace-nowrap">{fmtDate(r.decision) || '—'}</span> },
-  { key: 'item', label: 'Item', width: 220, sortValue: r => ctx.itemOf(r)?.title,
-    render: r => <span className="text-text-2">{ctx.itemOf(r)?.title || '—'}</span>, csv: r => ctx.itemOf(r)?.title },
-  { key: 'project', label: 'Project', width: 180, sortValue: r => ctx.projects.get(ctx.projectOf(r)),
-    render: r => <span className="text-text-2">{ctx.projects.get(ctx.projectOf(r)) || '—'}</span>, csv: r => ctx.projects.get(ctx.projectOf(r)) },
+const fields = ctx => [
+  { key: 'number', label: 'VC', type: 'number', width: 104, get: r => r.number, csv: r => r.code,
+    render: r => <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[13px] text-accent no-underline hover:underline whitespace-nowrap">{r.code || 'VC'}</a> },
+  { key: 'title', label: 'Description', type: 'text', get: r => r.title, render: r => <div className="min-w-[240px]">{r.title || '—'}</div> },
+  { key: 'status', label: 'Status', type: 'select', width: 190, get: r => r.status || null, render: r => <StatusPill status={r.status || 'No status'} tone={TONE[r.status] || 'muted'} /> },
+  { key: 'type', label: 'Type', type: 'select', width: 180, get: r => r.type },
+  { key: 'raisedBy', label: 'Raised by', type: 'select', width: 120, get: r => r.raisedBy },
+  { key: 'tbcBy', label: 'TBC by', type: 'select', width: 180, get: r => r.tbcBy || [] },
+  { key: 'bic', label: 'BIC', type: 'select', width: 110, get: r => r.bic },
+  { key: 'instructed', label: 'Instructed', type: 'bool', width: 110, get: r => !!r.instructed, render: r => (r.instructed ? <Badge tone="ok">Yes</Badge> : null) },
+  { key: 'pauses', label: 'Pauses the item', type: 'bool', width: 110, get: r => !!vcPauses(r),
+    render: r => (vcPauses(r) ? <Badge tone="danger">Pauses</Badge> : null) },
+  { key: 'requested', label: 'Requested', type: 'date', width: 116, get: r => r.requested },
+  { key: 'decision', label: 'Decision', type: 'date', width: 116, get: r => r.decision },
+  { key: 'addedDays', label: 'Added days', type: 'number', width: 100, get: r => r.addedDays },
+  ...commonFields(ctx),
 ];
 
-const searchText = (r, ctx) => [r.code, r.title, r.type, r.raisedBy, ...(r.tbcBy || []), ctx.itemOf(r)?.title].filter(Boolean).join(' ');
+const STARTERS = [
+  { id: 'awaiting', name: 'Awaiting instruction', statusMode: 'all', statuses: ['Awaiting Instruction'], group: 'project', sort: { key: 'requested', dir: 'asc' },
+    columns: ['number', 'title', 'type', 'tbcBy', 'requested', 'pauses', 'item'] },
+  { id: 'pausing', name: 'Pausing items', statusMode: 'open', group: 'project', filters: [{ field: 'pauses', op: 'true', value: null }],
+    columns: ['number', 'title', 'status', 'tbcBy', 'requested', 'item', 'itemStatus'] },
+  { id: 'instructed', name: 'Instructed changes', statusMode: 'all', group: 'project', filters: [{ field: 'instructed', op: 'true', value: null }], sort: { key: 'decision', dir: 'desc' },
+    columns: ['number', 'title', 'type', 'decision', 'addedDays', 'item'] },
+  { id: 'log', name: 'Full variation log (all columns for export)', statusMode: 'all', group: 'none', sort: { key: 'number', dir: 'asc' },
+    columns: ['number', 'title', 'status', 'type', 'raisedBy', 'tbcBy', 'bic', 'instructed', 'pauses', 'requested', 'decision', 'addedDays', 'item', 'project'] },
+];
 
 export default function VariationsPage() {
   return (
-    <TrackerPage
+    <RegisterPage
       id="variations"
       title="Variations"
       subtitle="Design and scope changes"
@@ -35,10 +46,12 @@ export default function VariationsPage() {
       statusOf={r => r.status || null}
       statusTone={s => TONE[s] || 'muted'}
       openStatuses={OPEN}
-      columns={columns}
-      searchText={searchText}
+      fields={fields}
+      defaultColumns={['number', 'title', 'status', 'type', 'raisedBy', 'tbcBy', 'instructed', 'requested', 'decision', 'item', 'project']}
+      starterViews={STARTERS}
+      searchText={(r, ctx) => [r.code, r.title, r.type, r.raisedBy, ...(r.tbcBy || []), ctx.itemOf(r)?.title].filter(Boolean).join(' ')}
       initialSort={{ key: 'number', dir: 'desc' }}
-      filename="variations.csv"
+      filename="Variations"
     />
   );
 }
