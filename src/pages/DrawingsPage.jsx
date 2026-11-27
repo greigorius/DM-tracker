@@ -112,14 +112,14 @@ function stageFields(ctx, k, L) {
 const fields = ctx => [
   { key: 'title', label: 'Drawing', type: 'text', width: 230,
     render: r => (
-      <span className="flex flex-col gap-0.5 min-w-[200px] max-w-[260px]">
+      <span className="flex flex-col gap-0.5 min-w-[180px] max-w-[240px]">
         <a href={r.url} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-info no-underline hover:underline break-all">{r.title || '—'}</a>
-        {r.name && <span className="text-[13px] text-text-2 leading-snug">{r.name}</span>}
+        {r.name && <span className="text-[12px] text-text-2 leading-snug">{r.name}</span>}
         {r.type && r.type !== 'Drawing' && <span><Badge>{r.type}</Badge></span>}
       </span>
     ),
     get: r => r.title, csv: r => r.title },
-  { key: 'name', label: 'Drawing title', type: 'text', width: 220, get: r => r.name },
+  { key: 'name', label: 'Drawing title', type: 'text', width: 200, get: r => r.name, hint: 'already under the number' },
   { key: 'type', label: 'Type', type: 'select', width: 100, get: r => r.type },
   { key: 'status', label: 'Status', type: 'select', width: 130, get: r => r.status,
     render: r => (
@@ -154,10 +154,10 @@ const DEFAULT_COLUMNS = ['title', 'status', 's4', 's5', 'c01', 'prd', 'item', 'p
 const STARTERS = [
   { id: 's4', name: 'S4 drawings · submission dates', statusMode: 'all', group: 'project', sort: { key: 's4Issued', dir: 'asc' },
     filters: [{ field: 'stage', op: 'any', value: ['S4'] }],
-    columns: ['title', 'name', 'rev', 's4First', 's4Issued', 's4Grade', 's4Returned', 's4Baseline', 's4Rag', 'drawingDt', 'item', 'status'] },
+    columns: ['title', 'rev', 's4First', 's4Issued', 's4Grade', 's4Returned', 's4Baseline', 's4Rag', 'drawingDt', 'status'] },
   { id: 'issued-s4', name: 'Everything issued at S4', statusMode: 'all', group: 'project', sort: { key: 's4First', dir: 'asc' },
     filters: [{ field: 's4First', op: 'not_empty', value: null }],
-    columns: ['title', 'name', 's4First', 's4Issued', 's4Rev', 's4Grade', 's4Returned', 'stage', 'item'] },
+    columns: ['title', 's4First', 's4Issued', 's4Rev', 's4Grade', 's4Returned', 'stage', 'item'] },
   { id: 'overdue', name: 'Forecast issues overdue', statusMode: 'open', group: 'item', match: 'any',
     filters: STAGES.map(([k]) => ({ field: `${k}Forecast`, op: 'past', value: null })),
     columns: ['title', 'status', 's4Forecast', 's5Forecast', 'c01Forecast', 'prdForecast', 'drawingDt', 'itemDt', 'project'] },
@@ -165,10 +165,10 @@ const STARTERS = [
     filters: STAGES.map(([k]) => ({ field: `${k}Rag`, op: 'any', value: ['Red'] })),
     columns: ['title', 'status', 's4', 's5', 'c01', 'prd', 'item'] },
   { id: 'client', name: 'With the client for review', statusMode: 'all', group: 'project', statuses: ['Client Review'],
-    columns: ['title', 'name', 'stage', 'rev', 's4Issued', 's5Issued', 'c01Issued', 'item'] },
-  { id: 'by-dt', name: 'By DT', statusMode: 'open', group: 'drawingDt', columns: ['title', 'name', 'status', 'stage', 'rev', 'item', 'project'] },
+    columns: ['title', 'stage', 'rev', 's4Issued', 's5Issued', 'c01Issued', 'item'] },
+  { id: 'by-dt', name: 'By DT', statusMode: 'open', group: 'drawingDt', columns: ['title', 'status', 'stage', 'rev', 'item', 'project'] },
   { id: 'production', name: 'Production', statusMode: 'all', group: 'productionStage', filters: [{ field: 'c01SignOff', op: 'not_empty', value: null }],
-    columns: ['title', 'name', 'c01SignOff', 'prdScheduled', 'productionStage', 'prdStatus', 'item', 'project'] },
+    columns: ['title', 'c01SignOff', 'prdScheduled', 'productionStage', 'prdStatus', 'item', 'project'] },
 ];
 
 export default function DrawingsPage() {

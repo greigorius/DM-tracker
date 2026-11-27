@@ -332,7 +332,7 @@ export default function Cockpit() {
   return (
     <div className="hub">
       <AppHeader title="Cockpit" />
-      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6 flex flex-col gap-8">
+      <main className="mx-auto max-w-[1920px] px-4 sm:px-6 py-6 flex flex-col gap-8">
         {error && !boot && (
           <Card className="p-4 border-danger text-danger text-[14px]" role="alert">Couldn’t load the Hub data: {error.message}</Card>
         )}

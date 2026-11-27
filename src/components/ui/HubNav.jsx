@@ -69,7 +69,7 @@ export function HubNav() {
   }, [pathname]);
   return (
     <nav ref={navRef} aria-label="Hub" className="border-t border-line">
-      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 flex items-stretch overflow-x-auto sm:overflow-visible">
+      <div className="mx-auto max-w-[1920px] px-4 sm:px-6 flex items-stretch overflow-x-auto sm:overflow-visible">
         {NAV.map(n => (
           <NavLink key={n.to} to={n.to} className={() => linkCls(n === section)} aria-current={n === section ? 'page' : undefined}
             onMouseEnter={() => preloadRoute(n.to)} onFocus={() => preloadRoute(n.to)}>
@@ -85,7 +85,7 @@ export function HubNav() {
       </div>
       {section?.tabs && (
         <div className="border-t border-line bg-bar">
-          <div className="mx-auto max-w-[1440px] px-4 sm:px-6 flex items-stretch overflow-x-auto" role="navigation" aria-label={section.label}>
+          <div className="mx-auto max-w-[1920px] px-4 sm:px-6 flex items-stretch overflow-x-auto" role="navigation" aria-label={section.label}>
             {section.tabs.map(t => (
               <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => subCls(isActive)} onMouseEnter={() => preloadRoute(t.to)} onFocus={() => preloadRoute(t.to)}>
                 {t.label}
