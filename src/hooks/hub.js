@@ -345,3 +345,23 @@ export function useMergeDuplicate() {
     onSettled: () => qc.invalidateQueries({ queryKey: keys.bootstrap }),
   });
 }
+
+// ── Saved register views (hub-core/views.js) ────────────────────────────────
+const viewsKey = ['register-views'];
+export function useRegisterViews() {
+  return useQuery({ queryKey: viewsKey, queryFn: ({ signal }) => api('/api/views', { signal }), staleTime: 60_000 });
+}
+export function useSaveRegisterViews() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ register, views }) => api('/api/views', { method: 'POST', body: { register, views } }),
+    onMutate: async ({ register, views }) => {
+      await qc.cancelQueries({ queryKey: viewsKey });
+      const prev = qc.getQueryData(viewsKey);
+      qc.setQueryData(viewsKey, old => ({ views: { ...(old?.views || {}), [register]: views } }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(viewsKey, ctx.prev); },
+    onSuccess: data => qc.setQueryData(viewsKey, data),
+  });
+}
